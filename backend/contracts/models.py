@@ -1,5 +1,9 @@
+from decimal import Decimal
+from datetime import date
+from typing import Optional, Dict
 from django.db import models
 from core.models import TimestampedModel
+from core.cashflow import CashFlowCalculator
 
 
 class Contract(TimestampedModel):
@@ -93,3 +97,48 @@ class Contract(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.number} — {self.name}"
+    
+    def get_cash_flow(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Dict[str, Decimal]:
+        """
+        Рассчитывает cash-flow для договора за период
+        
+        Args:
+            start_date: Начало периода (опционально)
+            end_date: Конец периода (опционально)
+        
+        Returns:
+            Dict с ключами: income, expense, cash_flow
+        """
+        return CashFlowCalculator.calculate_for_contract(
+            self.id,
+            start_date=start_date,
+            end_date=end_date
+        )
+    
+    def get_cash_flow_by_periods(
+        self,
+        period_type: str = 'month',
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> list:
+        """
+        Рассчитывает cash-flow с разбивкой по периодам
+        
+        Args:
+            period_type: Тип периода ('month', 'week', 'day')
+            start_date: Начало периода (опционально)
+            end_date: Конец периода (опционально)
+        
+        Returns:
+            List[Dict] с данными по каждому периоду
+        """
+        return CashFlowCalculator.calculate_by_periods(
+            contract_id=self.id,
+            period_type=period_type,
+            start_date=start_date,
+            end_date=end_date
+        )

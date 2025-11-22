@@ -1,0 +1,2458 @@
+openapi: 3.0.3
+info:
+  title: Финансовый ассистент API
+  version: 1.0.0
+  description: API для управления финансовыми данными строительной компании
+paths:
+  /api/v1/:
+    get:
+      operationId: root_retrieve
+      description: Корневой endpoint API
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: auth_login_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/v1/auth/refresh/:
+    post:
+      operationId: auth_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/verify/:
+    post:
+      operationId: auth_verify_create
+      description: |-
+        Takes a token and indicates if it is valid.  This view provides no
+        information about a token's fitness for a particular use.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+        required: true
+      responses:
+        '200':
+          description: No response body
+  /api/v1/contracts/:
+    get:
+      operationId: contracts_list
+      description: Получить список всех договоров с возможностью фильтрации и поиска
+      summary: Список договоров
+      parameters:
+      - in: query
+        name: currency
+        schema:
+          type: string
+          title: Валюта
+          enum:
+          - EUR
+          - RUB
+          - USD
+        description: |-
+          * `RUB` - Российский рубль
+          * `USD` - Доллар США
+          * `EUR` - Евро
+      - in: query
+        name: object
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          title: Статус
+          enum:
+          - active
+          - completed
+          - planned
+          - suspended
+          - terminated
+        description: |-
+          * `planned` - Планируется
+          * `active` - В работе
+          * `completed` - Завершён
+          * `suspended` - Приостановлен
+          * `terminated` - Расторгнут
+      tags:
+      - Договоры
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedContractListList'
+          description: ''
+    post:
+      operationId: contracts_create
+      description: Создать новый договор для объекта
+      summary: Создать договор
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContractRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContractRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+          description: ''
+  /api/v1/contracts/{id}/:
+    get:
+      operationId: contracts_retrieve
+      description: Получить подробную информацию о договоре
+      summary: Детали договора
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Договор.
+        required: true
+      tags:
+      - Договоры
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+          description: ''
+    put:
+      operationId: contracts_update
+      description: Полностью обновить информацию о договоре
+      summary: Обновить договор
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Договор.
+        required: true
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContractRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContractRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+          description: ''
+    patch:
+      operationId: contracts_partial_update
+      description: Частично обновить информацию о договоре
+      summary: Частично обновить договор
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Договор.
+        required: true
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedContractRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedContractRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedContractRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+          description: ''
+    delete:
+      operationId: contracts_destroy
+      description: 'Удалить договор (внимание: также удалятся все связанные платежи)'
+      summary: Удалить договор
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Договор.
+        required: true
+      tags:
+      - Договоры
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/contracts/{id}/cash_flow/:
+    get:
+      operationId: contracts_cash_flow_retrieve
+      description: Рассчитать cash-flow (поступления - расходы) для договора за указанный
+        период
+      summary: Cash-flow договора
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Договор.
+        required: true
+      tags:
+      - Договоры
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+          description: ''
+  /api/v1/contracts/{id}/cash_flow_periods/:
+    get:
+      operationId: contracts_cash_flow_periods_retrieve
+      description: Получить cash-flow договора с разбивкой по периодам (месяц/неделя/день)
+      summary: Cash-flow по периодам
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Договор.
+        required: true
+      tags:
+      - Договоры
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+          description: ''
+  /api/v1/imports/:
+    get:
+      operationId: imports_list
+      description: Получить список всех импортов данных с возможностью фильтрации
+      summary: Список импортов
+      parameters:
+      - in: query
+        name: file_type
+        schema:
+          type: string
+          title: Тип файла
+          enum:
+          - balance
+          - incomes
+          - payments_actual
+          - payments_plan
+        description: |-
+          * `payments_actual` - Фактические платежи
+          * `payments_plan` - Плановые платежи
+          * `incomes` - Поступления
+          * `balance` - Задолженность
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          title: Статус обработки
+          enum:
+          - failed
+          - partial
+          - pending
+          - success
+        description: |-
+          * `pending` - В обработке
+          * `success` - Успешно
+          * `failed` - Ошибка
+          * `partial` - Частично успешно
+      - in: query
+        name: user
+        schema:
+          type: integer
+      tags:
+      - Импорты
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedImportLogListList'
+          description: ''
+  /api/v1/imports/{id}/:
+    get:
+      operationId: imports_retrieve
+      description: Получить подробную информацию об импорте, включая статистику и
+        ошибки
+      summary: Детали импорта
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Журнал импорта.
+        required: true
+      tags:
+      - Импорты
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportLog'
+          description: ''
+  /api/v1/objects/:
+    get:
+      operationId: objects_list
+      description: Получить список всех строительных объектов с возможностью фильтрации
+        и поиска
+      summary: Список объектов
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - Объекты
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedObjectListList'
+          description: ''
+    post:
+      operationId: objects_create
+      description: Создать новый строительный объект
+      summary: Создать объект
+      tags:
+      - Объекты
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ObjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ObjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Object'
+          description: ''
+  /api/v1/objects/{id}/:
+    get:
+      operationId: objects_retrieve
+      description: Получить подробную информацию об объекте
+      summary: Детали объекта
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Объект.
+        required: true
+      tags:
+      - Объекты
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Object'
+          description: ''
+    put:
+      operationId: objects_update
+      description: Полностью обновить информацию об объекте
+      summary: Обновить объект
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Объект.
+        required: true
+      tags:
+      - Объекты
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ObjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ObjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Object'
+          description: ''
+    patch:
+      operationId: objects_partial_update
+      description: Частично обновить информацию об объекте
+      summary: Частично обновить объект
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Объект.
+        required: true
+      tags:
+      - Объекты
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedObjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedObjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedObjectRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Object'
+          description: ''
+    delete:
+      operationId: objects_destroy
+      description: 'Удалить объект (внимание: также удалятся все связанные договоры)'
+      summary: Удалить объект
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Объект.
+        required: true
+      tags:
+      - Объекты
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/objects/{id}/cash_flow/:
+    get:
+      operationId: objects_cash_flow_retrieve
+      description: Рассчитать cash-flow (поступления - расходы) для объекта за указанный
+        период
+      summary: Cash-flow объекта
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Объект.
+        required: true
+      tags:
+      - Объекты
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Object'
+          description: ''
+  /api/v1/objects/{id}/cash_flow_periods/:
+    get:
+      operationId: objects_cash_flow_periods_retrieve
+      description: Получить cash-flow объекта с разбивкой по периодам (месяц/неделя/день)
+      summary: Cash-flow по периодам
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Объект.
+        required: true
+      tags:
+      - Объекты
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Object'
+          description: ''
+  /api/v1/payment-registry/:
+    get:
+      operationId: payment_registry_list
+      description: Получить список плановых платежей из реестра
+      summary: Список плановых платежей
+      parameters:
+      - in: query
+        name: contract
+        schema:
+          type: integer
+      - in: query
+        name: contract__object
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          title: Статус
+          enum:
+          - approved
+          - cancelled
+          - planned
+        description: |-
+          * `planned` - Планируется
+          * `approved` - Утверждено
+          * `cancelled` - Отменено
+      tags:
+      - Плановые платежи
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaymentRegistryListList'
+          description: ''
+    post:
+      operationId: payment_registry_create
+      description: Создать новую запись в реестре плановых платежей
+      summary: Создать плановый платёж
+      tags:
+      - Плановые платежи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRegistryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRegistryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRegistryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRegistry'
+          description: ''
+  /api/v1/payment-registry/{id}/:
+    get:
+      operationId: payment_registry_retrieve
+      description: Получить подробную информацию о плановом платеже
+      summary: Детали планового платежа
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Плановый платёж.
+        required: true
+      tags:
+      - Плановые платежи
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRegistry'
+          description: ''
+    put:
+      operationId: payment_registry_update
+      description: Полностью обновить информацию о плановом платеже
+      summary: Обновить плановый платёж
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Плановый платёж.
+        required: true
+      tags:
+      - Плановые платежи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRegistryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRegistryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRegistryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRegistry'
+          description: ''
+    patch:
+      operationId: payment_registry_partial_update
+      description: Частично обновить информацию о плановом платеже
+      summary: Частично обновить плановый платёж
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Плановый платёж.
+        required: true
+      tags:
+      - Плановые платежи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentRegistryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentRegistryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentRegistryRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRegistry'
+          description: ''
+    delete:
+      operationId: payment_registry_destroy
+      description: Удалить запись из реестра плановых платежей
+      summary: Удалить плановый платёж
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Плановый платёж.
+        required: true
+      tags:
+      - Плановые платежи
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/payments/:
+    get:
+      operationId: payments_list
+      description: Получить список фактических платежей (расходы и поступления)
+      summary: Список платежей
+      parameters:
+      - in: query
+        name: contract
+        schema:
+          type: integer
+      - in: query
+        name: contract__object
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: payment_type
+        schema:
+          type: string
+          title: Тип платежа
+          enum:
+          - expense
+          - income
+        description: |-
+          * `expense` - Расход
+          * `income` - Поступление
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - Платежи
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaymentListList'
+          description: ''
+    post:
+      operationId: payments_create
+      description: Создать новый фактический платёж
+      summary: Создать платёж
+      tags:
+      - Платежи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+  /api/v1/payments/{id}/:
+    get:
+      operationId: payments_retrieve
+      description: Получить подробную информацию о платеже
+      summary: Детали платежа
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Платёж.
+        required: true
+      tags:
+      - Платежи
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+    put:
+      operationId: payments_update
+      description: Полностью обновить информацию о платеже
+      summary: Обновить платёж
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Платёж.
+        required: true
+      tags:
+      - Платежи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+    patch:
+      operationId: payments_partial_update
+      description: Частично обновить информацию о платеже
+      summary: Частично обновить платёж
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Платёж.
+        required: true
+      tags:
+      - Платежи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPaymentRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+          description: ''
+    delete:
+      operationId: payments_destroy
+      description: Удалить платёж
+      summary: Удалить платёж
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Платёж.
+        required: true
+      tags:
+      - Платежи
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/:
+    get:
+      operationId: users_list
+      description: Получить список пользователей (только для администраторов)
+      summary: Список пользователей
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Пользователи
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserList'
+          description: ''
+    post:
+      operationId: users_create
+      description: |-
+        ViewSet для управления пользователями
+
+        list: Получить список пользователей (только для администраторов)
+        retrieve: Получить информацию о пользователе
+        me: Получить информацию о текущем пользователе
+        register: Регистрация нового пользователя
+        change_password: Смена пароля
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/users/{id}/:
+    get:
+      operationId: users_retrieve
+      description: Получить информацию о пользователе
+      summary: Детали пользователя
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - Пользователи
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    put:
+      operationId: users_update
+      description: |-
+        ViewSet для управления пользователями
+
+        list: Получить список пользователей (только для администраторов)
+        retrieve: Получить информацию о пользователе
+        me: Получить информацию о текущем пользователе
+        register: Регистрация нового пользователя
+        change_password: Смена пароля
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    patch:
+      operationId: users_partial_update
+      description: |-
+        ViewSet для управления пользователями
+
+        list: Получить список пользователей (только для администраторов)
+        retrieve: Получить информацию о пользователе
+        me: Получить информацию о текущем пользователе
+        register: Регистрация нового пользователя
+        change_password: Смена пароля
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    delete:
+      operationId: users_destroy
+      description: |-
+        ViewSet для управления пользователями
+
+        list: Получить список пользователей (только для администраторов)
+        retrieve: Получить информацию о пользователе
+        me: Получить информацию о текущем пользователе
+        register: Регистрация нового пользователя
+        change_password: Смена пароля
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - users
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/change_password/:
+    post:
+      operationId: users_change_password_create
+      description: Изменить пароль текущего пользователя
+      summary: Смена пароля
+      tags:
+      - Пользователи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/users/me/:
+    get:
+      operationId: users_me_retrieve
+      description: Получить информацию о текущем аутентифицированном пользователе
+      summary: Текущий пользователь
+      tags:
+      - Пользователи
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/users/register/:
+    post:
+      operationId: users_register_create
+      description: Зарегистрировать нового пользователя. Возвращает JWT токены для
+        автоматического входа.
+      summary: Регистрация
+      tags:
+      - Аутентификация
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+components:
+  schemas:
+    Contract:
+      type: object
+      description: Сериализатор для модели Contract
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        object_name:
+          type: string
+          readOnly: true
+        number:
+          type: string
+          title: Номер договора
+          maxLength: 100
+        name:
+          type: string
+          title: Название / предмет договора
+          maxLength: 255
+        contract_date:
+          type: string
+          format: date
+          title: Дата заключения
+        start_date:
+          type: string
+          format: date
+          nullable: true
+          title: Дата начала работ
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          title: Плановая дата завершения
+        contractor:
+          type: string
+          title: Контрагент
+          maxLength: 255
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма договора
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          title: Валюта
+        vat_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          title: Ставка НДС, %
+        vat_included:
+          type: boolean
+          title: Сумма включает НДС
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status235Enum'
+          title: Статус
+        document_link:
+          type: string
+          title: Ссылка на договор
+          maxLength: 500
+        notes:
+          type: string
+          title: Примечания
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата создания
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата обновления
+      required:
+      - contract_date
+      - contractor
+      - created_at
+      - id
+      - name
+      - number
+      - object_name
+      - total_amount
+      - updated_at
+    ContractList:
+      type: object
+      description: Упрощённый сериализатор для списка договоров
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        object_name:
+          type: string
+          readOnly: true
+        number:
+          type: string
+          title: Номер договора
+          maxLength: 100
+        name:
+          type: string
+          title: Название / предмет договора
+          maxLength: 255
+        contractor:
+          type: string
+          title: Контрагент
+          maxLength: 255
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма договора
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          title: Валюта
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status235Enum'
+          title: Статус
+        contract_date:
+          type: string
+          format: date
+          title: Дата заключения
+      required:
+      - contract_date
+      - contractor
+      - id
+      - name
+      - number
+      - object_name
+      - total_amount
+    ContractRequest:
+      type: object
+      description: Сериализатор для модели Contract
+      properties:
+        object_id:
+          type: integer
+          writeOnly: true
+        number:
+          type: string
+          minLength: 1
+          title: Номер договора
+          maxLength: 100
+        name:
+          type: string
+          minLength: 1
+          title: Название / предмет договора
+          maxLength: 255
+        contract_date:
+          type: string
+          format: date
+          title: Дата заключения
+        start_date:
+          type: string
+          format: date
+          nullable: true
+          title: Дата начала работ
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          title: Плановая дата завершения
+        contractor:
+          type: string
+          minLength: 1
+          title: Контрагент
+          maxLength: 255
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма договора
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          title: Валюта
+        vat_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          title: Ставка НДС, %
+        vat_included:
+          type: boolean
+          title: Сумма включает НДС
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status235Enum'
+          title: Статус
+        document_link:
+          type: string
+          title: Ссылка на договор
+          maxLength: 500
+        notes:
+          type: string
+          title: Примечания
+      required:
+      - contract_date
+      - contractor
+      - name
+      - number
+      - object_id
+      - total_amount
+    CurrencyEnum:
+      enum:
+      - RUB
+      - USD
+      - EUR
+      type: string
+      description: |-
+        * `RUB` - Российский рубль
+        * `USD` - Доллар США
+        * `EUR` - Евро
+    FileTypeEnum:
+      enum:
+      - payments_actual
+      - payments_plan
+      - incomes
+      - balance
+      type: string
+      description: |-
+        * `payments_actual` - Фактические платежи
+        * `payments_plan` - Плановые платежи
+        * `incomes` - Поступления
+        * `balance` - Задолженность
+    ImportLog:
+      type: object
+      description: Сериализатор для модели ImportLog
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        import_batch_id:
+          type: string
+          title: Идентификатор импорта
+          maxLength: 100
+        user_username:
+          type: string
+          readOnly: true
+        file_name:
+          type: string
+          title: Имя файла
+          maxLength: 255
+        file_type:
+          allOf:
+          - $ref: '#/components/schemas/FileTypeEnum'
+          title: Тип файла
+        file_type_display:
+          type: string
+          readOnly: true
+        file_size:
+          type: integer
+          title: Размер файла (байт)
+        file_path:
+          type: string
+          title: Путь к файлу
+          maxLength: 500
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ImportLogStatusEnum'
+          title: Статус обработки
+        status_display:
+          type: string
+          readOnly: true
+        records_count:
+          type: integer
+          title: Количество записей
+        success_count:
+          type: integer
+          title: Успешно обработано
+        error_count:
+          type: integer
+          title: Ошибок
+        success_rate:
+          type: number
+          format: double
+          readOnly: true
+        errors:
+          type: string
+          title: Описание ошибок
+        import_date:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата импорта
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата создания
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата обновления
+      required:
+      - created_at
+      - file_name
+      - file_size
+      - file_type
+      - file_type_display
+      - id
+      - import_batch_id
+      - import_date
+      - status_display
+      - success_rate
+      - updated_at
+      - user_username
+    ImportLogList:
+      type: object
+      description: Упрощённый сериализатор для списка импортов
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        import_batch_id:
+          type: string
+          title: Идентификатор импорта
+          maxLength: 100
+        file_name:
+          type: string
+          title: Имя файла
+          maxLength: 255
+        file_type_display:
+          type: string
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        user_username:
+          type: string
+          readOnly: true
+        records_count:
+          type: integer
+          title: Количество записей
+        success_count:
+          type: integer
+          title: Успешно обработано
+        error_count:
+          type: integer
+          title: Ошибок
+        success_rate:
+          type: number
+          format: double
+          readOnly: true
+        import_date:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата импорта
+      required:
+      - file_name
+      - file_type_display
+      - id
+      - import_batch_id
+      - import_date
+      - status_display
+      - success_rate
+      - user_username
+    ImportLogStatusEnum:
+      enum:
+      - pending
+      - success
+      - failed
+      - partial
+      type: string
+      description: |-
+        * `pending` - В обработке
+        * `success` - Успешно
+        * `failed` - Ошибка
+        * `partial` - Частично успешно
+    Object:
+      type: object
+      description: Сериализатор для модели Object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: Название объекта
+          maxLength: 200
+        address:
+          type: string
+          title: Адрес объекта
+          maxLength: 255
+        description:
+          type: string
+          title: Описание объекта
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата создания
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата обновления
+      required:
+      - address
+      - created_at
+      - id
+      - name
+      - updated_at
+    ObjectList:
+      type: object
+      description: Упрощённый сериализатор для списка объектов
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: Название объекта
+          maxLength: 200
+        address:
+          type: string
+          title: Адрес объекта
+          maxLength: 255
+        contracts_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата создания
+      required:
+      - address
+      - contracts_count
+      - created_at
+      - id
+      - name
+    ObjectRequest:
+      type: object
+      description: Сериализатор для модели Object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: Название объекта
+          maxLength: 200
+        address:
+          type: string
+          minLength: 1
+          title: Адрес объекта
+          maxLength: 255
+        description:
+          type: string
+          title: Описание объекта
+      required:
+      - address
+      - name
+    PaginatedContractListList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContractList'
+    PaginatedImportLogListList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportLogList'
+    PaginatedObjectListList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObjectList'
+    PaginatedPaymentListList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentList'
+    PaginatedPaymentRegistryListList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentRegistryList'
+    PaginatedUserList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+    PatchedContractRequest:
+      type: object
+      description: Сериализатор для модели Contract
+      properties:
+        object_id:
+          type: integer
+          writeOnly: true
+        number:
+          type: string
+          minLength: 1
+          title: Номер договора
+          maxLength: 100
+        name:
+          type: string
+          minLength: 1
+          title: Название / предмет договора
+          maxLength: 255
+        contract_date:
+          type: string
+          format: date
+          title: Дата заключения
+        start_date:
+          type: string
+          format: date
+          nullable: true
+          title: Дата начала работ
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          title: Плановая дата завершения
+        contractor:
+          type: string
+          minLength: 1
+          title: Контрагент
+          maxLength: 255
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма договора
+        currency:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyEnum'
+          title: Валюта
+        vat_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          title: Ставка НДС, %
+        vat_included:
+          type: boolean
+          title: Сумма включает НДС
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status235Enum'
+          title: Статус
+        document_link:
+          type: string
+          title: Ссылка на договор
+          maxLength: 500
+        notes:
+          type: string
+          title: Примечания
+    PatchedObjectRequest:
+      type: object
+      description: Сериализатор для модели Object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: Название объекта
+          maxLength: 200
+        address:
+          type: string
+          minLength: 1
+          title: Адрес объекта
+          maxLength: 255
+        description:
+          type: string
+          title: Описание объекта
+    PatchedPaymentRegistryRequest:
+      type: object
+      description: Сериализатор для модели PaymentRegistry
+      properties:
+        contract_id:
+          type: integer
+          writeOnly: true
+        planned_date:
+          type: string
+          format: date
+          title: Плановая дата
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusBceEnum'
+          title: Статус
+        initiator:
+          type: string
+          title: Инициатор платежа
+          maxLength: 255
+        comment:
+          type: string
+          title: Комментарий
+    PatchedPaymentRequest:
+      type: object
+      description: Сериализатор для модели Payment
+      properties:
+        contract_id:
+          type: integer
+          writeOnly: true
+        payment_type:
+          allOf:
+          - $ref: '#/components/schemas/PaymentTypeEnum'
+          title: Тип платежа
+        payment_date:
+          type: string
+          format: date
+          title: Дата платежа
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        company_account:
+          type: string
+          title: Счёт компании
+          maxLength: 100
+        description:
+          type: string
+          title: Назначение платежа
+        document_link:
+          type: string
+          title: Ссылка на документ
+          maxLength: 500
+        import_batch_id:
+          type: string
+          title: Идентификатор импорта
+          maxLength: 100
+    PatchedUserRequest:
+      type: object
+      description: Сериализатор для пользователя
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+    Payment:
+      type: object
+      description: Сериализатор для модели Payment
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        contract_number:
+          type: string
+          readOnly: true
+        contract_name:
+          type: string
+          readOnly: true
+        payment_type:
+          allOf:
+          - $ref: '#/components/schemas/PaymentTypeEnum'
+          title: Тип платежа
+        payment_type_display:
+          type: string
+          readOnly: true
+        payment_date:
+          type: string
+          format: date
+          title: Дата платежа
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        company_account:
+          type: string
+          title: Счёт компании
+          maxLength: 100
+        description:
+          type: string
+          title: Назначение платежа
+        document_link:
+          type: string
+          title: Ссылка на документ
+          maxLength: 500
+        import_batch_id:
+          type: string
+          title: Идентификатор импорта
+          maxLength: 100
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата создания
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата обновления
+      required:
+      - amount
+      - contract_name
+      - contract_number
+      - created_at
+      - id
+      - payment_date
+      - payment_type
+      - payment_type_display
+      - updated_at
+    PaymentList:
+      type: object
+      description: Упрощённый сериализатор для списка платежей
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        contract_number:
+          type: string
+          readOnly: true
+        payment_type:
+          allOf:
+          - $ref: '#/components/schemas/PaymentTypeEnum'
+          title: Тип платежа
+        payment_type_display:
+          type: string
+          readOnly: true
+        payment_date:
+          type: string
+          format: date
+          title: Дата платежа
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        company_account:
+          type: string
+          title: Счёт компании
+          maxLength: 100
+      required:
+      - amount
+      - contract_number
+      - id
+      - payment_date
+      - payment_type
+      - payment_type_display
+    PaymentRegistry:
+      type: object
+      description: Сериализатор для модели PaymentRegistry
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        contract_number:
+          type: string
+          readOnly: true
+        contract_name:
+          type: string
+          readOnly: true
+        planned_date:
+          type: string
+          format: date
+          title: Плановая дата
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusBceEnum'
+          title: Статус
+        status_display:
+          type: string
+          readOnly: true
+        initiator:
+          type: string
+          title: Инициатор платежа
+          maxLength: 255
+        comment:
+          type: string
+          title: Комментарий
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата создания
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Дата обновления
+      required:
+      - amount
+      - contract_name
+      - contract_number
+      - created_at
+      - id
+      - planned_date
+      - status_display
+      - updated_at
+    PaymentRegistryList:
+      type: object
+      description: Упрощённый сериализатор для списка плановых платежей
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        contract_number:
+          type: string
+          readOnly: true
+        planned_date:
+          type: string
+          format: date
+          title: Плановая дата
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusBceEnum'
+          title: Статус
+        status_display:
+          type: string
+          readOnly: true
+        initiator:
+          type: string
+          title: Инициатор платежа
+          maxLength: 255
+      required:
+      - amount
+      - contract_number
+      - id
+      - planned_date
+      - status_display
+    PaymentRegistryRequest:
+      type: object
+      description: Сериализатор для модели PaymentRegistry
+      properties:
+        contract_id:
+          type: integer
+          writeOnly: true
+        planned_date:
+          type: string
+          format: date
+          title: Плановая дата
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusBceEnum'
+          title: Статус
+        initiator:
+          type: string
+          title: Инициатор платежа
+          maxLength: 255
+        comment:
+          type: string
+          title: Комментарий
+      required:
+      - amount
+      - contract_id
+      - planned_date
+    PaymentRequest:
+      type: object
+      description: Сериализатор для модели Payment
+      properties:
+        contract_id:
+          type: integer
+          writeOnly: true
+        payment_type:
+          allOf:
+          - $ref: '#/components/schemas/PaymentTypeEnum'
+          title: Тип платежа
+        payment_date:
+          type: string
+          format: date
+          title: Дата платежа
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          title: Сумма
+        company_account:
+          type: string
+          title: Счёт компании
+          maxLength: 100
+        description:
+          type: string
+          title: Назначение платежа
+        document_link:
+          type: string
+          title: Ссылка на документ
+          maxLength: 500
+        import_batch_id:
+          type: string
+          title: Идентификатор импорта
+          maxLength: 100
+      required:
+      - amount
+      - contract_id
+      - payment_date
+      - payment_type
+    PaymentTypeEnum:
+      enum:
+      - expense
+      - income
+      type: string
+      description: |-
+        * `expense` - Расход
+        * `income` - Поступление
+    Status235Enum:
+      enum:
+      - planned
+      - active
+      - completed
+      - suspended
+      - terminated
+      type: string
+      description: |-
+        * `planned` - Планируется
+        * `active` - В работе
+        * `completed` - Завершён
+        * `suspended` - Приостановлен
+        * `terminated` - Расторгнут
+    StatusBceEnum:
+      enum:
+      - planned
+      - approved
+      - cancelled
+      type: string
+      description: |-
+        * `planned` - Планируется
+        * `approved` - Утверждено
+        * `cancelled` - Отменено
+    TokenObtainPair:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenObtainPairRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    TokenVerifyRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - token
+    User:
+      type: object
+      description: Сериализатор для пользователя
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date_joined
+      - id
+      - username
+    UserRequest:
+      type: object
+      description: Сериализатор для пользователя
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+      required:
+      - username
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+servers:
+- url: http://localhost:8000
+  description: Локальный сервер разработки
+tags:
+- name: Аутентификация
+  description: Регистрация, логин, управление токенами
+- name: Пользователи
+  description: Управление пользователями
+- name: Объекты
+  description: Управление строительными объектами
+- name: Договоры
+  description: Управление договорами
+- name: Платежи
+  description: Управление фактическими платежами
+- name: Плановые платежи
+  description: Управление реестром плановых платежей
+- name: Импорты
+  description: Журнал импорта данных
