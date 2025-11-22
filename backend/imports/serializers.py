@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from core.serializer_mixins import DisplayFieldMixin
 from .models import ImportLog
 
 
-class ImportLogSerializer(serializers.ModelSerializer):
+class ImportLogSerializer(DisplayFieldMixin, serializers.ModelSerializer):
     """Сериализатор для модели ImportLog"""
     
     user_username = serializers.CharField(source='user.username', read_only=True)
@@ -14,14 +15,8 @@ class ImportLogSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    status_display = serializers.CharField(
-        source='get_status_display',
-        read_only=True
-    )
-    file_type_display = serializers.CharField(
-        source='get_file_type_display',
-        read_only=True
-    )
+    status_display = DisplayFieldMixin.get_display_field('status')
+    file_type_display = DisplayFieldMixin.get_display_field('file_type')
     success_rate = serializers.FloatField(read_only=True)
     
     class Meta:
@@ -59,18 +54,12 @@ class ImportLogSerializer(serializers.ModelSerializer):
         ]
 
 
-class ImportLogListSerializer(serializers.ModelSerializer):
+class ImportLogListSerializer(DisplayFieldMixin, serializers.ModelSerializer):
     """Упрощённый сериализатор для списка импортов"""
     
     user_username = serializers.CharField(source='user.username', read_only=True)
-    status_display = serializers.CharField(
-        source='get_status_display',
-        read_only=True
-    )
-    file_type_display = serializers.CharField(
-        source='get_file_type_display',
-        read_only=True
-    )
+    status_display = DisplayFieldMixin.get_display_field('status')
+    file_type_display = DisplayFieldMixin.get_display_field('file_type')
     success_rate = serializers.FloatField(read_only=True)
     
     class Meta:

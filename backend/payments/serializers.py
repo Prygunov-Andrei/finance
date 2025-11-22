@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from contracts.models import Contract
+from core.serializer_mixins import DisplayFieldMixin
 from .models import Payment, PaymentRegistry
 
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(DisplayFieldMixin, serializers.ModelSerializer):
     """Сериализатор для модели Payment"""
     
     contract_number = serializers.CharField(source='contract.number', read_only=True)
@@ -13,10 +14,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         source='contract',
         write_only=True
     )
-    payment_type_display = serializers.CharField(
-        source='get_payment_type_display',
-        read_only=True
-    )
+    payment_type_display = DisplayFieldMixin.get_display_field('payment_type')
     
     class Meta:
         model = Payment
@@ -46,14 +44,11 @@ class PaymentSerializer(serializers.ModelSerializer):
         ]
 
 
-class PaymentListSerializer(serializers.ModelSerializer):
+class PaymentListSerializer(DisplayFieldMixin, serializers.ModelSerializer):
     """Упрощённый сериализатор для списка платежей"""
     
     contract_number = serializers.CharField(source='contract.number', read_only=True)
-    payment_type_display = serializers.CharField(
-        source='get_payment_type_display',
-        read_only=True
-    )
+    payment_type_display = DisplayFieldMixin.get_display_field('payment_type')
     
     class Meta:
         model = Payment
@@ -69,7 +64,7 @@ class PaymentListSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'contract_number', 'payment_type_display']
 
 
-class PaymentRegistrySerializer(serializers.ModelSerializer):
+class PaymentRegistrySerializer(DisplayFieldMixin, serializers.ModelSerializer):
     """Сериализатор для модели PaymentRegistry"""
     
     contract_number = serializers.CharField(source='contract.number', read_only=True)
@@ -79,10 +74,7 @@ class PaymentRegistrySerializer(serializers.ModelSerializer):
         source='contract',
         write_only=True
     )
-    status_display = serializers.CharField(
-        source='get_status_display',
-        read_only=True
-    )
+    status_display = DisplayFieldMixin.get_display_field('status')
     
     class Meta:
         model = PaymentRegistry
@@ -110,14 +102,11 @@ class PaymentRegistrySerializer(serializers.ModelSerializer):
         ]
 
 
-class PaymentRegistryListSerializer(serializers.ModelSerializer):
+class PaymentRegistryListSerializer(DisplayFieldMixin, serializers.ModelSerializer):
     """Упрощённый сериализатор для списка плановых платежей"""
     
     contract_number = serializers.CharField(source='contract.number', read_only=True)
-    status_display = serializers.CharField(
-        source='get_status_display',
-        read_only=True
-    )
+    status_display = DisplayFieldMixin.get_display_field('status')
     
     class Meta:
         model = PaymentRegistry

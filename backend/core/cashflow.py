@@ -2,15 +2,77 @@
 Утилиты для расчёта cash-flow
 """
 from decimal import Decimal
-from datetime import date, datetime
+from datetime import date
 from typing import Optional, Dict, List
 from django.db.models import Sum, Q, DecimalField
 from django.db.models.functions import Coalesce
-from payments.models import Payment, PaymentRegistry
+from payments.models import Payment
 
 
 class CashFlowCalculator:
     """Калькулятор cash-flow для объектов и договоров"""
+    
+    @staticmethod
+    def calculate(
+        object_id: Optional[int] = None,
+        contract_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Dict[str, Decimal]:
+        """
+        Рассчитывает cash-flow за период
+        
+        Args:
+            object_id: ID объекта (опционально)
+            contract_id: ID договора (опционально)
+            start_date: Начало периода (опционально)
+            end_date: Конец периода (опционально)
+        
+        Returns:
+            Dict с ключами: income, expense, cash_flow
+        
+        Note:
+            Если указаны и object_id и contract_id, используется contract_id
+        """
+        # Базовый фильтр
+        base_filter = Q()
+        
+        if contract_id:
+            base_filter &= Q(contract_id=contract_id)
+        elif object_id:
+            from contracts.models import Contract
+            contract_ids = Contract.objects.filter(object_id=object_id).values_list('id', flat=True)
+            base_filter &= Q(contract_id__in=contract_ids)
+        
+        # Фильтр по дате
+        if start_date:
+            base_filter &= Q(payment_date__gte=start_date)
+        if end_date:
+            base_filter &= Q(payment_date__lte=end_date)
+        
+        # Оптимизированный запрос: один запрос вместо двух
+        result = Payment.objects.filter(base_filter).aggregate(
+            income=Coalesce(
+                Sum('amount', filter=Q(payment_type=Payment.PaymentType.INCOME)),
+                Decimal('0'),
+                output_field=DecimalField()
+            ),
+            expense=Coalesce(
+                Sum('amount', filter=Q(payment_type=Payment.PaymentType.EXPENSE)),
+                Decimal('0'),
+                output_field=DecimalField()
+            )
+        )
+        
+        income = result['income'] or Decimal('0')
+        expense = result['expense'] or Decimal('0')
+        cash_flow = income - expense
+        
+        return {
+            'income': income,
+            'expense': expense,
+            'cash_flow': cash_flow,
+        }
     
     @staticmethod
     def calculate_for_object(
@@ -29,43 +91,11 @@ class CashFlowCalculator:
         Returns:
             Dict с ключами: income, expense, cash_flow
         """
-        from contracts.models import Contract
-        
-        # Получаем все договоры объекта
-        contracts = Contract.objects.filter(object_id=object_id)
-        contract_ids = contracts.values_list('id', flat=True)
-        
-        # Фильтр по дате
-        date_filter = Q()
-        if start_date:
-            date_filter &= Q(payment_date__gte=start_date)
-        if end_date:
-            date_filter &= Q(payment_date__lte=end_date)
-        
-        # Суммируем поступления (income)
-        income = Payment.objects.filter(
-            contract_id__in=contract_ids,
-            payment_type=Payment.PaymentType.INCOME
-        ).filter(date_filter).aggregate(
-            total=Coalesce(Sum('amount'), Decimal('0'), output_field=DecimalField())
-        )['total'] or Decimal('0')
-        
-        # Суммируем расходы (expense)
-        expense = Payment.objects.filter(
-            contract_id__in=contract_ids,
-            payment_type=Payment.PaymentType.EXPENSE
-        ).filter(date_filter).aggregate(
-            total=Coalesce(Sum('amount'), Decimal('0'), output_field=DecimalField())
-        )['total'] or Decimal('0')
-        
-        # Cash-flow = поступления - расходы
-        cash_flow = income - expense
-        
-        return {
-            'income': income,
-            'expense': expense,
-            'cash_flow': cash_flow,
-        }
+        return CashFlowCalculator.calculate(
+            object_id=object_id,
+            start_date=start_date,
+            end_date=end_date
+        )
     
     @staticmethod
     def calculate_for_contract(
@@ -84,37 +114,11 @@ class CashFlowCalculator:
         Returns:
             Dict с ключами: income, expense, cash_flow
         """
-        # Фильтр по дате
-        date_filter = Q()
-        if start_date:
-            date_filter &= Q(payment_date__gte=start_date)
-        if end_date:
-            date_filter &= Q(payment_date__lte=end_date)
-        
-        # Суммируем поступления (income)
-        income = Payment.objects.filter(
+        return CashFlowCalculator.calculate(
             contract_id=contract_id,
-            payment_type=Payment.PaymentType.INCOME
-        ).filter(date_filter).aggregate(
-            total=Coalesce(Sum('amount'), Decimal('0'), output_field=DecimalField())
-        )['total'] or Decimal('0')
-        
-        # Суммируем расходы (expense)
-        expense = Payment.objects.filter(
-            contract_id=contract_id,
-            payment_type=Payment.PaymentType.EXPENSE
-        ).filter(date_filter).aggregate(
-            total=Coalesce(Sum('amount'), Decimal('0'), output_field=DecimalField())
-        )['total'] or Decimal('0')
-        
-        # Cash-flow = поступления - расходы
-        cash_flow = income - expense
-        
-        return {
-            'income': income,
-            'expense': expense,
-            'cash_flow': cash_flow,
-        }
+            start_date=start_date,
+            end_date=end_date
+        )
     
     @staticmethod
     def calculate_for_all_objects(
@@ -131,35 +135,10 @@ class CashFlowCalculator:
         Returns:
             Dict с ключами: income, expense, cash_flow
         """
-        # Фильтр по дате
-        date_filter = Q()
-        if start_date:
-            date_filter &= Q(payment_date__gte=start_date)
-        if end_date:
-            date_filter &= Q(payment_date__lte=end_date)
-        
-        # Суммируем поступления (income)
-        income = Payment.objects.filter(
-            payment_type=Payment.PaymentType.INCOME
-        ).filter(date_filter).aggregate(
-            total=Coalesce(Sum('amount'), Decimal('0'), output_field=DecimalField())
-        )['total'] or Decimal('0')
-        
-        # Суммируем расходы (expense)
-        expense = Payment.objects.filter(
-            payment_type=Payment.PaymentType.EXPENSE
-        ).filter(date_filter).aggregate(
-            total=Coalesce(Sum('amount'), Decimal('0'), output_field=DecimalField())
-        )['total'] or Decimal('0')
-        
-        # Cash-flow = поступления - расходы
-        cash_flow = income - expense
-        
-        return {
-            'income': income,
-            'expense': expense,
-            'cash_flow': cash_flow,
-        }
+        return CashFlowCalculator.calculate(
+            start_date=start_date,
+            end_date=end_date
+        )
     
     @staticmethod
     def calculate_by_periods(
@@ -181,19 +160,23 @@ class CashFlowCalculator:
         
         Returns:
             List[Dict] с данными по каждому периоду
+        
+        Note:
+            Если указаны и object_id и contract_id, используется contract_id
         """
         from django.db.models.functions import TruncMonth, TruncWeek, TruncDay
         from django.db.models import Count
         
         # Базовый фильтр
         base_filter = Q()
-        if object_id:
-            from contracts.models import Contract
-            contracts = Contract.objects.filter(object_id=object_id)
-            contract_ids = contracts.values_list('id', flat=True)
-            base_filter &= Q(contract_id__in=contract_ids)
+        
         if contract_id:
             base_filter &= Q(contract_id=contract_id)
+        elif object_id:
+            from contracts.models import Contract
+            contract_ids = Contract.objects.filter(object_id=object_id).values_list('id', flat=True)
+            base_filter &= Q(contract_id__in=contract_ids)
+        
         if start_date:
             base_filter &= Q(payment_date__gte=start_date)
         if end_date:
@@ -209,7 +192,7 @@ class CashFlowCalculator:
         else:
             raise ValueError(f"Неизвестный тип периода: {period_type}")
         
-        # Группировка по периодам
+        # Оптимизированная группировка по периодам: один запрос вместо нескольких
         periods = Payment.objects.filter(base_filter).annotate(
             period=trunc_func
         ).values('period').annotate(

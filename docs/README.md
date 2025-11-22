@@ -25,6 +25,7 @@
 - [День 11. Система авторизации и аутентификации](./day11_authentication.md)
 - [День 12. Документация API (OpenAPI/Swagger)](./day12_api_documentation.md)
 - [День 13. Миграция на PostgreSQL](./day13_postgresql.md)
+- [Рефакторинг 2. Оптимизация и устранение технического долга](./refactoring_2.md)
 - [Планирование моделей](./planning/models_planning.md)
 - [Чек-лист планирования модуля](./planning/module_planning_checklist.md)
 - [Шаблоны тестовых данных](./sample_data/)
