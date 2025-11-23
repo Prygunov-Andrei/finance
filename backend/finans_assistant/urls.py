@@ -17,7 +17,7 @@ from drf_spectacular.views import (
 
 from objects.views import ObjectViewSet
 from contracts.views import ContractViewSet
-from payments.views import PaymentViewSet, PaymentRegistryViewSet
+from payments.views import PaymentViewSet, PaymentRegistryViewSet, ExpenseCategoryViewSet
 from imports.views import ImportLogViewSet
 from core.views import UserViewSet
 
@@ -28,6 +28,7 @@ router.register(r'objects', ObjectViewSet, basename='object')
 router.register(r'contracts', ContractViewSet, basename='contract')
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'payment-registry', PaymentRegistryViewSet, basename='payment-registry')
+router.register(r'expense-categories', ExpenseCategoryViewSet, basename='expense-category')
 router.register(r'imports', ImportLogViewSet, basename='import-log')
 
 @api_view(['GET'])
@@ -52,6 +53,7 @@ def api_root(request):
             'contracts': '/api/v1/contracts/',
             'payments': '/api/v1/payments/',
             'payment-registry': '/api/v1/payment-registry/',
+            'expense-categories': '/api/v1/expense-categories/',
             'imports': '/api/v1/imports/',
         }
     })
