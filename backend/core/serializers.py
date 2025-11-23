@@ -1,15 +1,28 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from .models import UserProfile
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователя"""
     
+    photo = serializers.ImageField(source='profile.photo', read_only=True)
+    photo_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined']
-        read_only_fields = ['id', 'date_joined']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'photo', 'photo_url']
+        read_only_fields = ['id', 'date_joined', 'photo', 'photo_url']
+    
+    def get_photo_url(self, obj):
+        """Возвращает полный URL фотографии"""
+        if obj.profile and obj.profile.photo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile.photo.url)
+            return obj.profile.photo.url
+        return None
 
 
 class RegisterSerializer(serializers.ModelSerializer):

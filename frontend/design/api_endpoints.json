@@ -1,0 +1,749 @@
+{
+  "api": {
+    "base_url": "http://localhost:8000/api/v1",
+    "version": "v1",
+    "authentication": {
+      "type": "JWT",
+      "header": "Authorization: Bearer {access_token}",
+      "endpoints": {
+        "login": {
+          "method": "POST",
+          "path": "/auth/login/",
+          "description": "Получить JWT токены (access и refresh)",
+          "request": {
+            "body": {
+              "username": "string (required)",
+              "password": "string (required)"
+            }
+          },
+          "response": {
+            "access": "string",
+            "refresh": "string"
+          }
+        },
+        "refresh": {
+          "method": "POST",
+          "path": "/auth/refresh/",
+          "description": "Обновить access токен",
+          "request": {
+            "body": {
+              "refresh": "string (required)"
+            }
+          },
+          "response": {
+            "access": "string"
+          }
+        },
+        "verify": {
+          "method": "POST",
+          "path": "/auth/verify/",
+          "description": "Проверить валидность токена",
+          "request": {
+            "body": {
+              "token": "string (required)"
+            }
+          }
+        }
+      }
+    },
+    "endpoints": {
+      "users": {
+        "base_path": "/users/",
+        "list": {
+          "method": "GET",
+          "path": "/users/",
+          "description": "Список пользователей (только для администраторов)",
+          "requires_auth": true,
+          "query_params": {
+            "search": "string (поиск по username, email)",
+            "ordering": "string (сортировка: username, date_joined, -username, -date_joined)"
+          },
+          "response": {
+            "count": 10,
+            "next": "http://localhost:8000/api/v1/users/?page=2",
+            "previous": null,
+            "results": [
+              {
+                "id": 1,
+                "username": "admin",
+                "email": "admin@example.com",
+                "first_name": "Admin",
+                "last_name": "User",
+                "date_joined": "2023-01-01T00:00:00Z"
+              }
+            ]
+          }
+        },
+        "retrieve": {
+          "method": "GET",
+          "path": "/users/{id}/",
+          "description": "Детали пользователя",
+          "requires_auth": true,
+          "response": {
+            "id": 1,
+            "username": "admin",
+            "email": "admin@example.com",
+            "first_name": "Admin",
+            "last_name": "User",
+            "date_joined": "2023-01-01T00:00:00Z"
+          }
+        },
+        "me": {
+          "method": "GET",
+          "path": "/users/me/",
+          "description": "Информация о текущем пользователе",
+          "requires_auth": true,
+          "response": {
+            "id": 1,
+            "username": "admin",
+            "email": "admin@example.com",
+            "first_name": "Admin",
+            "last_name": "User",
+            "date_joined": "2023-01-01T00:00:00Z"
+          }
+        },
+        "register": {
+          "method": "POST",
+          "path": "/users/register/",
+          "description": "Регистрация нового пользователя",
+          "requires_auth": false,
+          "request": {
+            "body": {
+              "username": "string (required)",
+              "email": "string (required)",
+              "password": "string (required)",
+              "password_confirm": "string (required)",
+              "first_name": "string (optional)",
+              "last_name": "string (optional)"
+            }
+          },
+          "response": {
+            "user": {
+              "id": 2,
+              "username": "newuser",
+              "email": "newuser@example.com",
+              "first_name": "New",
+              "last_name": "User",
+              "date_joined": "2023-11-22T10:00:00Z"
+            },
+            "refresh": "string",
+            "access": "string"
+          }
+        },
+        "change_password": {
+          "method": "POST",
+          "path": "/users/change_password/",
+          "description": "Смена пароля текущего пользователя",
+          "requires_auth": true,
+          "request": {
+            "body": {
+              "old_password": "string (required)",
+              "new_password": "string (required)",
+              "new_password_confirm": "string (required)"
+            }
+          },
+          "response": {
+            "message": "Пароль успешно изменён"
+          }
+        }
+      },
+      "objects": {
+        "base_path": "/objects/",
+        "list": {
+          "method": "GET",
+          "path": "/objects/",
+          "description": "Список объектов строительства",
+          "requires_auth": true,
+          "query_params": {
+            "search": "string (поиск по name, address, description)",
+            "ordering": "string (сортировка: name, created_at, updated_at, -name, -created_at, -updated_at)",
+            "page": "integer (пагинация)"
+          },
+          "response": {
+            "count": 5,
+            "next": null,
+            "previous": null,
+            "results": [
+              {
+                "id": 1,
+                "name": "ЖК \"Северный\"",
+                "address": "г. Москва, Дмитровское ш., 120",
+                "contracts_count": 12,
+                "created_at": "2023-01-15T10:00:00Z"
+              }
+            ]
+          }
+        },
+        "retrieve": {
+          "method": "GET",
+          "path": "/objects/{id}/",
+          "description": "Детали объекта",
+          "requires_auth": true,
+          "response": {
+            "id": 1,
+            "name": "ЖК \"Северный\"",
+            "address": "г. Москва, Дмитровское ш., 120",
+            "description": "Жилой комплекс в северной части Москвы",
+            "created_at": "2023-01-15T10:00:00Z",
+            "updated_at": "2023-11-20T15:30:00Z"
+          }
+        },
+        "create": {
+          "method": "POST",
+          "path": "/objects/",
+          "description": "Создать новый объект",
+          "requires_auth": true,
+          "request": {
+            "body": {
+              "name": "string (required, unique)",
+              "address": "string (required)",
+              "description": "string (optional)"
+            }
+          },
+          "response": {
+            "id": 2,
+            "name": "БЦ \"Плаза\"",
+            "address": "г. Москва, Ленинградский пр-т, 39",
+            "description": "Бизнес-центр",
+            "created_at": "2023-11-22T10:00:00Z",
+            "updated_at": "2023-11-22T10:00:00Z"
+          }
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/objects/{id}/",
+          "description": "Полностью обновить объект",
+          "requires_auth": true,
+          "request": {
+            "body": {
+              "name": "string (required)",
+              "address": "string (required)",
+              "description": "string (optional)"
+            }
+          }
+        },
+        "partial_update": {
+          "method": "PATCH",
+          "path": "/objects/{id}/",
+          "description": "Частично обновить объект",
+          "requires_auth": true,
+          "request": {
+            "body": {
+              "name": "string (optional)",
+              "address": "string (optional)",
+              "description": "string (optional)"
+            }
+          }
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/objects/{id}/",
+          "description": "Удалить объект",
+          "requires_auth": true
+        },
+        "cash_flow": {
+          "method": "GET",
+          "path": "/objects/{id}/cash_flow/",
+          "description": "Рассчитать cash-flow для объекта за период",
+          "requires_auth": true,
+          "query_params": {
+            "start_date": "string (YYYY-MM-DD, optional)",
+            "end_date": "string (YYYY-MM-DD, optional)"
+          },
+          "response": {
+            "object_id": 1,
+            "object_name": "ЖК \"Северный\"",
+            "start_date": "2023-01-01",
+            "end_date": "2023-12-31",
+            "income": "120500000.00",
+            "expense": "75300000.00",
+            "cash_flow": "45200000.00"
+          }
+        },
+        "cash_flow_periods": {
+          "method": "GET",
+          "path": "/objects/{id}/cash_flow_periods/",
+          "description": "Cash-flow с разбивкой по периодам",
+          "requires_auth": true,
+          "query_params": {
+            "period_type": "string (month|week|day, default: month)",
+            "start_date": "string (YYYY-MM-DD, optional)",
+            "end_date": "string (YYYY-MM-DD, optional)"
+          },
+          "response": {
+            "object_id": 1,
+            "object_name": "ЖК \"Северный\"",
+            "period_type": "month",
+            "start_date": "2023-01-01",
+            "end_date": "2023-12-31",
+            "periods": [
+              {
+                "period": "2023-01",
+                "income": "10000000.00",
+                "expense": "5000000.00",
+                "cash_flow": "5000000.00"
+              },
+              {
+                "period": "2023-02",
+                "income": "12000000.00",
+                "expense": "6500000.00",
+                "cash_flow": "5500000.00"
+              }
+            ],
+            "total": {
+              "income": "120500000.00",
+              "expense": "75300000.00",
+              "cash_flow": "45200000.00"
+            }
+          }
+        }
+      },
+      "contracts": {
+        "base_path": "/contracts/",
+        "list": {
+          "method": "GET",
+          "path": "/contracts/",
+          "description": "Список договоров",
+          "requires_auth": true,
+          "query_params": {
+            "object": "integer (фильтр по ID объекта)",
+            "status": "string (planned|active|completed|suspended|terminated)",
+            "currency": "string (RUB|USD|EUR)",
+            "search": "string (поиск по number, name, contractor, object__name)",
+            "ordering": "string (сортировка: contract_date, total_amount, created_at, -contract_date, -total_amount, -created_at)",
+            "page": "integer (пагинация)"
+          },
+          "response": {
+            "count": 20,
+            "next": null,
+            "previous": null,
+            "results": [
+              {
+                "id": 1,
+                "object_name": "ЖК \"Северный\"",
+                "number": "123/23",
+                "name": "Генподряд",
+                "contractor": "ООО \"СтройМонтаж\"",
+                "total_amount": "50000000.00",
+                "currency": "RUB",
+                "status": "active",
+                "contract_date": "2023-01-15"
+              }
+            ]
+          }
+        },
+        "retrieve": {
+          "method": "GET",
+          "path": "/contracts/{id}/",
+          "description": "Детали договора",
+          "requires_auth": true,
+          "response": {
+            "id": 1,
+            "object_id": 1,
+            "object_name": "ЖК \"Северный\"",
+            "number": "123/23",
+            "name": "Генподряд",
+            "contract_date": "2023-01-15",
+            "start_date": "2023-02-01",
+            "end_date": "2024-12-31",
+            "contractor": "ООО \"СтройМонтаж\"",
+            "total_amount": "50000000.00",
+            "currency": "RUB",
+            "vat_rate": "20.00",
+            "vat_included": true,
+            "status": "active",
+            "document_link": "https://example.com/contract.pdf",
+            "notes": "Договор на выполнение генподрядных работ",
+            "created_at": "2023-01-15T10:00:00Z",
+            "updated_at": "2023-11-20T15:30:00Z"
+          }
+        },
+        "create": {
+          "method": "POST",
+          "path": "/contracts/",
+          "description": "Создать новый договор",
+          "requires_auth": true,
+          "request": {
+            "body": {
+              "object_id": "integer (required)",
+              "number": "string (required)",
+              "name": "string (required)",
+              "contract_date": "string (YYYY-MM-DD, required)",
+              "start_date": "string (YYYY-MM-DD, optional)",
+              "end_date": "string (YYYY-MM-DD, optional)",
+              "contractor": "string (required)",
+              "total_amount": "string (decimal, required)",
+              "currency": "string (RUB|USD|EUR, default: RUB)",
+              "vat_rate": "string (decimal, default: 20.00)",
+              "vat_included": "boolean (default: true)",
+              "status": "string (planned|active|completed|suspended|terminated, default: planned)",
+              "document_link": "string (optional)",
+              "notes": "string (optional)"
+            }
+          }
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/contracts/{id}/",
+          "description": "Полностью обновить договор",
+          "requires_auth": true
+        },
+        "partial_update": {
+          "method": "PATCH",
+          "path": "/contracts/{id}/",
+          "description": "Частично обновить договор",
+          "requires_auth": true
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/contracts/{id}/",
+          "description": "Удалить договор",
+          "requires_auth": true
+        },
+        "cash_flow": {
+          "method": "GET",
+          "path": "/contracts/{id}/cash_flow/",
+          "description": "Рассчитать cash-flow для договора за период",
+          "requires_auth": true,
+          "query_params": {
+            "start_date": "string (YYYY-MM-DD, optional)",
+            "end_date": "string (YYYY-MM-DD, optional)"
+          },
+          "response": {
+            "contract_id": 1,
+            "contract_name": "123/23 — Генподряд",
+            "start_date": "2023-01-01",
+            "end_date": "2023-12-31",
+            "income": "30000000.00",
+            "expense": "25000000.00",
+            "cash_flow": "5000000.00"
+          }
+        },
+        "cash_flow_periods": {
+          "method": "GET",
+          "path": "/contracts/{id}/cash_flow_periods/",
+          "description": "Cash-flow договора с разбивкой по периодам",
+          "requires_auth": true,
+          "query_params": {
+            "period_type": "string (month|week|day, default: month)",
+            "start_date": "string (YYYY-MM-DD, optional)",
+            "end_date": "string (YYYY-MM-DD, optional)"
+          },
+          "response": {
+            "contract_id": 1,
+            "contract_name": "123/23 — Генподряд",
+            "period_type": "month",
+            "start_date": "2023-01-01",
+            "end_date": "2023-12-31",
+            "periods": [
+              {
+                "period": "2023-01",
+                "income": "5000000.00",
+                "expense": "2000000.00",
+                "cash_flow": "3000000.00"
+              }
+            ],
+            "total": {
+              "income": "30000000.00",
+              "expense": "25000000.00",
+              "cash_flow": "5000000.00"
+            }
+          }
+        }
+      },
+      "payments": {
+        "base_path": "/payments/",
+        "list": {
+          "method": "GET",
+          "path": "/payments/",
+          "description": "Список фактических платежей",
+          "requires_auth": true,
+          "query_params": {
+            "contract": "integer (фильтр по ID договора)",
+            "payment_type": "string (expense|income)",
+            "contract__object": "integer (фильтр по ID объекта)",
+            "search": "string (поиск по description, company_account, contract__number, contract__object__name)",
+            "ordering": "string (сортировка: payment_date, amount, created_at, -payment_date, -amount, -created_at)",
+            "page": "integer (пагинация)"
+          },
+          "response": {
+            "count": 50,
+            "next": null,
+            "previous": null,
+            "results": [
+              {
+                "id": 1,
+                "contract_number": "123/23",
+                "payment_type": "income",
+                "payment_type_display": "Поступление",
+                "payment_date": "2023-11-15",
+                "amount": "1500000.00",
+                "company_account": "40702810100000000001"
+              }
+            ]
+          }
+        },
+        "retrieve": {
+          "method": "GET",
+          "path": "/payments/{id}/",
+          "description": "Детали платежа",
+          "requires_auth": true,
+          "response": {
+            "id": 1,
+            "contract_id": 1,
+            "contract_number": "123/23",
+            "contract_name": "Генподряд",
+            "payment_type": "income",
+            "payment_type_display": "Поступление",
+            "payment_date": "2023-11-15",
+            "amount": "1500000.00",
+            "company_account": "40702810100000000001",
+            "description": "Оплата по договору",
+            "document_link": "https://example.com/payment.pdf",
+            "import_batch_id": "batch_20231115_001",
+            "created_at": "2023-11-15T10:00:00Z",
+            "updated_at": "2023-11-15T10:00:00Z"
+          }
+        },
+        "create": {
+          "method": "POST",
+          "path": "/payments/",
+          "description": "Создать новый платёж",
+          "requires_auth": true,
+          "request": {
+            "body": {
+              "contract_id": "integer (required)",
+              "payment_type": "string (expense|income, required)",
+              "payment_date": "string (YYYY-MM-DD, required)",
+              "amount": "string (decimal, required)",
+              "company_account": "string (optional)",
+              "description": "string (optional)",
+              "document_link": "string (optional)",
+              "import_batch_id": "string (optional)"
+            }
+          }
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/payments/{id}/",
+          "description": "Полностью обновить платёж",
+          "requires_auth": true
+        },
+        "partial_update": {
+          "method": "PATCH",
+          "path": "/payments/{id}/",
+          "description": "Частично обновить платёж",
+          "requires_auth": true
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/payments/{id}/",
+          "description": "Удалить платёж",
+          "requires_auth": true
+        }
+      },
+      "payment_registry": {
+        "base_path": "/payment-registry/",
+        "list": {
+          "method": "GET",
+          "path": "/payment-registry/",
+          "description": "Список плановых платежей",
+          "requires_auth": true,
+          "query_params": {
+            "contract": "integer (фильтр по ID договора)",
+            "status": "string (planned|approved|cancelled)",
+            "contract__object": "integer (фильтр по ID объекта)",
+            "search": "string (поиск по comment, initiator, contract__number, contract__object__name)",
+            "ordering": "string (сортировка: planned_date, amount, created_at, -planned_date, -amount, -created_at)",
+            "page": "integer (пагинация)"
+          },
+          "response": {
+            "count": 30,
+            "next": null,
+            "previous": null,
+            "results": [
+              {
+                "id": 1,
+                "contract_number": "123/23",
+                "planned_date": "2023-12-01",
+                "amount": "2000000.00",
+                "status": "planned",
+                "status_display": "Планируется",
+                "initiator": "Иванов И.И."
+              }
+            ]
+          }
+        },
+        "retrieve": {
+          "method": "GET",
+          "path": "/payment-registry/{id}/",
+          "description": "Детали планового платежа",
+          "requires_auth": true,
+          "response": {
+            "id": 1,
+            "contract_id": 1,
+            "contract_number": "123/23",
+            "contract_name": "Генподряд",
+            "planned_date": "2023-12-01",
+            "amount": "2000000.00",
+            "status": "planned",
+            "status_display": "Планируется",
+            "initiator": "Иванов И.И.",
+            "comment": "Плановый платёж за декабрь",
+            "created_at": "2023-11-20T10:00:00Z",
+            "updated_at": "2023-11-20T10:00:00Z"
+          }
+        },
+        "create": {
+          "method": "POST",
+          "path": "/payment-registry/",
+          "description": "Создать плановый платёж",
+          "requires_auth": true,
+          "request": {
+            "body": {
+              "contract_id": "integer (required)",
+              "planned_date": "string (YYYY-MM-DD, required)",
+              "amount": "string (decimal, required)",
+              "status": "string (planned|approved|cancelled, default: planned)",
+              "initiator": "string (optional)",
+              "comment": "string (optional)"
+            }
+          }
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/payment-registry/{id}/",
+          "description": "Полностью обновить плановый платёж",
+          "requires_auth": true
+        },
+        "partial_update": {
+          "method": "PATCH",
+          "path": "/payment-registry/{id}/",
+          "description": "Частично обновить плановый платёж",
+          "requires_auth": true
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/payment-registry/{id}/",
+          "description": "Удалить плановый платёж",
+          "requires_auth": true
+        }
+      },
+      "imports": {
+        "base_path": "/imports/",
+        "list": {
+          "method": "GET",
+          "path": "/imports/",
+          "description": "Список импортов данных (только чтение)",
+          "requires_auth": true,
+          "query_params": {
+            "status": "string (pending|success|failed|partial)",
+            "file_type": "string (payments_actual|payments_plan|incomes|balance)",
+            "user": "integer (фильтр по ID пользователя)",
+            "search": "string (поиск по file_name, import_batch_id, file_path)",
+            "ordering": "string (сортировка: import_date, created_at, -import_date, -created_at)",
+            "page": "integer (пагинация)"
+          },
+          "response": {
+            "count": 15,
+            "next": null,
+            "previous": null,
+            "results": [
+              {
+                "id": 1,
+                "import_batch_id": "batch_20231122_001",
+                "file_name": "payments_nov.xlsx",
+                "file_type_display": "Фактические платежи",
+                "status_display": "Успешно",
+                "user_username": "admin",
+                "records_count": 154,
+                "success_count": 154,
+                "error_count": 0,
+                "success_rate": 100.0,
+                "import_date": "2023-11-22T14:30:00Z"
+              }
+            ]
+          }
+        },
+        "retrieve": {
+          "method": "GET",
+          "path": "/imports/{id}/",
+          "description": "Детали импорта",
+          "requires_auth": true,
+          "response": {
+            "id": 1,
+            "import_batch_id": "batch_20231122_001",
+            "user_id": 1,
+            "user_username": "admin",
+            "file_name": "payments_nov.xlsx",
+            "file_type": "payments_actual",
+            "file_type_display": "Фактические платежи",
+            "file_size": 524288,
+            "file_path": "/uploads/payments_nov.xlsx",
+            "status": "success",
+            "status_display": "Успешно",
+            "records_count": 154,
+            "success_count": 154,
+            "error_count": 0,
+            "success_rate": 100.0,
+            "errors": "",
+            "import_date": "2023-11-22T14:30:00Z",
+            "created_at": "2023-11-22T14:30:00Z",
+            "updated_at": "2023-11-22T14:30:05Z"
+          }
+        }
+      }
+    },
+    "documentation": {
+      "swagger": "http://localhost:8000/api/docs/",
+      "redoc": "http://localhost:8000/api/redoc/",
+      "schema": "http://localhost:8000/api/schema/"
+    },
+    "pagination": {
+      "default_page_size": 20,
+      "page_size_query_param": "page_size",
+      "max_page_size": 100
+    },
+    "data_types": {
+      "status_contract": {
+        "planned": "Планируется",
+        "active": "В работе",
+        "completed": "Завершён",
+        "suspended": "Приостановлен",
+        "terminated": "Расторгнут"
+      },
+      "status_payment_registry": {
+        "planned": "Планируется",
+        "approved": "Утверждено",
+        "cancelled": "Отменено"
+      },
+      "status_import": {
+        "pending": "В обработке",
+        "success": "Успешно",
+        "failed": "Ошибка",
+        "partial": "Частично успешно"
+      },
+      "payment_type": {
+        "expense": "Расход",
+        "income": "Поступление"
+      },
+      "file_type": {
+        "payments_actual": "Фактические платежи",
+        "payments_plan": "Плановые платежи",
+        "incomes": "Поступления",
+        "balance": "Задолженность"
+      },
+      "currency": {
+        "RUB": "Российский рубль",
+        "USD": "Доллар США",
+        "EUR": "Евро"
+      },
+      "period_type": {
+        "month": "Месяц",
+        "week": "Неделя",
+        "day": "День"
+      }
+    }
+  }
+}
+

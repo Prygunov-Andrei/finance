@@ -26,7 +26,13 @@ SECRET_KEY = 'django-insecure-^)16g74+k9b!4mfbp3r6ih4h$1===oca==rjvsijbtr4uq&-=^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.ngrok-free.app',  # ⚠️ ВРЕМЕННО: Разрешить все ngrok домены (только для разработки)
+    '.ngrok.io',  # ⚠️ ВРЕМЕННО: Старые ngrok домены (только для разработки)
+    # В production удалите ngrok домены и добавьте реальный домен сервера
+]
 
 
 # Application definition
@@ -133,6 +139,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (загружаемые пользователями)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
@@ -153,11 +163,40 @@ REST_FRAMEWORK = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+# ⚠️ ВРЕМЕННОЕ РЕШЕНИЕ ДЛЯ РАЗРАБОТКИ
+# Для разработки - разрешить все источники (только для тестирования фронтенда в Figma)
+# В production измените на конкретные домены!
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
+# Примечание: CORS_ALLOW_PRIVATE_NETWORK не поддерживается django-cors-headers
+# Для работы с Figma во время разработки используйте ngrok туннель (см. start_ngrok.sh)
+# После развёртывания на production ngrok больше не нужен
+
+# Дополнительные заголовки для работы с Figma и ngrok
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'ngrok-skip-browser-warning',  # Заголовок ngrok для пропуска предупреждения браузера
+]
+
+# Для production используйте конкретные домены:
+# CORS_ALLOW_ALL_ORIGINS = False
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+#     "https://figma.site",
+# ]
+# CORS_ALLOWED_ORIGIN_REGEXES = [
+#     r"^https://.*\.figma\.site$",
+# ]
 
 # JWT Settings
 SIMPLE_JWT = {

@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -38,6 +39,16 @@ from .serializers import (
         description='Изменить пароль текущего пользователя',
         tags=['Пользователи'],
     ),
+    update_photo=extend_schema(
+        summary='Обновить фотографию',
+        description='Загрузить или обновить фотографию текущего пользователя',
+        tags=['Пользователи'],
+    ),
+    update_profile=extend_schema(
+        summary='Обновить профиль',
+        description='Обновить профиль текущего пользователя (фотографию и другие поля)',
+        tags=['Пользователи'],
+    ),
 )
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -69,8 +80,14 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Обычные пользователи видят только себя"""
         if self.request.user.is_staff:
-            return User.objects.all()
-        return User.objects.filter(id=self.request.user.id)
+            return User.objects.select_related('profile').all()
+        return User.objects.select_related('profile').filter(id=self.request.user.id)
+    
+    def get_serializer_context(self):
+        """Добавляем request в контекст сериализатора"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
     
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def register(self, request):
@@ -80,7 +97,7 @@ class UserViewSet(viewsets.ModelViewSet):
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
             return Response({
-                'user': UserSerializer(user).data,
+                'user': UserSerializer(user, context={'request': request}).data,
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             }, status=status.HTTP_201_CREATED)
@@ -89,7 +106,71 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
         """Получить информацию о текущем пользователе"""
-        serializer = self.get_serializer(request.user)
+        serializer = self.get_serializer(request.user, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(
+        detail=False,
+        methods=['put', 'patch'],
+        permission_classes=[permissions.IsAuthenticated],
+        parser_classes=[MultiPartParser, FormParser]
+    )
+    def update_photo(self, request):
+        """Обновить фотографию текущего пользователя"""
+        user = request.user
+        if not hasattr(user, 'profile'):
+            from core.models import UserProfile
+            UserProfile.objects.create(user=user)
+        
+        photo = request.FILES.get('photo')
+        if not photo:
+            return Response({'error': 'Фотография не предоставлена'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Проверка типа файла
+        if not photo.content_type.startswith('image/'):
+            return Response({'error': 'Файл должен быть изображением'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.profile.photo = photo
+        user.profile.save()
+        
+        serializer = self.get_serializer(user, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(
+        detail=False,
+        methods=['put', 'patch'],
+        permission_classes=[permissions.IsAuthenticated],
+        parser_classes=[MultiPartParser, FormParser, JSONParser]
+    )
+    def update_profile(self, request):
+        """Обновить профиль текущего пользователя"""
+        user = request.user
+        if not hasattr(user, 'profile'):
+            from core.models import UserProfile
+            UserProfile.objects.create(user=user)
+        
+        # Обновление фотографии, если предоставлена (только для multipart/form-data)
+        photo = request.FILES.get('photo')
+        if photo:
+            # Проверка типа файла
+            if not photo.content_type.startswith('image/'):
+                return Response({'error': 'Файл должен быть изображением'}, status=status.HTTP_400_BAD_REQUEST)
+            user.profile.photo = photo
+        
+        # Обновление полей пользователя, если предоставлены
+        # Работает и для JSON, и для multipart/form-data
+        if 'first_name' in request.data:
+            user.first_name = request.data['first_name']
+        if 'last_name' in request.data:
+            user.last_name = request.data['last_name']
+        if 'email' in request.data:
+            user.email = request.data['email']
+        
+        user.save()
+        if photo:
+            user.profile.save()
+        
+        serializer = self.get_serializer(user, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])

@@ -3,6 +3,8 @@ URL configuration for finans_assistant project.
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -68,3 +70,7 @@ urlpatterns = [
     path('api/v1/', include(router.urls)),
     path('api/v1/', api_root, name='api-root'),
 ]
+
+# Раздача медиа файлов в режиме разработки
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
