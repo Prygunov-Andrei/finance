@@ -12,6 +12,9 @@ class ObjectSerializer(serializers.ModelSerializer):
             'name',
             'address',
             'description',
+            'start_date',
+            'end_date',
+            'status',
             'created_at',
             'updated_at',
         ]
@@ -30,6 +33,9 @@ class ObjectListSerializer(serializers.ModelSerializer):
             'name',
             'address',
             'contracts_count',
+            'start_date',
+            'end_date',
+            'status',
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']

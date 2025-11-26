@@ -9,6 +9,11 @@ from core.cashflow import CashFlowCalculator
 class Object(TimestampedModel):
     """Модель объекта для строительной компании"""
     
+    class Status(models.TextChoices):
+        PLANNED = 'planned', 'Планируется'
+        IN_PROGRESS = 'in_progress', 'В работе'
+        COMPLETED = 'completed', 'Завершен'
+    
     name = models.CharField(
         max_length=200,
         unique=True,
@@ -21,6 +26,20 @@ class Object(TimestampedModel):
     description = models.TextField(
         blank=True,
         verbose_name='Описание объекта'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.IN_PROGRESS,
+        verbose_name='Статус'
+    )
+    start_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='Дата начала'
+    )
+    end_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='Дата окончания'
     )
 
     class Meta:

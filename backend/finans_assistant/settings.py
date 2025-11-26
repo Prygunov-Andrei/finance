@@ -31,7 +31,12 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     '.ngrok-free.app',  # ⚠️ ВРЕМЕННО: Разрешить все ngrok домены (только для разработки)
     '.ngrok.io',  # ⚠️ ВРЕМЕННО: Старые ngrok домены (только для разработки)
-    # В production удалите ngrok домены и добавьте реальный домен сервера
+    '*', # Разрешить всё для дебага
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.ngrok-free.app',
+    'https://*.figma.site',
 ]
 
 

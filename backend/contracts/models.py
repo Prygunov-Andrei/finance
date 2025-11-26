@@ -462,14 +462,24 @@ class Act(TimestampedModel):
         verbose_name='Описание работ'
     )
 
-    class Meta:
-        verbose_name = 'Акт выполненных работ'
-        verbose_name_plural = 'Акты выполненных работ'
-        unique_together = ('contract', 'number')
-        ordering = ['-date']
+    def save(self, *args, **kwargs):
+        # Авторасчет НДС если задан Gross, а остальные не заданы (или 0)
+        if self.amount_gross and (not self.amount_net or not self.vat_amount):
+            rate = self.contract.vat_rate  # Например, 20.00
+            # Формула для включенного НДС: Net = Gross / (1 + rate/100)
+            # Если НДС сверху: Net = Gross (но у нас по логике Gross - это итоговая сумма)
+            
+            divisor = Decimal('1') + (rate / Decimal('100'))
+            calculated_net = round(self.amount_gross / divisor, 2)
+            calculated_vat = self.amount_gross - calculated_net
+            
+            if not self.amount_net:
+                self.amount_net = calculated_net
+            if not self.vat_amount:
+                self.vat_amount = calculated_vat
 
-    def __str__(self):
-        return f"Акт №{self.number} от {self.date} ({self.contract.number})"
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class ActPaymentAllocation(models.Model):
