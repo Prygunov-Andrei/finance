@@ -53,7 +53,8 @@ INSTALLED_APPS = [
     'objects',
     'contracts',
     'payments',
-    'imports',
+    'accounting',
+    'communications',
 ]
 
 MIDDLEWARE = [
@@ -186,7 +187,6 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'ngrok-skip-browser-warning',  # Заголовок ngrok для пропуска предупреждения браузера
 ]
-
 # Для production используйте конкретные домены:
 # CORS_ALLOW_ALL_ORIGINS = False
 # CORS_ALLOWED_ORIGINS = [
@@ -239,3 +239,4 @@ SPECTACULAR_SETTINGS = {
         {'name': 'Импорты', 'description': 'Журнал импорта данных'},
     ],
 }
+

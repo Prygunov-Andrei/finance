@@ -23,3 +23,4 @@ admin.site.register(User, UserAdmin)
 # Регистрируем UserProfile отдельно (опционально)
 admin.site.register(UserProfile)
 
+

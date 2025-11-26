@@ -16,20 +16,27 @@ from drf_spectacular.views import (
 )
 
 from objects.views import ObjectViewSet
-from contracts.views import ContractViewSet
+from contracts.views import (
+    ContractViewSet, ContractAmendmentViewSet, 
+    WorkScheduleItemViewSet, ActViewSet, ActPaymentAllocationViewSet,
+    CommercialProposalViewSet
+)
 from payments.views import PaymentViewSet, PaymentRegistryViewSet, ExpenseCategoryViewSet
-from imports.views import ImportLogViewSet
 from core.views import UserViewSet
 
 # Создаём роутер для ViewSets
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'objects', ObjectViewSet, basename='object')
+router.register(r'commercial-proposals', CommercialProposalViewSet, basename='commercial-proposal')
 router.register(r'contracts', ContractViewSet, basename='contract')
+router.register(r'contract-amendments', ContractAmendmentViewSet, basename='contract-amendment')
+router.register(r'work-schedule', WorkScheduleItemViewSet, basename='work-schedule')
+router.register(r'acts', ActViewSet, basename='act')
+router.register(r'act-allocations', ActPaymentAllocationViewSet, basename='act-allocation')
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'payment-registry', PaymentRegistryViewSet, basename='payment-registry')
 router.register(r'expense-categories', ExpenseCategoryViewSet, basename='expense-category')
-router.register(r'imports', ImportLogViewSet, basename='import-log')
 
 @api_view(['GET'])
 def api_root(request):
@@ -50,11 +57,18 @@ def api_root(request):
             },
             'users': '/api/v1/users/',
             'objects': '/api/v1/objects/',
+            'commercial-proposals': '/api/v1/commercial-proposals/',
             'contracts': '/api/v1/contracts/',
+            'acts': '/api/v1/acts/',
             'payments': '/api/v1/payments/',
             'payment-registry': '/api/v1/payment-registry/',
             'expense-categories': '/api/v1/expense-categories/',
-            'imports': '/api/v1/imports/',
+            'accounting': {
+                'tax-systems': '/api/v1/tax-systems/',
+                'legal-entities': '/api/v1/legal-entities/',
+                'accounts': '/api/v1/accounts/',
+                'counterparties': '/api/v1/counterparties/',
+            }
         }
     })
 
@@ -70,6 +84,8 @@ urlpatterns = [
     path('api/v1/auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
     # API endpoints
     path('api/v1/', include(router.urls)),
+    path('api/v1/', include('accounting.urls')),
+    path('api/v1/', include('communications.urls')),
     path('api/v1/', api_root, name='api-root'),
 ]
 

@@ -1,4 +1,7 @@
-from rest_framework import viewsets, filters, permissions
+from rest_framework import viewsets, filters, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Payment, PaymentRegistry, ExpenseCategory
@@ -58,14 +61,16 @@ class PaymentViewSet(viewsets.ModelViewSet):
         'contract',
         'contract__object',
         'category',
-        'category__parent'
+        'category__parent',
+        'account',
+        'legal_entity'
     ).all()
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['contract', 'payment_type', 'contract__object', 'category', 'category__parent']
+    filterset_fields = ['contract', 'payment_type', 'contract__object', 'category', 'category__parent', 'account', 'legal_entity', 'status']
     search_fields = [
         'description',
-        'company_account',
+        'account__number', # Changed from company_account
         'contract__number',
         'contract__object__name',
         'category__name',
@@ -123,10 +128,17 @@ class PaymentRegistryViewSet(viewsets.ModelViewSet):
     partial_update: Частично обновить плановый платёж
     destroy: Удалить плановый платёж
     """
-    queryset = PaymentRegistry.objects.select_related('contract', 'contract__object').all()
+    queryset = PaymentRegistry.objects.select_related(
+        'contract',
+        'contract__object',
+        'category',
+        'account',
+        'approved_by',
+        'act'
+    ).all()
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['contract', 'status', 'contract__object']
+    filterset_fields = ['contract', 'status', 'contract__object', 'account', 'category']
     search_fields = ['comment', 'initiator', 'contract__number', 'contract__object__name']
     ordering_fields = ['planned_date', 'amount', 'created_at']
     ordering = ['planned_date', '-created_at']
@@ -135,6 +147,66 @@ class PaymentRegistryViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return PaymentRegistryListSerializer
         return PaymentRegistrySerializer
+
+    @extend_schema(summary='Согласовать платёж', tags=['Плановые платежи'])
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Переводит заявку в статус 'Утверждено'"""
+        payment_request = self.get_object()
+        
+        if payment_request.status != PaymentRegistry.Status.PLANNED:
+            return Response(
+                {'error': 'Можно согласовать только запланированный платёж'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        payment_request.status = PaymentRegistry.Status.APPROVED
+        payment_request.approved_by = request.user
+        payment_request.approved_at = timezone.now()
+        payment_request.save()
+        
+        serializer = self.get_serializer(payment_request)
+        return Response(serializer.data)
+
+    @extend_schema(summary='Провести оплату', tags=['Плановые платежи'])
+    @action(detail=True, methods=['post'])
+    def pay(self, request, pk=None):
+        """Переводит заявку в статус 'Оплачено' (создает платеж)"""
+        payment_request = self.get_object()
+        
+        if payment_request.status != PaymentRegistry.Status.APPROVED:
+            return Response(
+                {'error': 'Можно оплатить только согласованный платёж'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Проверяем достаточность средств (просто предупреждение или блок? По ТЗ - не блокируем)
+        # Но если мы хотим вернуть предупреждение, то это сложнее через REST.
+        # Просто проводим.
+            
+        payment_request.status = PaymentRegistry.Status.PAID
+        payment_request.save()
+        
+        serializer = self.get_serializer(payment_request)
+        return Response(serializer.data)
+
+    @extend_schema(summary='Отменить заявку', tags=['Плановые платежи'])
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Отменяет заявку"""
+        payment_request = self.get_object()
+        
+        if payment_request.status == PaymentRegistry.Status.PAID:
+            return Response(
+                {'error': 'Нельзя отменить уже оплаченную заявку'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        payment_request.status = PaymentRegistry.Status.CANCELLED
+        payment_request.save()
+        
+        serializer = self.get_serializer(payment_request)
+        return Response(serializer.data)
 
 
 @extend_schema_view(

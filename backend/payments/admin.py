@@ -75,7 +75,7 @@ class PaymentAdmin(admin.ModelAdmin):
         'payment_date',
         'category',
         'contract',
-        'company_account',
+        'account', # Changed from company_account to account
         'created_at',
     )
     list_filter = (
@@ -93,7 +93,7 @@ class PaymentAdmin(admin.ModelAdmin):
         'contract__object__name',
         'category__name',
         'description',
-        'company_account',
+        'account__number', # Changed from company_account to account__number
         'import_batch_id',
     )
     ordering = ('-payment_date',)
@@ -108,7 +108,7 @@ class PaymentAdmin(admin.ModelAdmin):
             'description': 'Оставьте пустым для операционных расходов/доходов'
         }),
         ('Дополнительная информация', {
-            'fields': ('company_account', 'description', 'document_link', 'import_batch_id')
+            'fields': ('account', 'description', 'scan_file', 'import_batch_id') # Changed company_account/document_link
         }),
         ('Системная информация', {
             'fields': ('created_at', 'updated_at'),
@@ -122,7 +122,8 @@ class PaymentAdmin(admin.ModelAdmin):
             'contract',
             'contract__object',
             'category',
-            'category__parent'
+            'category__parent',
+            'account'
         )
 
 

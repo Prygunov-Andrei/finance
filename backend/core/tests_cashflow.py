@@ -4,12 +4,17 @@ from django.test import TestCase
 from django.utils import timezone
 from objects.models import Object
 from contracts.models import Contract
-from payments.models import Payment
+from payments.models import Payment, ExpenseCategory
 from core.cashflow import CashFlowCalculator
+from accounting.models import Counterparty, LegalEntity, TaxSystem
 
 
 class CashFlowCalculatorTests(TestCase):
     def setUp(self) -> None:
+        self.tax_system = TaxSystem.objects.create(code='osn', name='ОСН')
+        self.legal_entity = LegalEntity.objects.create(name='Our Company', tax_system=self.tax_system, inn='111')
+        self.counterparty = Counterparty.objects.create(name='Partner', inn='222', type=Counterparty.Type.CUSTOMER, legal_form=Counterparty.LegalForm.OOO)
+        
         self.object = Object.objects.create(
             name='Объект А',
             address='г. Москва, ул. Примерная, д. 1',
@@ -19,26 +24,38 @@ class CashFlowCalculatorTests(TestCase):
             number='ДГ-001',
             name='Монтаж инженерных систем',
             contract_date=timezone.now().date(),
-            contractor='ООО "СтройИнжиниринг"',
+            counterparty=self.counterparty,
+            legal_entity=self.legal_entity,
             total_amount='1500000.00',
+            contract_type=Contract.Type.INCOME
+        )
+        
+        # Создаем категорию для тестов
+        self.category = ExpenseCategory.objects.create(
+            name='Тестовая категория',
+            code='test_cat',
+            requires_contract=True
         )
         
         # Создаём платежи
         today = timezone.now().date()
         Payment.objects.create(
             contract=self.contract,
+            category=self.category,
             payment_type=Payment.PaymentType.INCOME,
             payment_date=today - timedelta(days=10),
             amount=Decimal('500000.00'),
         )
         Payment.objects.create(
             contract=self.contract,
+            category=self.category,
             payment_type=Payment.PaymentType.EXPENSE,
             payment_date=today - timedelta(days=5),
             amount=Decimal('200000.00'),
         )
         Payment.objects.create(
             contract=self.contract,
+            category=self.category,
             payment_type=Payment.PaymentType.INCOME,
             payment_date=today - timedelta(days=2),
             amount=Decimal('300000.00'),
@@ -89,11 +106,14 @@ class CashFlowCalculatorTests(TestCase):
             number='ДГ-002',
             name='Отделочные работы',
             contract_date=timezone.now().date(),
-            contractor='ООО "РемСтрой"',
+            counterparty=self.counterparty,
+            legal_entity=self.legal_entity,
             total_amount='2000000.00',
+            contract_type=Contract.Type.INCOME
         )
         Payment.objects.create(
             contract=contract2,
+            category=self.category,
             payment_type=Payment.PaymentType.INCOME,
             payment_date=timezone.now().date(),
             amount=Decimal('100000.00'),
@@ -113,6 +133,7 @@ class CashFlowCalculatorTests(TestCase):
         today = timezone.now().date()
         Payment.objects.create(
             contract=self.contract,
+            category=self.category,
             payment_type=Payment.PaymentType.INCOME,
             payment_date=today.replace(day=1) - timedelta(days=30),
             amount=Decimal('100000.00'),
@@ -162,7 +183,8 @@ class CashFlowCalculatorTests(TestCase):
             number='ДГ-003',
             name='Пустой договор',
             contract_date=timezone.now().date(),
-            contractor='ООО "Тест"',
+            counterparty=self.counterparty,
+            legal_entity=self.legal_entity,
             total_amount='1000000.00',
         )
         
@@ -177,6 +199,10 @@ class ModelCashFlowMethodsTests(TestCase):
     """Тесты методов cash-flow в моделях"""
     
     def setUp(self) -> None:
+        self.tax_system = TaxSystem.objects.create(code='osn', name='ОСН')
+        self.legal_entity = LegalEntity.objects.create(name='Our Company', tax_system=self.tax_system, inn='111')
+        self.counterparty = Counterparty.objects.create(name='Partner', inn='222', type=Counterparty.Type.CUSTOMER, legal_form=Counterparty.LegalForm.OOO)
+        
         self.object = Object.objects.create(
             name='Объект А',
             address='г. Москва, ул. Примерная, д. 1',
@@ -186,17 +212,28 @@ class ModelCashFlowMethodsTests(TestCase):
             number='ДГ-001',
             name='Монтаж инженерных систем',
             contract_date=timezone.now().date(),
-            contractor='ООО "СтройИнжиниринг"',
+            counterparty=self.counterparty,
+            legal_entity=self.legal_entity,
             total_amount='1500000.00',
+            contract_type=Contract.Type.INCOME
         )
+        
+        self.category = ExpenseCategory.objects.create(
+            name='Тестовая категория',
+            code='test_cat_2',
+            requires_contract=True
+        )
+
         Payment.objects.create(
             contract=self.contract,
+            category=self.category,
             payment_type=Payment.PaymentType.INCOME,
             payment_date=timezone.now().date(),
             amount=Decimal('500000.00'),
         )
         Payment.objects.create(
             contract=self.contract,
+            category=self.category,
             payment_type=Payment.PaymentType.EXPENSE,
             payment_date=timezone.now().date(),
             amount=Decimal('200000.00'),
@@ -239,4 +276,3 @@ class ModelCashFlowMethodsTests(TestCase):
         if result:
             self.assertIn('period', result[0])
             self.assertIn('income', result[0])
-

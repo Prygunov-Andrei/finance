@@ -160,9 +160,3 @@ class ProtectedEndpointsTests(TestCase):
         """Тест что список платежей требует авторизации"""
         response = self.client.get('/api/v1/payments/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    def test_imports_list_requires_auth(self) -> None:
-        """Тест что список импортов требует авторизации"""
-        response = self.client.get('/api/v1/imports/')
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
