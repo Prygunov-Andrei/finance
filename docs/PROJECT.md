@@ -1,651 +1,934 @@
-# Описание проекта и сущностей
+# Проект Finans Assistant — Полная документация
+
+**Версия:** 2.0  
+**Дата:** 13.12.2025  
+**Статус:** Бекенд полностью реализован ✅
+
+---
+
+## Содержание
+
+1. [Общее описание проекта](#1-общее-описание-проекта)
+2. [Архитектура и технологии](#2-архитектура-и-технологии)
+3. [Модели данных](#3-модели-данных)
+4. [API Endpoints](#4-api-endpoints)
+5. [Бизнес-логика](#5-бизнес-логика)
+6. [Прогресс разработки](#6-прогресс-разработки)
+7. [Ограничения системы](#7-ограничения-системы)
+8. [История изменений](#8-история-изменений)
+
+---
 
 ## 1. Общее описание проекта
 
 ### Контекст
-- Строительная компания ведёт несколько объектов (строительные площадки, здания).
-- Каждый объект связан с множеством договоров, которые могут исполняться разными юридическими лицами.
-- Финансовые операции фиксируются в табличных файлах и сопровождаются документами, размещёнными в общем хранилище.
+
+Строительная компания ведёт несколько объектов (строительные площадки, здания). Компания выступает как Генеральный подрядчик: заключает договоры с Заказчиками и привлекает Исполнителей (субподрядчиков) для выполнения работ.
 
 ### Цели системы
-- Централизовать финансовые данные по объектам и договорам.
-- Автоматизировать сбор, обработку и анализ платежей из загруженных таблиц.
-- Обеспечить расчёт cash-flow по каждому объекту и по компании в целом.
-- Предоставить прозрачную отчётность и аналитические инструменты для команды.
+
+1. **SRM (Supplier Relationship Management):** Управление полным жизненным циклом взаимодействия с контрагентами — от заключения договора до закрытия актов и гарантийных обязательств.
+2. **Финансовый контроль:** Централизация финансовых данных, контроль кассовых разрывов, управление дебиторской и кредиторской задолженностью.
+3. **Зеркальный учет:** Связь доходов от Заказчиков с расходами на Исполнителей для расчета реальной маржинальности каждого объекта.
+4. **Единое информационное пространство:** Хранение всей истории по объекту в одном месте.
 
 ### Роли пользователей
 
-- **Руководитель строительного направления**
-  - Видит сводку по всем объектам, динамику cash-flow, статус договоров.
-  - Получает уведомления о рисках (кассовые разрывы, просрочки платежей).
-
-- **Финансовый директор / главный бухгалтер**
-  - Контролирует движение средств по договорам.
-  - Формирует финансовые отчёты, проверяет корректность платежей и задолженностей.
-
-- **Проектный менеджер объекта**
-  - Следит за затратами и поступлениями в разрезе конкретного объекта.
-  - Вносит комментарии к платежам, инициирует плановые платежи.
-
-- **Финансовый аналитик**
-  - Загружает обновлённые таблицы, сверяет расчёты, формирует прогнозы cash-flow.
+| Роль | Описание |
+|------|----------|
+| **Руководитель** | Видит сводку по объектам, маржинальность, статусы работ |
+| **Финансовый директор** | Контролирует движение средств, согласовывает платежи |
+| **Проектный менеджер** | Ведёт операционную работу, загружает акты и сканы |
+| **Финансовый аналитик** | Вводит данные, формирует отчётность |
 
 ### Ключевые требования
-1. Система хранит объекты, связанные договоры и платежи.
-2. Пользователи могут импортировать актуальные табличные данные без ручного ввода.
-3. Cash-flow рассчитывается автоматически в разрезе объектов, договоров и периодов.
-4. Доступны отчёты: сводка по объектам, детализация по договорам, реестр плановых платежей, задолженность.
-5. Вся информация по платежам должна ссылаться на исходные документы (сканы, PDF).
-6. История импортов и изменения данных фиксируются для аудита.
+
+1. **SRM-ядро:** Хранение финансовых транзакций и истории взаимоотношений (Договоры, Переписка, Акты).
+2. **Двусторонний учёт:** Поддержка договоров с Заказчиками (приход) и с Исполнителями (расход).
+3. **Зеркальность:** Расходные договоры привязываются к доходным для расчёта маржинальности.
+4. **Управление долгами:** Акты автоматически формируют дебиторскую/кредиторскую задолженность.
+5. **Workflow согласований:** Исходящие платежи проходят согласование через Реестр.
+6. **Документооборот:** К каждой операции привязывается скан документа.
+7. **Мульти-юридичность:** Несколько юрлиц и множество счетов (20+).
+8. **Аналитика:** Cash-flow (деньги) и P&L (начисления).
 
 ---
 
-## 2. Основные сущности
-
-> **Примечание:** Система учёта (юридические лица, счета, налогообложение) находится в стадии проектирования. Подробнее: [PROJECT_ACCOUNTING.md](./PROJECT_ACCOUNTING.md)
-
-### Object (Объект)
-Физическое место строительства с уникальным названием и адресом.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `name` — название объекта (уникальное)
-- `address` — адрес объекта
-- `description` — описание объекта (опционально)
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**Связи:**
-- Один объект может иметь множество договоров (`contracts`)
-- Агрегированные показатели cash-flow
-
-**Методы:**
-- `get_cash_flow(start_date=None, end_date=None)` — расчёт cash-flow для объекта
-- `get_cash_flow_by_periods(period_type='month', start_date=None, end_date=None)` — расчёт по периодам
-
-### Contract (Договор)
-Финансовое соглашение, привязанное к объекту; один объект может иметь множество договоров.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `object` — связь с объектом (ForeignKey)
-- `legal_entity` — юридическое лицо (ForeignKey на LegalEntity, опционально)
-  - Если указано — договор относится к конкретному юридическому лицу
-  - Если null — договор общий
-- `number` — номер договора
-- `name` — название / предмет договора
-- `contract_date` — дата заключения
-- `start_date` — дата начала работ (опционально)
-- `end_date` — плановая дата завершения (опционально)
-- `contractor` — контрагент
-- `total_amount` — сумма договора
-- `currency` — валюта (RUB/USD/EUR)
-- `vat_rate` — ставка НДС, % (используется если legal_entity не указан)
-- `vat_included` — сумма включает НДС
-- `status` — статус (planned/active/completed/suspended/terminated)
-- `document_link` — ссылка на договор (опционально)
-- `notes` — примечания (опционально)
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**Ограничения:**
-- Уникальность номера договора в пределах объекта
-
-**Связи:**
-- Принадлежит объекту (`object`)
-- Принадлежит юридическому лицу (`legal_entity`, опционально)
-- Имеет платежи (`payments`)
-- Имеет записи в Реестре (`planned_payments`)
-
-**Логика НДС:**
-- Если указан `legal_entity` → используется `legal_entity.tax_system.vat_rate`
-- Если не указан → используется `contract.vat_rate`
-
-**Методы:**
-- `get_cash_flow(start_date=None, end_date=None)` — расчёт cash-flow для договора
-- `get_cash_flow_by_periods(period_type='month', start_date=None, end_date=None)` — расчёт по периодам
-
-### Payment (Платёж)
-Фактическое движение денег. Одна сущность для:
-- исходящих платежей (расходы),
-- входящих платежей (доходы),
-- внутренних переводов между своими счетами.
-
-**Поля (основные):**
-- `id` — уникальный идентификатор
-- `account` — счёт компании (ForeignKey на Account, **обязательное**)
-  - Для расходов — счёт списания
-  - Для поступлений — счёт зачисления
-- `category` — категория платежа (ForeignKey на ExpenseCategory, обязательное)
-- `contract` — связь с договором (ForeignKey, опционально)
-- `legal_entity` — юридическое лицо (ForeignKey, опционально)
-- `payment_type` — тип платежа (`expense` / `income`)
-- `payment_date` — дата платежа
-- `status` — статус оплаты (`pending` / `paid` / `cancelled`)
-- `company_account` — номер счёта (CharField, опционально, для обратной совместимости)
-- `description` — назначение платежа (опционально)
-- `document_link` — ссылка на документ (опционально)
-- `import_batch_id` — идентификатор импорта (опционально, с индексом)
-- `payment_registry` — связь с расходным Реестром (OneToOne на PaymentRegistry, опционально)
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**НДС и аналитика:**
-- `amount_gross` — сумма с НДС (фактическая сумма по выписке)
-- `amount_net` — сумма без НДС
-- `vat_amount` — сумма НДС
-- `income_kind` — тип входящего платежа (для `payment_type='income'`):
-  - `advance` — аванс по договору
-  - `act_payment` — оплата по акту выполненных работ
-  - `other` — прочие поступления (возвраты, штрафы и т.п.)
-
-**Внутренние переводы:**
-- `is_internal_transfer` — флаг, что платёж участвует во внутреннем переводе
-- `internal_transfer_group` — идентификатор пары переводов (расход на одном счёте, доход на другом)
-
-**Workflow:**
-- **Расходы:** только через расходный Реестр:
-  - PaymentRegistry (`planned`) → одобрение → создание `Payment(paid)` → списание средств
-- **Поступления:** напрямую:
-  - создание `Payment(paid)` → зачисление средств
-- **Внутренние переводы:**
-  - пара платежей: `expense` на одном счёте и `income` на другом с одинаковым `internal_transfer_group`
-
-**Индексы:**
-- По дате платежа
-- По типу и дате
-- По договору и дате
-- По счёту и дате
-- По статусу
-
-**Связи:**
-- Привязан к счёту (`account`)
-- Относится к договору (`contract`, опционально)
-- Связан с расходным Реестром (`payment_registry`, опционально)
-- Влияет на cash-flow, остатки на счёте и аналитику по НДС
-
-### PaymentRegistry (Реестр платежей)
-**Workflow одобрения исходящих (расходных) платежей.** Каждый расходной платёж сначала попадает в Реестр, одобряется ответственным лицом, и только после одобрения создаётся фактический Payment со списанием средств.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `account` — счёт для списания (ForeignKey на Account, обязательное)
-- `category` — категория платежа (ForeignKey на ExpenseCategory, обязательное)
-- `contract` — связь с договором (ForeignKey, опционально)
-- `legal_entity` — юридическое лицо (ForeignKey, опционально)
-- `planned_date` — плановая дата
-- `amount` — сумма
-- `status` — статус (planned/approved/paid/cancelled)
-- `initiator` — инициатор платежа (опционально)
-- `approved_by` — кто одобрил (ForeignKey на User, опционально)
-- `approved_at` — когда одобрено (DateTimeField, опционально)
-- `comment` — комментарий (опционально)
-- `description` — назначение платежа (опционально)
-- `document_link` — ссылка на документ (опционально)
-- `payment` — созданный платёж после одобрения (OneToOne на Payment, опционально)
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**Workflow:**
-1. Создание записи со статусом `planned`
-2. Одобрение ответственным лицом → статус `approved`
-3. Автоматическое создание Payment → статус `paid`
-4. Списание средств со счёта
-
-**Связи:**
-- Привязка к счёту (`account`)
-- Привязка к категории (`category`)
-- Привязка к договору (`contract`, опционально)
-- Связь с созданным платежом (`payment`, опционально)
-
-### LegalEntity (Юридическое лицо)
-Юридическое лицо компании с системой налогообложения и счетами.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `name` — полное наименование
-- `short_name` — краткое наименование
-- `inn` — ИНН (уникальный)
-- `kpp` — КПП (опционально)
-- `ogrn` — ОГРН (опционально)
-- `tax_system` — система налогообложения (ForeignKey на TaxSystem)
-- `is_active` — активно ли юридическое лицо
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**Связи:**
-- Имеет систему налогообложения (`tax_system`)
-- Имеет множество счетов (`accounts`)
-- Имеет множество договоров (`contracts`)
-
-### TaxSystem (Система налогообложения)
-Справочник систем налогообложения.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `code` — код системы (unique): "osn_vat_20", "osn_vat_10", "osn_vat_5", "usn_income", "usn_income_expense", "no_vat"
-- `name` — название: "ОСН с НДС 20%", "УСН (доходы)", "Без НДС"
-- `vat_rate` — ставка НДС (Decimal, nullable)
-- `has_vat` — есть ли НДС (Boolean)
-- `description` — описание
-- `is_active` — активно ли
-
-### Account (Счёт компании)
-Счёт юридического лица (расчётный, касса) в определённой валюте.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `legal_entity` — юридическое лицо (ForeignKey на LegalEntity)
-- `name` — название счёта
-- `number` — номер счёта (уникальный в рамках юридического лица)
-- `account_type` — тип счёта (расчётный/касса/депозит/валютный)
-- `bank_name` — название банка (опционально)
-- `bik` — БИК банка (опционально)
-- `currency` — валюта (RUB/USD/EUR)
-- `is_active` — активен ли счёт
-- `initial_balance` — начальный остаток
-- `balance_date` — дата начального остатка
-- `location` — местоположение (для касс, опционально)
-- `description` — описание
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**Связи:**
-- Принадлежит юридическому лицу (`legal_entity`)
-- Имеет остатки (`balances`)
-- Имеет платежи (`payments`)
-### AccountBalance (Остаток на счёте)
-Остаток на счёте на конкретную дату.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `account` — счёт (ForeignKey на Account)
-- `balance_date` — дата остатка
-- `balance` — остаток на дату
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**Ограничения:**
-- Уникальность: `(account, balance_date)`
-
-### Act (Акт выполненных работ)
-Первичный документ по договору, фиксирующий объём и стоимость выполненных работ, на основе которого происходят оплаты.
-
-**Поля (концептуально):**
-- `id` — уникальный идентификатор
-- `contract` — договор (ForeignKey)
-- `number` — номер акта
-- `date` — дата акта
-- `amount_gross` — сумма с НДС
-- `amount_net` — сумма без НДС
-- `vat_amount` — сумма НДС
-- `status` — статус (draft/sent/signed/partially_paid/paid/cancelled)
-- `due_date` — ожидаемая дата оплаты
-- `description` — описание (опционально)
-- `document_link` — ссылка на скан/файл акта (опционально)
-- `created_at`, `updated_at` — временные метки
-
-**Связи:**
-- Принадлежит договору (`contract`)
-- Имеет распределения оплат (`allocations`)
-
-### IncomingPaymentRegistry (Реестр входящих платежей/актов)
-Реестр, отражающий ожидаемые и фактические входящие платежи по актам и авансам. Используется для контроля дебиторской задолженности.
-
-**Поля (концептуально):**
-- `id` — уникальный идентификатор
-- `contract` — договор (ForeignKey)
-- `act` — акт (ForeignKey на Act, опционально — для авансов может быть пустым)
-- `planned_date` — плановая дата поступления
-- `amount_expected` — ожидаемая сумма
-- `amount_paid` — уже оплаченная сумма
-- `status` — статус (expected/partially_paid/paid/overdue/cancelled)
-- `comment` — комментарий
-- `created_at`, `updated_at` — временные метки
-
-**Связи:**
-- Привязан к договору (`contract`)
-- Может быть привязан к акту (`act`)
-
-### ActPaymentAllocation (Распределение оплат по актам)
-Связь между входящими платежами и актами для учёта частичных оплат.
-
-**Поля (концептуально):**
-- `id` — уникальный идентификатор
-- `act` — акт (ForeignKey на Act)
-- `payment` — входящий платёж (ForeignKey на Payment)
-- `allocated_amount` — сумма, зачтённая в оплату акта
-- `created_at`, `updated_at` — временные метки
-
-**Логика:**
-- Один платёж может гасить несколько актов
-- Один акт может оплачиваться несколькими платежами
-
-### ImportLog (Журнал импортов)
-Журнал импорта данных из файлов для учёта и аудита.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `import_batch_id` — уникальный идентификатор импорта
-- `user` — пользователь, выполнивший импорт (ForeignKey, nullable)
-- `file_name` — имя файла
-- `file_type` — тип файла (payments_actual/payments_plan/incomes/balance)
-- `file_size` — размер файла в байтах
-- `file_path` — путь к файлу в хранилище (опционально)
-- `status` — статус обработки (pending/success/failed/partial)
-- `records_count` — общее количество записей
-- `success_count` — успешно обработано
-- `error_count` — количество ошибок
-- `errors` — описание ошибок (опционально)
-- `import_date` — дата импорта
-- `created_at` — дата создания
-- `updated_at` — дата обновления
-
-**Свойства:**
-- `success_rate` — процент успешно обработанных записей (read-only property)
-
-**Индексы:**
-- По идентификатору импорта
-- По статусу и дате
-- По типу файла и дате
-- По пользователю и дате
-
-### UserProfile (Профиль пользователя)
-Дополнительная информация о пользователе, включая фотографию.
-
-**Поля:**
-- `id` — уникальный идентификатор
-- `user` — связь с пользователем (OneToOne)
-- `photo` — фотография пользователя (ImageField, опционально)
-
-**Связи:**
-- Один к одному с User
-
----
-
-## 3. Источники данных и форматы
-
-### Табличные файлы (Excel/CSV)
-
-#### Файл «Фактические платежи» (payments_actual.xlsx)
-**Лист `payments`:**
-- `object_code` — код объекта (строка, *обязательно*)
-- `object_name` — название объекта (строка, *обязательно*)
-- `contract_number` — номер договора (строка, *обязательно*)
-- `contract_party` — контрагент (строка)
-- `payment_type` — расход / поступление (строка, *обязательно*)
-- `payment_date` — дата платежа (дата, *обязательно*)
-- `amount` — сумма (число, *обязательно*)
-- `company_account` — счёт компании (строка)
-- `description` — назначение платежа (строка)
-- `document_link` — путь/ссылка на первичный документ (строка)
-- `import_batch_id` — идентификатор импорта (строка, заполняется системой)
-
-#### Файл «Плановые платежи» (payments_plan.xlsx)
-**Лист `planned_payments`:**
-- `object_code`
-- `contract_number`
-- `planned_date`
-- `amount`
-- `status` — планируется / утверждено / отменено
-- `initiator` — инициатор платежа
-- `comment`
-
-#### Файл «Поступления» (incomes.xlsx)
-**Лист `incomes`:**
-- `object_code`
-- `contract_number`
-- `income_date`
-- `amount`
-- `payer`
-- `description`
-
-#### Файл «Задолженность» (balance.xlsx)
-**Лист `debts`:**
-- `object_code`
-- `contract_number`
-- `debt_type` — дебиторская / кредиторская
-- `amount`
-- `as_of_date`
-
-### Общие требования к файлам
-- Формат: Excel (.xlsx) или CSV в UTF-8
-- Названия листов фиксированы
-- Первая строка — заголовки колонок
-- Даты — `YYYY-MM-DD`
-- Суммы — десятичные значения с точкой
-
-### Каталог документов
-- Структурирован по объектам и договорам
-- Содержит первичные документы: счета, акты, договоры
-- Ответственный за поддержание структуры: Проектный менеджер объекта
-
-### Регламент обновления
-1. **Ответственные**
-   - Подготовка и загрузка файлов — Финансовый аналитик
-   - Проверка корректности и утверждение — Финансовый директор
-
-2. **Частота обновления**
-   - Фактические платежи и поступления — ежедневно при наличии операций
-   - Плановые платежи и задолженность — минимум раз в неделю
-
-3. **Версионирование**
-   - Каждая загрузка получает уникальный `import_batch_id`
-   - Исходные файлы архивируются с меткой времени `YYYYMMDD_HHMM`
-
----
-
-## 4. Архитектура системы
-
-### Backend (Django REST)
-
-**Слои:**
-- `objects`, `contracts`, `payments`, `imports` — доменные приложения
-- `core` — общие утилиты, настройки логирования, базовые модели
-
-**База данных:**
-- PostgreSQL с расширениями `pg_trgm` (поиск по названиям объектов) и `uuid-ossp` для идентификаторов импортов
-
-**Интеграция с файловым хранилищем:**
-- Локальный каталог/облачный бакет (путь хранится в платежах и импорт-логах)
-
-**Расширяемость:**
-- Возможность добавить модуль планирования ресурсов или аналитики без изменения ядра
-
-### Frontend
-- **Стек**: Next.js + TypeScript, UI-библиотека — Shadcn UI + Radix
-- **Слои интерфейса**:
-  - Панель объектов (список, фильтрация, статус)
-  - Договоры и платежи (гриды, формы, ссылки на документы)
-  - Отчёты и дашборды (cash-flow, задолженность)
-- **Состояние**: React Query для работы с API, Zustand для локального стейта
-- **Graph/Charts**: Recharts или Victory для визуализации cash-flow
-
-### Межслойное взаимодействие
-- REST API (JSON), авторизация через JWT (Simple JWT на backend)
-- Версионирование API: `/api/v1/...` с возможностью добавлять v2 при изменениях
-- Ограничение доступа: роли пользователей управляются на backend
+## 2. Архитектура и технологии
+
+### Backend
+
+| Компонент | Технология |
+|-----------|------------|
+| Фреймворк | Django REST Framework |
+| База данных | PostgreSQL |
+| Аутентификация | JWT (simplejwt) |
+| Документация API | Swagger/OpenAPI |
+
+### Django-приложения
+
+| Приложение | Описание |
+|------------|----------|
+| `core` | Базовые модели, миксины, утилиты, сервисы |
+| `accounting` | Юрлица, счета, контрагенты, налоговые системы |
+| `objects` | Объекты строительства |
+| `contracts` | Договоры, акты, рамочные договоры |
+| `payments` | Платежи, реестры, категории расходов |
+| `communications` | Переписка с контрагентами |
+| `pricelists` | Прайс-листы на работы, разряды, справочники |
+| `estimates` | Проекты, сметы, монтажные сметы |
+| `proposals` | ТКП, МП, справочники фронта работ |
 
 ### Структура проекта
 
 ```
-finans_assistant/
-├── backend/              # Django REST API
-│   ├── contracts/        # Приложение договоров
-│   ├── core/             # Общие компоненты
-│   ├── imports/          # Импорт данных
-│   ├── objects/          # Приложение объектов
-│   ├── payments/         # Приложение платежей
-│   └── finans_assistant/ # Настройки Django проекта
-├── frontend/             # Next.js приложение
-└── docs/                 # Документация проекта
+backend/
+├── core/                  # Базовые компоненты
+│   ├── models.py          # TimestampedModel, VersionedModelMixin
+│   ├── services.py        # Сервисный слой
+│   ├── cached.py          # CachedPropertyMixin
+│   ├── constants.py       # Константы
+│   ├── version_mixin.py   # VersioningMixin для ViewSets
+│   ├── number_generator.py # Генерация номеров
+│   └── file_signals.py    # Сигналы удаления файлов
+├── accounting/            # Учёт
+├── objects/               # Объекты
+├── contracts/             # Договоры
+├── payments/              # Платежи
+├── communications/        # Переписка
+├── pricelists/            # Прайс-листы
+├── estimates/             # Сметы
+├── proposals/             # ТКП/МП
+└── finans_assistant/      # Настройки проекта
 ```
 
 ---
 
-## 5. API и сериализаторы
+## 3. Модели данных
 
-### Сериализаторы DRF
+### 3.0. Objects (Объекты)
 
-Все модели имеют два типа сериализаторов:
-- **Полный сериализатор** — для детального просмотра (все поля)
-- **List сериализатор** — для списков (упрощённые данные)
-
-**Особенности:**
-- Read-only поля: `id`, `created_at`, `updated_at`
-- Автоматическое включение информации о связанных объектах
-- Display поля для choice полей (например, `payment_type_display`, `status_display`)
-
-### REST API Endpoints
-
-#### Объекты
-- `GET /api/v1/objects/` — список объектов
-- `GET /api/v1/objects/{id}/` — детали объекта
-- `POST /api/v1/objects/` — создать объект
-- `PUT/PATCH /api/v1/objects/{id}/` — обновить объект
-- `DELETE /api/v1/objects/{id}/` — удалить объект
-- `GET /api/v1/objects/{id}/cash_flow/` — расчёт cash-flow
-- `GET /api/v1/objects/{id}/cash_flow_periods/` — cash-flow по периодам
-
-#### Договоры
-- `GET /api/v1/contracts/` — список договоров
-- `GET /api/v1/contracts/{id}/` — детали договора
-- `POST /api/v1/contracts/` — создать договор
-- `PUT/PATCH /api/v1/contracts/{id}/` — обновить договор
-- `DELETE /api/v1/contracts/{id}/` — удалить договор
-- `GET /api/v1/contracts/{id}/cash_flow/` — расчёт cash-flow
-- `GET /api/v1/contracts/{id}/cash_flow_periods/` — cash-flow по периодам
-
-#### Платежи
-- `GET /api/v1/payments/` — список платежей
-- `GET /api/v1/payments/{id}/` — детали платежа
-- `POST /api/v1/payments/` — создать платёж
-- `PUT/PATCH /api/v1/payments/{id}/` — обновить платёж
-- `DELETE /api/v1/payments/{id}/` — удалить платёж
-
-#### Плановые платежи
-- `GET /api/v1/payment-registry/` — список плановых платежей
-- `GET /api/v1/payment-registry/{id}/` — детали планового платежа
-- `POST /api/v1/payment-registry/` — создать плановый платёж
-- `PUT/PATCH /api/v1/payment-registry/{id}/` — обновить плановый платёж
-- `DELETE /api/v1/payment-registry/{id}/` — удалить плановый платёж
-
-#### Импорты
-- `GET /api/v1/imports/` — список импортов (только чтение)
-- `GET /api/v1/imports/{id}/` — детали импорта
-
-#### Пользователи
-- `GET /api/v1/users/me/` — информация о текущем пользователе
-- `PUT/PATCH /api/v1/users/update_profile/` — обновить профиль (включая фото)
-- `POST /api/v1/users/change_password/` — смена пароля
-
-### Фильтрация и поиск
-
-Все ViewSets поддерживают:
-- **Фильтрацию** через query параметры (например: `?status=active&currency=RUB`)
-- **Поиск** через параметр `search` (например: `?search=москва`)
-- **Сортировку** через параметр `ordering` (например: `?ordering=-created_at`)
-- **Пагинацию** (по 20 записей на страницу)
-
-### Документация API
-
-- **Swagger UI**: `/api/docs/` — интерактивная документация
-- **ReDoc**: `/api/redoc/` — альтернативный интерфейс
-- **OpenAPI Schema**: `/api/schema/` — JSON схема
-
----
-
-## 6. Бизнес-логика
-
-### Расчёты cash-flow
-
-Реализован модуль `core/cashflow.py` с классом `CashFlowCalculator`.
-
-**Основные методы:**
-
-#### `calculate(object_id=None, contract_id=None, start_date=None, end_date=None)`
-Универсальный метод для расчёта cash-flow:
-- Для объекта: суммирует все договоры объекта
-- Для договора: рассчитывает по платежам договора
-- Для всех объектов: рассчитывает по всей компании
-
-Возвращает: `{'income': Decimal, 'expense': Decimal, 'cash_flow': Decimal}`
-
-#### `calculate_by_periods(object_id=None, contract_id=None, period_type='month', start_date=None, end_date=None)`
-Расчёт cash-flow с разбивкой по периодам:
-- `period_type`: 'month', 'week' или 'day'
-- Возвращает: `List[Dict]` с данными по каждому периоду
-
-**Особенности реализации:**
-- Использование `Decimal` для точности финансовых вычислений
-- Оптимизация запросов через агрегацию на уровне БД
-- Группировка по периодам через Django ORM функции (`TruncMonth`, `TruncWeek`, `TruncDay`)
-
----
-
-## 7. Аутентификация и безопасность
-
-### JWT аутентификация
-
-**Настройки:**
-- `ACCESS_TOKEN_LIFETIME`: 1 час
-- `REFRESH_TOKEN_LIFETIME`: 7 дней
-- `ROTATE_REFRESH_TOKENS`: True
-- `BLACKLIST_AFTER_ROTATION`: True
-
-### Endpoints аутентификации
-
-- `POST /api/v1/auth/login/` — получение JWT токенов
-- `POST /api/v1/auth/refresh/` — обновление access токена
-- `POST /api/v1/auth/verify/` — проверка токена
-- `POST /api/v1/users/register/` — регистрация нового пользователя
-
-### Защита endpoints
-
-Все ViewSets требуют авторизации (`IsAuthenticated`), кроме:
-- Регистрации (`/api/v1/users/register/`)
-
-**Использование токена:**
+#### Object (Объект строительства)
 ```
-Authorization: Bearer {access_token}
+- name: название (unique)
+- address: адрес
+- start_date, end_date: плановые сроки
+- status: planned / active / completed / suspended
+- description
 ```
 
----
-
-## 8. База данных
-
-### PostgreSQL
-
-**Настройки:**
-- Драйвер: `psycopg2-binary`
-- Расширения: `pg_trgm` (поиск), `uuid-ossp` (идентификаторы)
-
-**Преимущества:**
-- Производительность для production окружения
-- Масштабируемость для больших объёмов данных
-- Расширенные типы индексов
-- Улучшенная поддержка транзакций
-
-**Для production:**
-- Использовать переменные окружения для паролей
-- Настроить connection pooling
-- Включить логирование запросов
-- Настроить резервное копирование
+**Связи:**
+- contracts, projects, estimates, technical_proposals, mounting_proposals
 
 ---
 
-## 9. Ключевые метрики и отчёты
+### 3.1. Accounting (Учёт)
 
-- Cash-flow по объектам и по всей компании за произвольные периоды
-- Сводка расходов и доходов по договорам
-- Актуальный реестр планируемых платежей
-- Статус дебиторской и кредиторской задолженности
+#### TaxSystem (Система налогообложения)
+```
+- code: код системы (unique)
+- name: название
+- vat_rate: ставка НДС (nullable)
+- has_vat: есть ли НДС
+- is_active: активна
+```
+
+#### LegalEntity (Наша компания)
+```
+- name, short_name: наименования
+- inn, kpp, ogrn: реквизиты
+- tax_system: FK → TaxSystem
+- director: FK → User
+- director_name: ФИО директора
+- director_position: должность
+- is_active
+```
+
+#### Account (Счёт/Касса)
+```
+- legal_entity: FK → LegalEntity
+- name, number: название, номер счёта
+- account_type: bank_account / cash / deposit / currency_account
+- bank_name, bik: реквизиты банка
+- currency: RUB / USD / EUR
+- initial_balance, balance_date
+- is_active
+```
+
+#### AccountBalance (Остаток на дату)
+```
+- account: FK → Account
+- balance_date: дата
+- balance: сумма
+unique: (account, balance_date)
+```
+
+#### Counterparty (Контрагент)
+```
+- name, short_name: наименования
+- type: customer / vendor / both
+- vendor_subtype: supplier / executor / both (для vendor)
+- legal_form: ooo / ip / self_employed / fiz
+- inn, kpp, ogrn: реквизиты
+- contact_info, is_active
+```
+
+**Методы:**
+- `is_vendor()` → bool
+- `is_customer()` → bool
+- `validate_is_vendor(counterparty, field_name)`
 
 ---
 
-## 10. Ограничения и риски
+### 3.2. Pricelists (Прайс-листы)
 
-- Точность данных зависит от своевременного обновления файлов и корректности импорта
-- Требуется выстроенный регламент хранения и структурирования документов
-- Необходимо обеспечить разграничение доступа и аудит операций импорта
+#### WorkerGrade (Разряд рабочего)
+```
+- grade: 1-5 (unique)
+- name: "Монтажник N разряда"
+- default_hourly_rate: базовая ставка
+- is_active
+```
 
+#### WorkSection (Раздел работ)
+```
+- code: уникальный код
+- name: название
+- parent: FK → self (иерархия)
+- is_active, sort_order
+```
+
+#### WorkerGradeSkills (Навыки разряда по разделу)
+```
+- grade: FK → WorkerGrade
+- section: FK → WorkSection
+- description: описание навыков
+unique: (grade, section)
+```
+
+#### WorkItem (Работа) — с версионированием
+```
+- article: артикул (unique)
+- section: FK → WorkSection
+- name: наименование
+- unit: шт / м.п. / м² / м³ / компл / ед / ч / кг / т
+- hours: часов на единицу
+- grade: FK → WorkerGrade
+- composition: состав работы
+- coefficient: коэфф. сложности (default=1.00)
+- parent_version, version_number, is_current
+```
+
+**Методы:**
+- `create_new_version()` → WorkItem
+
+#### PriceList (Прайс-лист) — с версионированием
+```
+- number, name, date
+- status: draft / active / archived
+- grade_1_rate ... grade_5_rate: ставки по разрядам
+- parent_version, version_number
+```
+
+**Методы:**
+- `populate_rates_from_grades()`
+- `create_new_version()` → PriceList
+- `get_rate_for_grade(grade_number)` → Decimal
+
+#### PriceListAgreement (Согласование с Исполнителем)
+```
+- price_list: FK → PriceList
+- counterparty: FK → Counterparty (vendor only!)
+- agreed_date, notes
+unique: (price_list, counterparty)
+```
+
+#### PriceListItem (Позиция прайс-листа)
+```
+- price_list: FK → PriceList
+- work_item: FK → WorkItem
+- hours_override, coefficient_override: переопределения
+- is_included: включена в прайс
+unique: (price_list, work_item)
+```
+
+**Свойства:**
+- `effective_hours`, `effective_coefficient`
+- `calculated_cost` = hours × coefficient × rate
+
+---
+
+### 3.3. Estimates (Сметы)
+
+#### Project (Проект) — с версионированием
+```
+- cipher: шифр проекта
+- name, date
+- stage: П / РД
+- object: FK → Object
+- file: ZIP-архив
+- notes
+- is_approved_for_production, production_approval_file, production_approval_date
+- primary_check_done, primary_check_by, primary_check_date
+- secondary_check_done, secondary_check_by, secondary_check_date
+- parent_version, version_number, is_current
+unique: (cipher, date)
+```
+
+#### ProjectNote (Замечание к проекту)
+```
+- project: FK → Project
+- author: FK → User
+- text
+```
+
+#### Estimate (Смета) — с версионированием
+```
+- number, name
+- object: FK → Object
+- legal_entity: FK → LegalEntity
+- with_vat, vat_rate
+- projects: M2M → Project
+- price_list: FK → PriceList
+- man_hours, usd_rate, eur_rate, cny_rate
+- file
+- status: draft / in_progress / checking / approved / sent / agreed / rejected
+- approved_by_customer, approved_date
+- created_by, checked_by, approved_by
+- parent_version, version_number
+```
+
+**Вычисляемые свойства (cached_property):**
+- `total_materials_sale`, `total_works_sale`
+- `total_materials_purchase`, `total_works_purchase`
+- `total_sale`, `total_purchase`
+- `vat_amount`, `total_with_vat`
+- `profit_amount`, `profit_percent`
+
+#### EstimateSection (Раздел сметы)
+```
+- estimate: FK → Estimate
+- name, sort_order
+```
+
+#### EstimateSubsection (Подраздел сметы)
+```
+- section: FK → EstimateSection
+- name
+- materials_sale, works_sale
+- materials_purchase, works_purchase
+- sort_order
+```
+
+#### EstimateCharacteristic (Характеристика сметы)
+```
+- estimate: FK → Estimate
+- name: "Материалы" / "Работы" / custom
+- purchase_amount, sale_amount
+- is_auto_calculated: автоматически рассчитано
+- source_type: sections / manual
+- sort_order
+```
+
+#### MountingEstimate (Монтажная смета) — с версионированием
+```
+- number, name
+- object: FK → Object
+- source_estimate: FK → Estimate
+- total_amount, man_hours
+- file
+- status: draft / sent / approved / rejected
+- agreed_counterparty: FK → Counterparty (vendor only!)
+- agreed_date
+- created_by
+- parent_version, version_number
+```
+
+---
+
+### 3.4. Proposals (ТКП/МП)
+
+#### FrontOfWorkItem (Справочник "Фронт работ")
+```
+- name: "Подвести электропитание..."
+- category: "Электрика" / "Строительство" / ...
+- is_active, sort_order
+```
+
+#### MountingCondition (Справочник "Условия для МП")
+```
+- name: "Проживание" / "Инструмент" / "Питание"
+- description
+- is_active, sort_order
+```
+
+#### TechnicalProposal (ТКП) — с версионированием
+```
+- number: автогенерация {порядковый}_{ДД.ММ.ГГ}
+- outgoing_number, name, date
+- object: FK → Object
+- object_area
+- legal_entity: FK → LegalEntity
+- estimates: M2M → Estimate
+- advance_required, work_duration
+- validity_days: default=30
+- notes
+- status: draft / in_progress / checking / approved / sent / agreed / rejected
+- file
+- created_by, checked_by, approved_by, approved_at
+- parent_version, version_number
+```
+
+**Вычисляемые свойства (cached_property):**
+- `signatory`, `signatory_name`, `signatory_position`
+- `object_address`, `validity_date`
+- `total_man_hours`, `total_amount`, `total_with_vat`
+- `total_profit`, `profit_percent`
+- `currency_rates`, `projects`
+
+**Методы:**
+- `copy_data_from_estimates()`
+- `create_new_version()` → TechnicalProposal
+
+#### TKPEstimateSection (Раздел сметы в ТКП)
+```
+- tkp: FK → TechnicalProposal
+- source_estimate: FK → Estimate
+- source_section: FK → EstimateSection
+- name, sort_order
+```
+
+#### TKPEstimateSubsection (Подраздел сметы в ТКП)
+```
+- section: FK → TKPEstimateSection
+- source_subsection: FK → EstimateSubsection
+- name
+- materials_sale, works_sale
+- materials_purchase, works_purchase
+- sort_order
+```
+
+#### TKPCharacteristic (Характеристика ТКП)
+```
+- tkp: FK → TechnicalProposal
+- source_estimate: FK → Estimate
+- source_characteristic: FK → EstimateCharacteristic
+- name, purchase_amount, sale_amount, sort_order
+```
+
+#### TKPFrontOfWork (Фронт работ в ТКП)
+```
+- tkp: FK → TechnicalProposal
+- front_item: FK → FrontOfWorkItem
+- when_text, when_date
+- sort_order
+unique: (tkp, front_item)
+```
+
+#### MountingProposal (МП) — с версионированием
+```
+- number: автогенерация {номер_ТКП}-{порядковый} или МП-{год}-{порядковый}
+- name, date
+- object: FK → Object
+- counterparty: FK → Counterparty (vendor only!)
+- parent_tkp: FK → TechnicalProposal
+- mounting_estimate: FK → MountingEstimate
+- total_amount, man_hours
+- notes
+- status: draft / published / sent / approved / rejected
+- file
+- telegram_published, telegram_published_at
+- conditions: M2M → MountingCondition
+- created_by
+- parent_version, version_number
+```
+
+**Методы:**
+- `copy_from_mounting_estimate()`
+- `create_from_tkp(tkp, created_by)` → MountingProposal
+- `create_new_version()` → MountingProposal
+
+---
+
+### 3.5. Contracts (Договоры)
+
+#### FrameworkContract (Рамочный договор)
+```
+- number: автогенерация РД-{год}-{порядковый}
+- name, date
+- valid_from, valid_until
+- legal_entity: FK → LegalEntity
+- counterparty: FK → Counterparty (vendor only!)
+- price_lists: M2M → PriceList
+- status: draft / active / expired / terminated
+- file, notes
+- created_by
+```
+
+**Вычисляемые свойства:**
+- `is_expired`, `is_active`
+- `days_until_expiration`
+- `contracts_count`, `total_contracts_amount`
+
+#### Contract (Договор)
+```
+- object: FK → Object
+- legal_entity: FK → LegalEntity
+- counterparty: FK → Counterparty
+- contract_type: income / expense
+- parent_contract: FK → self (зеркальные)
+- technical_proposal: OneToOne → TechnicalProposal (для income)
+- mounting_proposal: OneToOne → MountingProposal (для expense)
+- framework_contract: FK → FrameworkContract (для expense)
+- responsible_manager: FK → User
+- responsible_engineer: FK → User
+- number, name
+- contract_date, start_date, end_date
+- total_amount, currency
+- vat_rate, vat_included
+- status: planned / active / completed / terminated
+- document_link, notes
+```
+
+**Методы:**
+- `get_margin()` → Decimal
+- `get_margin_details()` → Dict
+
+#### ContractAmendment (Доп. соглашение)
+```
+- contract: FK → Contract
+- number, date, reason
+- new_start_date, new_end_date
+- new_total_amount
+- file
+```
+
+#### WorkScheduleItem (График работ)
+```
+- contract: FK → Contract
+- name
+- start_date, end_date
+- workers_count
+- status: pending / in_progress / done
+```
+
+#### Act (Акт выполненных работ)
+```
+- contract: FK → Contract
+- number, date
+- period_start, period_end
+- amount_gross, amount_net, vat_amount
+- status: draft / signed / cancelled
+- due_date
+- file, description
+```
+
+#### ActPaymentAllocation (Распределение оплат)
+```
+- act: FK → Act
+- payment: FK → Payment
+- amount
+```
+
+---
+
+### 3.6. Payments (Платежи)
+
+#### ExpenseCategory (Категория расходов/доходов)
+```
+- name, code
+- parent: FK → self
+- requires_contract
+- is_active, sort_order
+```
+
+#### Payment (Платёж)
+```
+- account: FK → Account
+- contract: FK → Contract
+- category: FK → ExpenseCategory
+- legal_entity: FK → LegalEntity
+- payment_type: income / expense
+- payment_date
+- amount_gross, amount_net, vat_amount
+- status: pending / paid / cancelled
+- description
+- scan_file: обязательный PDF-документ (счёт или акт)
+- payment_registry: FK → PaymentRegistry (автоматически для expense)
+- is_internal_transfer, internal_transfer_group
+```
+
+**Логика создания:**
+- **income (приход)**: сразу статус `paid`
+- **expense (расход)**: статус `pending`, автоматически создаётся запись в Реестре
+
+#### PaymentRegistry (Реестр платежей — для согласования расходов)
+```
+- account: FK → Account
+- category: FK → ExpenseCategory
+- contract: FK → Contract
+- act: FK → Act (постоплата) или null (аванс)
+- amount, planned_date
+- status: planned / approved / paid / cancelled
+- initiator, approved_by, approved_at
+- comment
+- invoice_file
+```
+
+**Логика согласования:**
+1. Расходный платёж создаётся → автоматически появляется заявка в Реестре (`planned`)
+2. Финансовый директор согласовывает → статус `approved`
+3. После оплаты → статус `paid`, платёж проводится
+
+---
+
+### 3.7. Communications (Переписка)
+
+#### Correspondence (Переписка)
+```
+- contract: FK → Contract
+- type: incoming / outgoing
+- category: уведомление / претензия / запрос / ответ / прочее
+- number, date
+- status: новое / в работе / отвечено / закрыто
+- subject, description
+- file
+- related_to: FK → self
+```
+
+---
+
+### 3.8. Core (Базовые)
+
+#### UserProfile (Профиль пользователя)
+```
+- user: OneToOne → User
+- photo: аватар
+```
+
+#### TimestampedModel (Абстрактная)
+```
+- created_at, updated_at
+```
+
+#### VersionedModelMixin (Абстрактная)
+```
+- version_number
+- is_current
+- parent_version: FK → self
+```
+
+---
+
+## 3.9. Диаграмма связей
+
+```
+Object (Объект)
+├── Project[] (Проекты)
+│   └── Estimate[] (Сметы)
+│       ├── MountingEstimate[] (Монтажные сметы)
+│       └── TechnicalProposal[] (ТКП)
+│           ├── MountingProposal[] (МП)
+│           └── Contract (Договор с Заказчиком)
+├── Contract[] (Договоры)
+│   ├── Act[] (Акты)
+│   ├── Payment[] (Платежи)
+│   ├── Correspondence[] (Переписка)
+│   └── WorkScheduleItem[] (График работ)
+└── MountingProposal[] (МП)
+    └── Contract (Договор с Исполнителем)
+
+LegalEntity (Наша компания)
+├── TaxSystem (Налоговая система)
+├── Account[] (Счета)
+│   └── AccountBalance[] (Остатки)
+├── Contract[] (Наши договоры)
+├── FrameworkContract[] (Рамочные договоры)
+└── TechnicalProposal[] (Наши ТКП)
+
+Counterparty (Контрагент)
+├── Contract[] (Договоры)
+├── FrameworkContract[] (Рамочные — только vendor)
+├── MountingProposal[] (МП — только vendor)
+└── PriceListAgreement[] (Согласования — только vendor)
+
+PriceList (Прайс-лист)
+├── PriceListItem[] → WorkItem (Позиции)
+├── PriceListAgreement[] → Counterparty (Согласования)
+└── FrameworkContract[] (Рамочные договоры)
+```
+
+---
+
+## 4. API Endpoints
+
+### 4.0. Objects
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/objects/` | CRUD | Объекты строительства |
+| `/api/v1/objects/{id}/` | GET | Детали объекта |
+| `/api/v1/objects/{id}/cash_flow/` | GET | Cash-flow по объекту |
+
+### 4.1. Accounting
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/legal-entities/` | GET, POST | Наши компании |
+| `/api/v1/tax-systems/` | GET | Справочник налоговых систем |
+| `/api/v1/accounts/` | GET, POST | Счета и кассы |
+| `/api/v1/accounts/{id}/balance/` | GET | Остаток на счёте |
+| `/api/v1/counterparties/` | GET, POST | Контрагенты |
+| `/api/v1/expense-categories/` | GET, POST | Категории расходов |
+
+### 4.2. Pricelists
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/worker-grades/` | CRUD | Разряды рабочих |
+| `/api/v1/worker-grade-skills/` | CRUD | Навыки разрядов |
+| `/api/v1/work-sections/` | CRUD | Разделы работ |
+| `/api/v1/work-items/` | CRUD | Работы |
+| `/api/v1/work-items/{id}/versions/` | GET | История версий |
+| `/api/v1/price-lists/` | CRUD | Прайс-листы |
+| `/api/v1/price-lists/{id}/create-version/` | POST | Новая версия |
+| `/api/v1/price-lists/{id}/add-items/` | POST | Добавить работы |
+| `/api/v1/price-lists/{id}/remove-items/` | POST | Удалить работы |
+| `/api/v1/price-lists/{id}/export/` | GET | Экспорт в Excel |
+| `/api/v1/price-list-items/` | GET, PATCH | Позиции прайс-листа |
+| `/api/v1/price-list-agreements/` | CRUD | Согласования |
+
+### 4.3. Estimates
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/projects/` | CRUD | Проекты |
+| `/api/v1/projects/{id}/versions/` | GET | История версий |
+| `/api/v1/projects/{id}/create-version/` | POST | Новая версия |
+| `/api/v1/projects/{id}/primary-check/` | POST | Первичная проверка |
+| `/api/v1/projects/{id}/secondary-check/` | POST | Вторичная проверка |
+| `/api/v1/project-notes/` | CRUD | Замечания к проектам |
+| `/api/v1/estimates/` | CRUD | Сметы |
+| `/api/v1/estimates/{id}/versions/` | GET | История версий |
+| `/api/v1/estimates/{id}/create-version/` | POST | Новая версия |
+| `/api/v1/estimates/{id}/create-mounting-estimate/` | POST | Создать МС |
+| `/api/v1/estimate-sections/` | CRUD | Разделы смет |
+| `/api/v1/estimate-subsections/` | CRUD | Подразделы смет |
+| `/api/v1/estimate-characteristics/` | CRUD | Характеристики |
+| `/api/v1/mounting-estimates/` | CRUD | Монтажные сметы |
+| `/api/v1/mounting-estimates/{id}/agree/` | POST | Согласовать с Исполнителем |
+
+### 4.4. Proposals
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/front-of-work-items/` | CRUD | Справочник фронта работ |
+| `/api/v1/mounting-conditions/` | CRUD | Справочник условий для МП |
+| `/api/v1/technical-proposals/` | CRUD | ТКП |
+| `/api/v1/technical-proposals/{id}/versions/` | GET | История версий |
+| `/api/v1/technical-proposals/{id}/create-version/` | POST | Новая версия |
+| `/api/v1/technical-proposals/{id}/add-estimates/` | POST | Добавить сметы |
+| `/api/v1/technical-proposals/{id}/remove-estimates/` | POST | Удалить сметы |
+| `/api/v1/technical-proposals/{id}/copy-from-estimates/` | POST | Скопировать данные |
+| `/api/v1/technical-proposals/{id}/create-mp/` | POST | Создать МП |
+| `/api/v1/tkp-sections/` | GET, PATCH, DELETE | Разделы в ТКП |
+| `/api/v1/tkp-subsections/` | GET, PATCH, DELETE | Подразделы в ТКП |
+| `/api/v1/tkp-characteristics/` | CRUD | Характеристики ТКП |
+| `/api/v1/tkp-front-of-work/` | CRUD | Фронт работ ТКП |
+| `/api/v1/mounting-proposals/` | CRUD | МП |
+| `/api/v1/mounting-proposals/{id}/versions/` | GET | История версий |
+| `/api/v1/mounting-proposals/{id}/create-version/` | POST | Новая версия |
+
+### 4.5. Contracts
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/framework-contracts/` | CRUD | Рамочные договоры |
+| `/api/v1/framework-contracts/{id}/contracts/` | GET | Связанные договоры |
+| `/api/v1/framework-contracts/{id}/add-price-lists/` | POST | Добавить прайс-листы |
+| `/api/v1/framework-contracts/{id}/activate/` | POST | Активировать |
+| `/api/v1/framework-contracts/{id}/terminate/` | POST | Расторгнуть |
+| `/api/v1/contracts/` | CRUD | Договоры |
+| `/api/v1/contracts/{id}/balance/` | GET | Сальдо |
+| `/api/v1/contracts/{id}/cash_flow/` | GET | Cash-flow |
+| `/api/v1/contracts/{id}/correspondence/` | GET | Переписка |
+| `/api/v1/contracts/{id}/schedule/` | GET | График работ |
+| `/api/v1/contracts/{id}/amendments/` | POST | Доп. соглашения |
+| `/api/v1/acts/` | CRUD | Акты |
+| `/api/v1/acts/{id}/sign/` | POST | Подписать акт |
+
+### 4.6. Payments
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/payment-registry/` | CRUD | Реестр платежей |
+| `/api/v1/payment-registry/{id}/approve/` | POST | Одобрить |
+| `/api/v1/payments/` | CRUD | Платежи |
+
+### 4.7. Communications
+
+| Endpoint | Методы | Описание |
+|----------|--------|----------|
+| `/api/v1/correspondence/` | CRUD | Переписка |
+
+---
+
+## 5. Бизнес-логика
+
+### 5.1. Работа с Заказчиком (Доходный договор)
+
+```
+Проект → Смета → ТКП → Договор → Акты → Платежи (income)
+```
+
+1. Загружаем **Проект** с проектной документацией
+2. Создаём **Смету** на основе проекта
+3. Создаём **ТКП** на основе сметы
+4. После согласования ТКП создаём **Договор**
+5. Выполняем работы, загружаем **Акты**
+6. Получаем **Платежи** от Заказчика (сразу проводятся)
+
+### 5.2. Работа с Исполнителем (Расходный договор)
+
+```
+МП → Договор → Акты → Платежи (expense) → Реестр → Согласование
+```
+
+1. Создаём **МП** (можно из ТКП или отдельно)
+2. После согласования МП создаём **Договор** с Исполнителем
+3. Принимаем работы через **Акты**
+4. Создаём **Платёж** (автоматически попадает в Реестр)
+5. Финансовый директор **согласовывает** в Реестре
+6. После согласования платёж **проводится**
+
+### 5.3. Единая форма создания платежей
+
+Все платежи создаются через одну форму `/payments`:
+- **Обязательный PDF**: к каждому платежу прикрепляется документ (счёт или акт)
+- **Income (приход)**: проводится сразу (статус `paid`)
+- **Expense (расход)**: создаётся со статусом `pending`, автоматически появляется в Реестре для согласования
+
+### 5.4. Рамочные договоры
+
+Рамочный договор — долгосрочное соглашение с Исполнителем:
+- Содержит согласованные прайс-листы
+- Под него создаются расходные договоры
+- Не привязан к конкретному объекту
+
+### 5.5. Расчёт баланса договора
+
+```
+Баланс = (Сумма подписанных Актов) - (Сумма проведённых Платежей)
+```
+
+- Для `income`: Положительный = Нам должны, Отрицательный = Аванс
+- Для `expense`: Положительный = Мы должны, Отрицательный = Аванс
+
+### 5.6. Маржинальность
+
+```
+Маржа = Доходы по Актам - Расходы по дочерним договорам
+```
+
+---
+
+## 6. Прогресс разработки
+
+### ✅ Backend — Полностью реализован
+
+| Этап | Описание | Статус |
+|------|----------|--------|
+| 1 | Справочники и субъекты учёта | ✅ |
+| 2 | Ядро SRM: Договоры и Акты | ✅ |
+| 3 | Платежный конвейер | ✅ |
+| 4 | Коммуникации | ✅ |
+| 5 | Аналитика (Backend) | ✅ |
+| 6 | Прайс-листы | ✅ |
+| 7 | Проекты и Сметы | ✅ |
+| 8 | ТКП и МП | ✅ |
+| 9 | Рамочные договоры | ✅ |
+| 10 | Рефакторинг | ✅ |
+
+### 🚧 Frontend — В процессе
+
+Фронтенд реализуется на Next.js + TypeScript + Shadcn UI.
+
+### Рефакторинг (выполнен)
+
+1. **Оптимизация запросов:** `select_related`, `prefetch_related`, `annotate`
+2. **Версионирование:** `VersioningMixin`, `VersionedModelMixin`
+3. **Сервисный слой:** `core/services.py`
+4. **Кэширование:** `CachedPropertyMixin`, `@cached_property`
+5. **Удаление файлов:** Автоматические сигналы
+6. **Константы:** Централизованы в `core/constants.py`
+7. **Генерация номеров:** Централизована в `core/number_generator.py`
+
+---
+
+## 7. Ограничения системы
+
+1. **Кассовые разрывы:** Система не проверяет остатки на счёте перед созданием заявки (разрешены "виртуальные" разрывы).
+2. **Мультивалютность:** Каждая валюта учитывается на отдельном счёте, кросс-курсы не пересчитываются автоматически.
+3. **Telegram-публикация:** Только отметка о публикации, без интеграции с Telegram API.
+4. **Удаление документов:** Нельзя удалить подписанный Акт или проведённый Платёж без предварительной отмены.
+
+---
+
+## 8. История изменений
+
+### Версия 2.0 (13.12.2025) — Текущая
+
+**Добавлено:**
+- Приложение `pricelists` — прайс-листы на работы
+- Приложение `estimates` — проекты и сметы
+- Приложение `proposals` — ТКП и МП (заменили CommercialProposal)
+- Рамочные договоры (FrameworkContract)
+- Поля director в LegalEntity
+- Поля responsible_manager, responsible_engineer в Contract
+- Версионирование для WorkItem, PriceList, Project, Estimate, TKP, MP
+
+**Удалено:**
+- Модель CommercialProposal (заменена на TechnicalProposal + MountingProposal)
+- Модель CommercialProposalEstimateFile (функционал перенесён в estimates)
+
+**Рефакторинг:**
+- Оптимизация N+1 запросов
+- Сервисный слой (core/services.py)
+- Централизация констант и генерации номеров
+
+---
+
+## Приложения
+
+### A. Команды для разработки
+
+```bash
+# Запуск сервера
+cd backend && python manage.py runserver
+
+# Миграции
+python manage.py makemigrations
+python manage.py migrate
+
+# Заполнение данных
+python manage.py populate_db
+python manage.py populate_pricelists
+python manage.py populate_proposals
+
+# Тесты
+python manage.py test
+
+# Проверка
+python manage.py check
+```
+
+### B. Переменные окружения
+
+```python
+# settings.py
+COMMERCIAL_PROPOSAL_START_NUMBER = 210  # Начальный номер ТКП
+```
+
+---
+
+*Документация обновлена: 13.12.2025*

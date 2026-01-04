@@ -27,7 +27,8 @@ class ContractModelTests(TestCase):
             name='Наша Фирма', short_name='НФ', inn='111', tax_system=self.tax_system
         )
         self.counterparty = Counterparty.objects.create(
-            name='Подрядчик', short_name='ПДР', inn='222', type=Counterparty.Type.VENDOR
+            name='Подрядчик', short_name='ПДР', inn='222', 
+            type=Counterparty.Type.VENDOR, legal_form=Counterparty.LegalForm.OOO
         )
 
     def _create_contract(self, **kwargs) -> Contract:

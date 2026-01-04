@@ -42,13 +42,20 @@ class PaymentModelTests(TestCase):
         )
 
     def _create_payment(self, **kwargs) -> Payment:
+        from django.core.files.uploadedfile import SimpleUploadedFile
         defaults = {
             'category': self.category,
             'contract': self.contract,
             'payment_type': Payment.PaymentType.EXPENSE,
             'payment_date': timezone.now().date(),
             'amount': Decimal('100000.00'),
+            'amount_gross': Decimal('100000.00'),
             'description': 'Оплата материалов',
+            'scan_file': SimpleUploadedFile(
+                "test.pdf",
+                b"PDF file content",
+                content_type="application/pdf"
+            ),
         }
         defaults.update(kwargs)
         return Payment.objects.create(**defaults)

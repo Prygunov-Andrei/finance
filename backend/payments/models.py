@@ -163,8 +163,8 @@ class Payment(TimestampedModel):
     )
     scan_file = models.FileField(
         upload_to=payment_scan_path,
-        blank=True, null=True,
-        verbose_name='Скан платежки'
+        verbose_name='Документ (счёт/акт)',
+        help_text='PDF для расходов, любой формат для доходов'
     )
     
     import_batch_id = models.CharField(
@@ -179,6 +179,19 @@ class Payment(TimestampedModel):
         null=True, blank=True,
         related_name='payment_fact',
         verbose_name='Связанная заявка'
+    )
+    is_internal_transfer = models.BooleanField(
+        default=False,
+        verbose_name='Внутренний перевод',
+        help_text='Флаг внутреннего перевода между счетами'
+    )
+    internal_transfer_group = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name='Группа внутреннего перевода',
+        help_text='Группа для связывания внутренних переводов (если платеж является частью внутреннего перевода)'
     )
 
     class Meta:
@@ -206,6 +219,14 @@ class Payment(TimestampedModel):
             
         if self.account and self.legal_entity and self.account.legal_entity != self.legal_entity:
              raise ValidationError({'account': 'Счет должен принадлежать выбранному юрлицу'})
+        
+        # Валидация формата файла для расходных платежей
+        if self.scan_file and self.payment_type == self.PaymentType.EXPENSE:
+            filename = self.scan_file.name.lower()
+            if not filename.endswith('.pdf'):
+                raise ValidationError({
+                    'scan_file': 'Для расходных платежей допускается только формат PDF'
+                })
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -311,3 +332,66 @@ class PaymentRegistry(TimestampedModel):
 
     def __str__(self) -> str:
         return f"Заявка {self.amount} на {self.planned_date} ({self.get_status_display()})"
+
+
+class PaymentItem(TimestampedModel):
+    """Позиция в платёжном документе (товар/услуга из счёта)"""
+    
+    payment = models.ForeignKey(
+        'Payment',
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='Платёж'
+    )
+    product = models.ForeignKey(
+        'catalog.Product',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payment_items',
+        verbose_name='Товар из каталога'
+    )
+    raw_name = models.CharField(
+        max_length=500,
+        verbose_name='Исходное название из счёта'
+    )
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        verbose_name='Количество'
+    )
+    unit = models.CharField(
+        max_length=20,
+        verbose_name='Единица измерения'
+    )
+    price_per_unit = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        verbose_name='Цена за единицу'
+    )
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        verbose_name='Сумма'
+    )
+    vat_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='НДС по позиции'
+    )
+    
+    class Meta:
+        verbose_name = 'Позиция платежа'
+        verbose_name_plural = 'Позиции платежей'
+        ordering = ['id']
+    
+    def __str__(self):
+        return f"{self.raw_name} x{self.quantity}"
+    
+    def save(self, *args, **kwargs):
+        # Автоматический расчёт суммы
+        if not self.amount:
+            self.amount = self.quantity * self.price_per_unit
+        super().save(*args, **kwargs)

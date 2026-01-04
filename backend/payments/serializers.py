@@ -1,8 +1,15 @@
+import json
+
 from rest_framework import serializers
+
 from contracts.models import Contract, Act
 from accounting.models import Account, LegalEntity
 from core.serializer_mixins import DisplayFieldMixin
-from .models import Payment, PaymentRegistry, ExpenseCategory
+from .models import Payment, PaymentRegistry, ExpenseCategory, PaymentItem
+from .services import PaymentService
+
+# Максимальное количество позиций в одном платеже
+MAX_PAYMENT_ITEMS = 200
 
 
 class ExpenseCategorySerializer(serializers.ModelSerializer):
@@ -30,6 +37,30 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
     def get_full_path(self, obj):
         """Возвращает полный путь категории"""
         return obj.get_full_path()
+
+
+class PaymentItemSerializer(serializers.ModelSerializer):
+    """Сериализатор позиции платежа"""
+    
+    product_name = serializers.CharField(source='product.name', read_only=True, allow_null=True)
+    product_category = serializers.CharField(source='product.category.name', read_only=True, allow_null=True)
+    
+    class Meta:
+        model = PaymentItem
+        fields = [
+            'id', 'raw_name', 'product', 'product_name', 'product_category',
+            'quantity', 'unit', 'price_per_unit', 'amount', 'vat_amount',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'product_name', 'product_category', 'created_at']
+
+
+class PaymentItemCreateSerializer(serializers.ModelSerializer):
+    """Сериализатор для создания позиций платежа"""
+    
+    class Meta:
+        model = PaymentItem
+        fields = ['raw_name', 'quantity', 'unit', 'price_per_unit', 'vat_amount']
 
 
 class PaymentSerializer(DisplayFieldMixin, serializers.ModelSerializer):
@@ -73,6 +104,10 @@ class PaymentSerializer(DisplayFieldMixin, serializers.ModelSerializer):
     payment_type_display = DisplayFieldMixin.get_display_field('payment_type')
     status_display = DisplayFieldMixin.get_display_field('status')
     
+    items = PaymentItemSerializer(many=True, read_only=True)
+    items_input = serializers.JSONField(write_only=True, required=False)
+    items_count = serializers.SerializerMethodField()
+    
     class Meta:
         model = Payment
         fields = [
@@ -99,6 +134,11 @@ class PaymentSerializer(DisplayFieldMixin, serializers.ModelSerializer):
             'description',
             'scan_file',
             'payment_registry',
+            'is_internal_transfer',
+            'internal_transfer_group',
+            'items',
+            'items_input',
+            'items_count',
             'created_at',
             'updated_at',
         ]
@@ -115,6 +155,8 @@ class PaymentSerializer(DisplayFieldMixin, serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'payment_registry',
+            'items',
+            'items_count',
         ]
     
     def get_category_full_path(self, obj):
@@ -122,6 +164,15 @@ class PaymentSerializer(DisplayFieldMixin, serializers.ModelSerializer):
         if obj.category:
             return obj.category.get_full_path()
         return None
+    
+    def get_items_count(self, obj):
+        """
+        Возвращает количество позиций в платеже.
+        Использует annotated поле если доступно (оптимизация N+1).
+        """
+        if hasattr(obj, 'annotated_items_count'):
+            return obj.annotated_items_count
+        return obj.items.count()
     
     def validate(self, data):
         """Валидация данных платежа"""
@@ -133,7 +184,59 @@ class PaymentSerializer(DisplayFieldMixin, serializers.ModelSerializer):
                 'contract_id': f'Категория "{category.name}" требует указания договора'
             })
         
+        # Проверяем наличие файла при создании
+        request = self.context.get('request')
+        if request and request.method == 'POST':
+            if not data.get('scan_file') and not request.FILES.get('scan_file'):
+                raise serializers.ValidationError({
+                    'scan_file': 'Документ (счёт или акт) обязателен для создания платежа'
+                })
+        
+        # Валидация items_input
+        items_input = data.get('items_input')
+        if items_input is not None:
+            if isinstance(items_input, str):
+                try:
+                    items_input = json.loads(items_input)
+                    data['items_input'] = items_input
+                except json.JSONDecodeError:
+                    raise serializers.ValidationError({
+                        'items_input': 'Неверный формат JSON'
+                    })
+            
+            if not isinstance(items_input, list):
+                raise serializers.ValidationError({
+                    'items_input': 'Должен быть список'
+                })
+            
+            # Проверяем лимит позиций
+            if len(items_input) > MAX_PAYMENT_ITEMS:
+                raise serializers.ValidationError({
+                    'items_input': f'Слишком много позиций ({len(items_input)}). Максимум: {MAX_PAYMENT_ITEMS}'
+                })
+            
+            # Валидируем каждую позицию
+            item_serializer = PaymentItemCreateSerializer(data=items_input, many=True)
+            if not item_serializer.is_valid():
+                raise serializers.ValidationError({
+                    'items_input': item_serializer.errors
+                })
+        
         return data
+    
+    def create(self, validated_data):
+        """
+        Создание платежа с учётом типа.
+        Логика вынесена в PaymentService для соблюдения принципа Single Responsibility.
+        """
+        items_data = validated_data.pop('items_input', [])
+        user = self.context.get('request').user if self.context.get('request') else None
+        
+        return PaymentService.create_payment(
+            validated_data=validated_data,
+            items_data=items_data,
+            user=user
+        )
 
 
 class PaymentListSerializer(DisplayFieldMixin, serializers.ModelSerializer):
@@ -158,6 +261,9 @@ class PaymentListSerializer(DisplayFieldMixin, serializers.ModelSerializer):
             'status_display',
             'payment_date',
             'amount',
+            'amount_gross',
+            'amount_net',
+            'vat_amount',
         ]
         read_only_fields = ['id', 'contract_number', 'category_name', 'account_name', 'payment_type_display', 'status_display']
 

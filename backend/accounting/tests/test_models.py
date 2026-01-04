@@ -82,3 +82,38 @@ class AccountingModelsTest(TestCase):
                 tax_system=self.tax_system
             )
 
+    def test_vendor_subtype(self):
+        """Проверка поля vendor_subtype для контрагентов типа vendor"""
+        # Создаем поставщика
+        supplier = Counterparty.objects.create(
+            name='ООО Поставщик',
+            short_name='Поставщик',
+            type=Counterparty.Type.VENDOR,
+            vendor_subtype=Counterparty.VendorSubtype.SUPPLIER,
+            legal_form=Counterparty.LegalForm.OOO,
+            inn='1111111111'
+        )
+        self.assertEqual(supplier.vendor_subtype, 'supplier')
+        
+        # Создаем исполнителя
+        executor = Counterparty.objects.create(
+            name='ООО Исполнитель',
+            short_name='Исполнитель',
+            type=Counterparty.Type.VENDOR,
+            vendor_subtype=Counterparty.VendorSubtype.EXECUTOR,
+            legal_form=Counterparty.LegalForm.OOO,
+            inn='2222222222'
+        )
+        self.assertEqual(executor.vendor_subtype, 'executor')
+        
+        # Проверяем валидацию: vendor_subtype нельзя указать для customer
+        with self.assertRaises(ValidationError):
+            Counterparty.objects.create(
+                name='Заказчик',
+                short_name='Заказчик',
+                type=Counterparty.Type.CUSTOMER,
+                vendor_subtype=Counterparty.VendorSubtype.SUPPLIER,  # Ошибка!
+                legal_form=Counterparty.LegalForm.OOO,
+                inn='3333333333'
+            )
+

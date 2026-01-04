@@ -21,7 +21,7 @@ from payments.models import Payment, PaymentRegistry, ExpenseCategory
 fake = Faker('ru_RU')
 
 class Command(BaseCommand):
-    help = 'Заполняет базу данных реалистичными тестовыми данными'
+    help = 'Заполняет базу данных реалистичными тестовыми данными. Требует наличия LegalEntity в БД.'
 
     def handle(self, *args, **kwargs):
         self.stdout.write('Начинаем генерацию данных...')
@@ -33,7 +33,13 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             self.generate_directories()
-            legal_entities = self.generate_legal_entities()
+            
+            # Получаем существующие юрлица
+            legal_entities = list(LegalEntity.objects.all())
+            if not legal_entities:
+                self.stdout.write(self.style.ERROR('ОШИБКА: В базе нет ни одного Юрлица (LegalEntity). Создайте их вручную или через админку перед запуском фабрики.'))
+                return
+
             categories = self.generate_categories()
             customers, vendors = self.generate_counterparties()
             objects = self.generate_objects()
@@ -77,34 +83,6 @@ class Command(BaseCommand):
                 categories.append(sub_cat)
         return categories
 
-    def generate_legal_entities(self):
-        """Создает наши юрлица и счета"""
-        entities = []
-        tax_systems = list(TaxSystem.objects.all())
-        
-        for _ in range(3):
-            le = LegalEntity.objects.create(
-                name=fake.company(),
-                inn=fake.numerify('##########'),
-                kpp=fake.numerify('#########'),
-                ogrn=fake.numerify('#############'),
-                tax_system=random.choice(tax_systems)
-            )
-            entities.append(le)
-            
-            # Счета
-            for _ in range(random.randint(2, 4)):
-                Account.objects.create(
-                    legal_entity=le,
-                    name=f'Основной {fake.bank()}',
-                    number=fake.iban(),
-                    bank_name=fake.bank(),
-                    bik=fake.numerify('#########'),
-                    currency='RUB',
-                    initial_balance=Decimal(random.randint(1000000, 50000000))
-                )
-        return entities
-
     def generate_counterparties(self):
         """Создает контрагентов"""
         customers = []
@@ -141,7 +119,7 @@ class Command(BaseCommand):
             obj = Object.objects.create(
                 name=f"ЖК {fake.city_name()}, ул. {fake.street_name()}",
                 address=fake.address(),
-                status=random.choice(['planned', 'in_progress', 'completed']),
+                status=random.choice(['planned', 'active', 'completed']),
                 start_date=start_date,
                 end_date=end_date
             )
@@ -237,7 +215,8 @@ class Command(BaseCommand):
                 name=f"Этап работ {j+1}: {fake.sentence(nb_words=3)}",
                 start_date=contract.start_date + timedelta(days=j*10),
                 end_date=contract.start_date + timedelta(days=(j+1)*10),
-                workers_count=random.randint(2, 10)
+                workers_count=random.randint(2, 10),
+                status=random.choice(['pending', 'in_progress', 'done'])
             )
             
         # 2. Акты (KS-2)
@@ -251,6 +230,7 @@ class Command(BaseCommand):
             else:
                 status = 'signed'
                 
+            # Создаем акт, net/vat расчитается автоматически в модели
             act = Act.objects.create(
                 contract=contract,
                 number=f"ACT-{contract.id}-{j}",
@@ -258,16 +238,10 @@ class Command(BaseCommand):
                 period_start=act_date - timedelta(days=30),
                 period_end=act_date,
                 amount_gross=amount,
-                amount_net=amount * Decimal('0.8333'), # approx without VAT 20%
-                vat_amount=amount * Decimal('0.1667'),
                 status=status
             )
             acts.append(act)
             
-            # Сразу создаем начисления для подписанных
-            if status == 'signed':
-                pass # Логика начисления баланса уже в модели/сигналах или вычисляется
-
         # 3. Платежи (30+ штук)
         # Для расходных - через Реестр, для доходных - сразу Payment
         
@@ -290,7 +264,8 @@ class Command(BaseCommand):
                     amount=amount,
                     planned_date=payment_date,
                     status=registry_status,
-                    act=random.choice(acts) if k % 2 != 0 and acts else None
+                    act=random.choice(acts) if k % 2 != 0 and acts else None,
+                    account=account # Сразу привязываем счет
                 )
                 
                 if registry_status == 'paid':
@@ -301,7 +276,8 @@ class Command(BaseCommand):
                         account=account,
                         contract=contract,
                         category=category,
-                        description=f"Оплата по заявке {reg_item.id}"
+                        description=f"Оплата по заявке {reg_item.id}",
+                        payment_registry=reg_item
                     )
             else:
                 # Доход: Просто входящий платеж
@@ -328,5 +304,3 @@ class Command(BaseCommand):
                 subject=fake.sentence(),
                 description=fake.text()
             )
-
-

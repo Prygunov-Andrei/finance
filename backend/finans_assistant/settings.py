@@ -29,13 +29,15 @@ DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '.ngrok-free.app',  # ⚠️ ВРЕМЕННО: Разрешить все ngrok домены (только для разработки)
-    '.ngrok.io',  # ⚠️ ВРЕМЕННО: Старые ngrok домены (только для разработки)
-    '*', # Разрешить всё для дебага
+    '.ngrok-free.app',
+    'finance.ngrok.app', # Ваш постоянный домен
+    '.ngrok.io',
+    '*', 
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://*.ngrok-free.app',
+    'https://finance.ngrok.app',
+    'https://*.figmaiframepreview.figma.site',
     'https://*.figma.site',
 ]
 
@@ -58,12 +60,17 @@ INSTALLED_APPS = [
     'objects',
     'contracts',
     'payments',
+    'catalog',
+    'llm_services',
     'accounting',
     'communications',
+    'pricelists',
+    'estimates',
+    'proposals',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # Должен быть ПЕРВЫМ!
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -169,11 +176,27 @@ REST_FRAMEWORK = {
 }
 
 # CORS settings
-# ⚠️ ВРЕМЕННОЕ РЕШЕНИЕ ДЛЯ РАЗРАБОТКИ
-# Для разработки - разрешить все источники (только для тестирования фронтенда в Figma)
-# В production измените на конкретные домены!
-CORS_ALLOW_ALL_ORIGINS = True
+# ⚠️ Зависит от DEBUG — в production автоматически отключается CORS_ALLOW_ALL_ORIGINS
+if DEBUG:
+    # Для разработки - разрешить все источники (только для тестирования фронтенда в Figma)
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    # Production — только конкретные домены
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [
+        "https://your-production-domain.com",  # TODO: заменить на реальный домен
+        # Добавьте другие production домены
+    ]
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 # Примечание: CORS_ALLOW_PRIVATE_NETWORK не поддерживается django-cors-headers
 # Для работы с Figma во время разработки используйте ngrok туннель (см. start_ngrok.sh)
@@ -191,16 +214,23 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
     'ngrok-skip-browser-warning',  # Заголовок ngrok для пропуска предупреждения браузера
+    'x-ngrok-skip-browser-warning',  # Альтернативный вариант
 ]
+
+# Явная поддержка Figma доменов через regex (на случай если CORS_ALLOW_ALL_ORIGINS не сработает)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.figmaiframepreview\.figma\.site$",
+    r"^https://.*\.figma\.site$",
+    r"^https://.*\.ngrok-free\.app$",
+    r"^https://.*\.ngrok\.io$",
+]
+
 # Для production используйте конкретные домены:
 # CORS_ALLOW_ALL_ORIGINS = False
 # CORS_ALLOWED_ORIGINS = [
 #     "http://localhost:3000",
 #     "http://127.0.0.1:3000",
 #     "https://figma.site",
-# ]
-# CORS_ALLOWED_ORIGIN_REGEXES = [
-#     r"^https://.*\.figma\.site$",
 # ]
 
 # JWT Settings
@@ -244,4 +274,7 @@ SPECTACULAR_SETTINGS = {
         {'name': 'Импорты', 'description': 'Журнал импорта данных'},
     ],
 }
+
+# Настройки нумерации коммерческих предложений
+COMMERCIAL_PROPOSAL_START_NUMBER = 210  # Начальный порядковый номер для ТКП (можно изменить)
 

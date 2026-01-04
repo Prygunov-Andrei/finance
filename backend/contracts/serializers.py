@@ -1,18 +1,56 @@
 from rest_framework import serializers
 from objects.models import Object
 from accounting.models import Counterparty, LegalEntity
-from .models import Contract, ContractAmendment, WorkScheduleItem, Act, ActPaymentAllocation, CommercialProposal
+from accounting.serializers import LegalEntitySerializer, CounterpartySerializer
+from pricelists.serializers import PriceListSerializer
+from .models import Contract, ContractAmendment, WorkScheduleItem, Act, ActPaymentAllocation, FrameworkContract
 
 
-class CommercialProposalSerializer(serializers.ModelSerializer):
-    object_name = serializers.CharField(source='object.name', read_only=True)
-    counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True)
-    contract_id = serializers.PrimaryKeyRelatedField(source='contract', read_only=True)
+class FrameworkContractListSerializer(serializers.ModelSerializer):
+    """Упрощённый сериализатор для списков"""
+    counterparty_name = serializers.CharField(source='counterparty.name', read_only=True)
+    legal_entity_name = serializers.CharField(source='legal_entity.short_name', read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
+    contracts_count = serializers.IntegerField(read_only=True)
     
     class Meta:
-        model = CommercialProposal
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at', 'contract']
+        model = FrameworkContract
+        fields = [
+            'id', 'number', 'name', 'date', 'valid_from', 'valid_until',
+            'counterparty', 'counterparty_name',
+            'legal_entity', 'legal_entity_name',
+            'status', 'is_active', 'contracts_count',
+            'created_at'
+        ]
+
+
+class FrameworkContractSerializer(serializers.ModelSerializer):
+    legal_entity_details = LegalEntitySerializer(source='legal_entity', read_only=True)
+    counterparty_details = CounterpartySerializer(source='counterparty', read_only=True)
+    price_lists_details = PriceListSerializer(source='price_lists', many=True, read_only=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    
+    # Вычисляемые
+    is_expired = serializers.BooleanField(read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
+    days_until_expiration = serializers.IntegerField(read_only=True)
+    contracts_count = serializers.IntegerField(read_only=True)
+    total_contracts_amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    
+    class Meta:
+        model = FrameworkContract
+        fields = [
+            'id', 'number', 'name', 'date', 'valid_from', 'valid_until',
+            'legal_entity', 'legal_entity_details',
+            'counterparty', 'counterparty_details',
+            'price_lists', 'price_lists_details',
+            'status', 'file', 'notes',
+            'created_by', 'created_by_name',
+            'is_expired', 'is_active', 'days_until_expiration',
+            'contracts_count', 'total_contracts_amount',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'number', 'created_by', 'created_at', 'updated_at']
 
 
 class ContractAmendmentSerializer(serializers.ModelSerializer):
@@ -49,14 +87,29 @@ class ActSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'contract', 'contract_number', 'number', 'date',
             'period_start', 'period_end', 'amount_gross', 'amount_net', 'vat_amount',
-            'status', 'file', 'description', 'allocations', 'unpaid_amount',
+            'status', 'file', 'description', 'due_date', 'allocations', 'unpaid_amount',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'contract_number', 'allocations', 'unpaid_amount']
 
     def get_unpaid_amount(self, obj) -> str:
-        # Считаем, сколько уже распределено
-        paid = sum(allocation.amount for allocation in obj.payment_allocations.all())
+        """
+        Вычисляет неоплаченную сумму.
+        Использует annotated поле paid_amount если доступно (оптимизация),
+        иначе вычисляет через итерацию (fallback).
+        """
+        from decimal import Decimal
+        
+        # Используем аннотированное значение если есть (из ViewSet.get_queryset)
+        if hasattr(obj, 'paid_amount'):
+            paid = obj.paid_amount or Decimal('0')
+        else:
+            # Fallback для случаев когда объект получен не через ViewSet
+            paid = sum(
+                allocation.amount 
+                for allocation in obj.payment_allocations.all()
+            )
+        
         return str(obj.amount_gross - paid)
 
 
@@ -71,7 +124,20 @@ class ContractSerializer(serializers.ModelSerializer):
     )
     counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True)
     legal_entity_name = serializers.CharField(source='legal_entity.short_name', read_only=True)
-    commercial_proposal_number = serializers.CharField(source='commercial_proposal.number', read_only=True)
+    technical_proposal_number = serializers.CharField(source='technical_proposal.number', read_only=True)
+    mounting_proposal_number = serializers.CharField(source='mounting_proposal.number', read_only=True)
+    framework_contract_details = FrameworkContractListSerializer(
+        source='framework_contract', 
+        read_only=True
+    )
+    responsible_manager_name = serializers.CharField(
+        source='responsible_manager.get_full_name', 
+        read_only=True
+    )
+    responsible_engineer_name = serializers.CharField(
+        source='responsible_engineer.get_full_name', 
+        read_only=True
+    )
     
     class Meta:
         model = Contract
@@ -84,9 +150,14 @@ class ContractSerializer(serializers.ModelSerializer):
             'counterparty',
             'counterparty_name',
             'contract_type',
-            'commercial_proposal',
-            'commercial_proposal_number',
+            'technical_proposal',
+            'technical_proposal_number',
+            'mounting_proposal',
+            'mounting_proposal_number',
             'parent_contract',
+            'framework_contract', 'framework_contract_details',
+            'responsible_manager', 'responsible_manager_name',
+            'responsible_engineer', 'responsible_engineer_name',
             'number',
             'name',
             'contract_date',
@@ -102,23 +173,7 @@ class ContractSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'object_name', 'counterparty_name', 'legal_entity_name', 'commercial_proposal_number', 'created_at', 'updated_at']
-
-    def validate(self, data):
-        """Проверка бизнес-правил"""
-        instance = self.instance
-        
-        # Получаем новые значения или оставляем старые
-        status_value = data.get('status', instance.status if instance else None)
-        commercial_proposal = data.get('commercial_proposal', instance.commercial_proposal if instance else None)
-        
-        if status_value == Contract.Status.ACTIVE:
-            if not commercial_proposal:
-                raise serializers.ValidationError({'status': 'Нельзя перевести договор в статус "В работе" без привязанного КП.'})
-            if commercial_proposal.status != CommercialProposal.Status.APPROVED:
-                raise serializers.ValidationError({'commercial_proposal': 'Привязанное КП должно быть в статусе "Согласовано".'})
-        
-        return data
+        read_only_fields = ['id', 'object_name', 'counterparty_name', 'legal_entity_name', 'technical_proposal_number', 'mounting_proposal_number', 'framework_contract_details', 'responsible_manager_name', 'responsible_engineer_name', 'created_at', 'updated_at']
 
 
 class ContractListSerializer(serializers.ModelSerializer):

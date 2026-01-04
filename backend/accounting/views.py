@@ -22,16 +22,18 @@ class TaxSystemViewSet(viewsets.ReadOnlyModelViewSet):
 
 class LegalEntityViewSet(viewsets.ModelViewSet):
     """Управление нашими юридическими лицами"""
-    queryset = LegalEntity.objects.all()
+    queryset = LegalEntity.objects.select_related('tax_system').all()
     serializer_class = LegalEntitySerializer
+    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ['name', 'short_name', 'inn']
     filterset_fields = ['is_active', 'tax_system']
 
 class AccountViewSet(viewsets.ModelViewSet):
     """Управление счетами компании"""
-    queryset = Account.objects.all()
+    queryset = Account.objects.select_related('legal_entity').all()
     serializer_class = AccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ['name', 'number', 'bank_name']
     filterset_fields = ['legal_entity', 'account_type', 'currency', 'is_active']

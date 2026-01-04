@@ -77,6 +77,25 @@ class LegalEntity(TimestampedModel):
         on_delete=models.PROTECT,
         verbose_name='Система налогообложения'
     )
+    director = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='directed_legal_entities',
+        verbose_name='Генеральный директор (пользователь)'
+    )
+    director_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='ФИО директора',
+        help_text='Полное ФИО для документов (Иванов Иван Иванович)'
+    )
+    director_position = models.CharField(
+        max_length=100,
+        default='Генеральный директор',
+        verbose_name='Должность директора'
+    )
     is_active = models.BooleanField(
         default=True,
         verbose_name='Активна'
@@ -239,6 +258,11 @@ class Counterparty(TimestampedModel):
         VENDOR = 'vendor', 'Исполнитель/Поставщик'
         BOTH = 'both', 'Заказчик и Исполнитель'
 
+    class VendorSubtype(models.TextChoices):
+        SUPPLIER = 'supplier', 'Поставщик'
+        EXECUTOR = 'executor', 'Исполнитель'
+        BOTH = 'both', 'Исполнитель и Поставщик'
+
     class LegalForm(models.TextChoices):
         OOO = 'ooo', 'ООО'
         IP = 'ip', 'ИП'
@@ -260,6 +284,14 @@ class Counterparty(TimestampedModel):
         max_length=20,
         choices=Type.choices,
         verbose_name='Тип контрагента'
+    )
+    vendor_subtype = models.CharField(
+        max_length=20,
+        choices=VendorSubtype.choices,
+        blank=True,
+        null=True,
+        verbose_name='Подтип (для vendor)',
+        help_text='Уточнение: Поставщик или Исполнитель. Заполняется только для типа "Исполнитель/Поставщик"'
     )
     legal_form = models.CharField(
         max_length=20,
@@ -296,5 +328,55 @@ class Counterparty(TimestampedModel):
         verbose_name_plural = 'Контрагенты'
         ordering = ['name']
 
+    def clean(self):
+        """Валидация: vendor_subtype можно указывать только для type='vendor'"""
+        if self.vendor_subtype and self.type != self.Type.VENDOR:
+            raise ValidationError({
+                'vendor_subtype': 'Подтип можно указывать только для контрагентов типа "Исполнитель/Поставщик"'
+            })
+        if self.type == self.Type.VENDOR and not self.vendor_subtype:
+            # Не обязательно требовать заполнение, но можно предупредить
+            pass
+
+    def save(self, *args, **kwargs):
+        """Переопределяем save для автоматической валидации"""
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.short_name or self.name
+    
+    def is_vendor(self) -> bool:
+        """
+        Проверяет, является ли контрагент исполнителем/поставщиком.
+        
+        Returns:
+            True если type = 'vendor' или 'both'
+        """
+        return self.type in [self.Type.VENDOR, self.Type.BOTH]
+    
+    def is_customer(self) -> bool:
+        """
+        Проверяет, является ли контрагент заказчиком.
+        
+        Returns:
+            True если type = 'customer' или 'both'
+        """
+        return self.type in [self.Type.CUSTOMER, self.Type.BOTH]
+    
+    @classmethod
+    def validate_is_vendor(cls, counterparty, field_name: str = 'counterparty'):
+        """
+        Валидация что контрагент является исполнителем.
+        
+        Args:
+            counterparty: Экземпляр Counterparty для проверки
+            field_name: Имя поля для сообщения об ошибке
+        
+        Raises:
+            ValidationError: Если контрагент не является исполнителем
+        """
+        if counterparty and not counterparty.is_vendor():
+            raise ValidationError({
+                field_name: 'Контрагент должен быть типа "Исполнитель/Поставщик" или "Заказчик и Исполнитель"'
+            })

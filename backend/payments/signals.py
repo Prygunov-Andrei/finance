@@ -1,53 +1,53 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.db import transaction
 from .models import PaymentRegistry, Payment
-from contracts.models import ActPaymentAllocation
+
 
 @receiver(post_save, sender=PaymentRegistry)
-def process_approved_payment(sender, instance, created, **kwargs):
+def sync_payment_from_registry(sender, instance, created, **kwargs):
     """
-    Автоматическое создание фактического платежа при переводе заявки в статус PAID.
-    Если платеж уже создан, ничего не делаем.
+    Синхронизация статуса платежа при изменении статуса в Реестре.
+    
+    Новая логика:
+    - Платёж создаётся первым (через форму), сразу со статусом pending (для expense)
+    - Реестр используется только для согласования расходов
+    - При согласовании (approved → paid) платёж переводится в статус paid
+    - При отмене заявки (cancelled) платёж переводится в статус cancelled
     """
-    # Проверяем, что статус стал PAID
-    if instance.status == PaymentRegistry.Status.PAID:
-        # Проверяем, нет ли уже связанного платежа (через reverse relation payment_fact)
-        if not hasattr(instance, 'payment_fact'):
-            with transaction.atomic():
-                # Создаем платеж
-                payment = Payment.objects.create(
-                    payment_registry=instance,
-                    payment_type=Payment.PaymentType.EXPENSE, # Заявки в основном на расход
-                    amount=instance.amount,
-                    amount_gross=instance.amount, # Предполагаем, что сумма в заявке полная
-                    payment_date=instance.planned_date,
-                    contract=instance.contract,
-                    category=instance.category,
-                    account=instance.account,
-                    legal_entity=instance.account.legal_entity if instance.account else None,
-                    description=f"Оплата по заявке: {instance.comment or 'Без комментария'}",
-                    status=Payment.Status.PAID
-                )
-                
-                # Если в заявке был указан Акт, создаем аллокацию (привязку платежа к акту)
-                if instance.act:
-                    ActPaymentAllocation.objects.create(
-                        act=instance.act,
-                        payment=payment,
-                        amount=instance.amount
-                    )
+    # Проверяем есть ли связанный платёж
+    if hasattr(instance, 'payment_fact') and instance.payment_fact:
+        payment = instance.payment_fact
+        
+        # При переводе заявки в PAID — проводим платёж
+        if instance.status == PaymentRegistry.Status.PAID:
+            if payment.status != Payment.Status.PAID:
+                payment.status = Payment.Status.PAID
+                payment.save(update_fields=['status'])
+        
+        # При отмене заявки — отменяем платёж
+        elif instance.status == PaymentRegistry.Status.CANCELLED:
+            if payment.status != Payment.Status.CANCELLED:
+                payment.status = Payment.Status.CANCELLED
+                payment.save(update_fields=['status'])
+
 
 @receiver(post_save, sender=Payment)
-def update_registry_status(sender, instance, created, **kwargs):
+def sync_registry_from_payment(sender, instance, created, **kwargs):
     """
-    Если платеж привязан к заявке и его статус меняется, можно обновлять статус заявки.
-    Например, если платеж отменен -> заявку можно вернуть в APPROVED или CANCELLED.
-    Пока реализуем простую логику: если платеж оплачен, заявка тоже (хотя это дублирование).
+    Обратная синхронизация: при изменении статуса платежа обновляем Реестр.
+    
+    Используется для случаев, когда платёж отменяется напрямую.
     """
     if instance.payment_registry:
         registry = instance.payment_registry
+        
+        # Платёж оплачен → заявка оплачена
         if instance.status == Payment.Status.PAID and registry.status != PaymentRegistry.Status.PAID:
             registry.status = PaymentRegistry.Status.PAID
+            registry.save(update_fields=['status'])
+        
+        # Платёж отменён → заявка отменена
+        elif instance.status == Payment.Status.CANCELLED and registry.status != PaymentRegistry.Status.CANCELLED:
+            registry.status = PaymentRegistry.Status.CANCELLED
             registry.save(update_fields=['status'])
 

@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
                 ('date', models.DateField(verbose_name='Дата предложения')),
                 ('total_amount', models.DecimalField(decimal_places=2, max_digits=14, verbose_name='Итоговая сумма')),
                 ('status', models.CharField(choices=[('draft', 'Черновик'), ('sent', 'Отправлено'), ('approved', 'Согласовано'), ('rejected', 'Отклонено')], default='draft', max_length=20, verbose_name='Статус')),
-                ('file', models.FileField(blank=True, null=True, upload_to=contracts.models.commercial_proposal_scan_path, verbose_name='Файл предложения')),
+                ('file', models.FileField(blank=True, null=True, upload_to='contracts/proposals/%Y/%m/%d/', verbose_name='Файл предложения')),
                 ('description', models.TextField(blank=True, verbose_name='Примечания')),
                 ('counterparty', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='commercial_proposals', to='accounting.counterparty', verbose_name='Контрагент')),
                 ('object', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='commercial_proposals', to='objects.object', verbose_name='Объект')),

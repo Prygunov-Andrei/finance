@@ -1,3 +1,10 @@
+"""
+Legacy тест workflow платежей.
+Обновлён для новой архитектуры: платежи создаются через форму, 
+реестр используется только для согласования.
+
+Основные тесты новой логики см. в tests_new_workflow.py
+"""
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
@@ -5,15 +12,31 @@ from decimal import Decimal
 from datetime import date
 from accounting.models import LegalEntity, Account, TaxSystem
 from payments.models import PaymentRegistry, Payment, ExpenseCategory
-from contracts.models import Contract, Act, ActPaymentAllocation
+from contracts.models import Contract, Act
 from objects.models import Object
 from accounting.models import Counterparty
 
 User = get_user_model()
 
+
 class PaymentWorkflowTest(TestCase):
+    """
+    Тест полного цикла согласования расходного платежа.
+    
+    Новая архитектура:
+    1. Платёж создаётся через форму (expense) → статус pending
+    2. Автоматически создаётся запись в реестре → статус planned
+    3. Согласование в реестре → статус approved  
+    4. Оплата в реестре → статус paid (синхронизируется с платежом)
+    """
+    
     def setUp(self):
-        self.user = User.objects.create_user(username='testuser', password='password')
+        self.user = User.objects.create_user(
+            username='testuser', 
+            password='password',
+            first_name='Test',
+            last_name='User'
+        )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
         
@@ -60,44 +83,61 @@ class PaymentWorkflowTest(TestCase):
             status=Act.Status.SIGNED
         )
 
-    def test_payment_workflow_full_cycle(self):
-        # 1. Create Payment Registry
-        response = self.client.post('/api/v1/payment-registry/', {
-            'contract_id': self.contract.id,
-            'category_id': self.category.id,
-            'account_id': self.account.id,
-            'act_id': self.act.id,
-            'planned_date': '2023-01-20',
-            'amount': '10000.00',
-            'initiator': 'Manager'
-        })
-        self.assertEqual(response.status_code, 201)
-        registry_id = response.data['id']
+    def test_expense_payment_approval_workflow(self):
+        """
+        Полный цикл согласования расходного платежа:
+        Создание → Согласование → Оплата
+        """
+        # 1. Создаём expense платёж и запись в реестре напрямую через модели
+        # (в реальности это делает сериализатор при POST /payments/)
+        payment = Payment.objects.create(
+            account=self.account,
+            contract=self.contract,
+            category=self.category,
+            legal_entity=self.legal_entity,
+            payment_type=Payment.PaymentType.EXPENSE,
+            payment_date=date.today(),
+            amount=Decimal('10000.00'),
+            amount_gross=Decimal('10000.00'),
+            status=Payment.Status.PENDING,
+            description='Оплата по акту',
+            scan_file='payments/2023/1/invoice.pdf'
+        )
         
-        # 2. Approve
-        response = self.client.post(f'/api/v1/payment-registry/{registry_id}/approve/')
+        registry = PaymentRegistry.objects.create(
+            account=self.account,
+            contract=self.contract,
+            category=self.category,
+            act=self.act,
+            planned_date=date.today(),
+            amount=Decimal('10000.00'),
+            status=PaymentRegistry.Status.PLANNED,
+            initiator='Test User',
+        )
+        
+        # Связываем платёж с реестром
+        payment.payment_registry = registry
+        payment.save(update_fields=['payment_registry'])
+        
+        # Проверяем начальные статусы
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+        self.assertEqual(registry.status, PaymentRegistry.Status.PLANNED)
+        
+        # 2. Согласование через API
+        response = self.client.post(f'/api/v1/payment-registry/{registry.id}/approve/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['status'], PaymentRegistry.Status.APPROVED)
-        # В ответе API approved_by_name, а не id, так как это read_only поле сериализатора
         self.assertEqual(response.data['approved_by_name'], 'testuser')
         
-        # 3. Pay
-        response = self.client.post(f'/api/v1/payment-registry/{registry_id}/pay/')
+        # 3. Оплата через API
+        response = self.client.post(f'/api/v1/payment-registry/{registry.id}/pay/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['status'], PaymentRegistry.Status.PAID)
         
-        # 4. Verify Payment Creation
-        payment = Payment.objects.get(payment_registry_id=registry_id)
-        self.assertEqual(payment.amount, Decimal('10000.00'))
+        # 4. Проверяем синхронизацию статуса платежа
+        payment.refresh_from_db()
         self.assertEqual(payment.status, Payment.Status.PAID)
-        self.assertEqual(payment.account, self.account)
-        self.assertEqual(payment.contract, self.contract)
         
-        # 5. Verify Allocation
-        allocation = ActPaymentAllocation.objects.get(payment=payment, act=self.act)
-        self.assertEqual(allocation.amount, Decimal('10000.00'))
-        
-        # 6. Verify Account Balance
-        # Initial 100000 - 10000 = 90000
+        # 5. Проверяем баланс счёта
         current_balance = self.account.get_current_balance()
         self.assertEqual(current_balance, Decimal('90000.00'))

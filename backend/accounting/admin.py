@@ -27,6 +27,6 @@ class AccountBalanceAdmin(admin.ModelAdmin):
 
 @admin.register(Counterparty)
 class CounterpartyAdmin(admin.ModelAdmin):
-    list_display = ('short_name', 'inn', 'type', 'legal_form', 'is_active')
+    list_display = ('short_name', 'inn', 'type', 'vendor_subtype', 'legal_form', 'is_active')
     search_fields = ('name', 'short_name', 'inn')
-    list_filter = ('type', 'legal_form', 'is_active')
+    list_filter = ('type', 'vendor_subtype', 'legal_form', 'is_active')

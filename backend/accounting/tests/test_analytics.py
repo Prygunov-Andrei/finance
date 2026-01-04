@@ -18,8 +18,12 @@ class AnalyticsTest(TestCase):
         
         self.tax = TaxSystem.objects.create(code='osn', name='ОСН')
         self.legal = LegalEntity.objects.create(name='MyFirm', tax_system=self.tax, inn='123')
-        self.client_cp = Counterparty.objects.create(name='Client', inn='456', type='customer')
-        self.vendor_cp = Counterparty.objects.create(name='Vendor', inn='789', type='vendor')
+        self.client_cp = Counterparty.objects.create(
+            name='Client', inn='456', type='customer', legal_form=Counterparty.LegalForm.OOO
+        )
+        self.vendor_cp = Counterparty.objects.create(
+            name='Vendor', inn='789', type='vendor', legal_form=Counterparty.LegalForm.OOO
+        )
         self.obj = Object.objects.create(name='Obj')
         self.cat = ExpenseCategory.objects.create(name='Cat', code='cat')
 

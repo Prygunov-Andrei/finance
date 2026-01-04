@@ -13,6 +13,7 @@ class Object(TimestampedModel):
         PLANNED = 'planned', 'Планируется'
         IN_PROGRESS = 'in_progress', 'В работе'
         COMPLETED = 'completed', 'Завершен'
+        SUSPENDED = 'suspended', 'Приостановлен'
     
     name = models.CharField(
         max_length=200,

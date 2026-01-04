@@ -2,8 +2,10 @@ from rest_framework import viewsets, filters, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
+
 from .models import Payment, PaymentRegistry, ExpenseCategory
 from .serializers import (
     PaymentSerializer,
@@ -70,7 +72,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     filterset_fields = ['contract', 'payment_type', 'contract__object', 'category', 'category__parent', 'account', 'legal_entity', 'status']
     search_fields = [
         'description',
-        'account__number', # Changed from company_account
+        'account__number',
         'contract__number',
         'contract__object__name',
         'category__name',
@@ -78,6 +80,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
     ]
     ordering_fields = ['payment_date', 'amount', 'created_at']
     ordering = ['-payment_date', '-created_at']
+    
+    def get_queryset(self):
+        """Оптимизация: добавляем annotate для count полей"""
+        queryset = super().get_queryset()
+        if self.action in ['list', 'retrieve']:
+            queryset = queryset.annotate(annotated_items_count=Count('items'))
+        return queryset
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -87,47 +96,45 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
 @extend_schema_view(
     list=extend_schema(
-        summary='Список плановых платежей',
-        description='Получить список плановых платежей из реестра',
-        tags=['Плановые платежи'],
+        summary='Список заявок на согласование',
+        description='Получить список расходных платежей, ожидающих согласования',
+        tags=['Реестр платежей'],
     ),
     retrieve=extend_schema(
-        summary='Детали планового платежа',
-        description='Получить подробную информацию о плановом платеже',
-        tags=['Плановые платежи'],
-    ),
-    create=extend_schema(
-        summary='Создать плановый платёж',
-        description='Создать новую запись в реестре плановых платежей',
-        tags=['Плановые платежи'],
+        summary='Детали заявки',
+        description='Получить подробную информацию о заявке на платёж',
+        tags=['Реестр платежей'],
     ),
     update=extend_schema(
-        summary='Обновить плановый платёж',
-        description='Полностью обновить информацию о плановом платеже',
-        tags=['Плановые платежи'],
+        summary='Обновить заявку',
+        description='Обновить информацию о заявке (только для статуса planned)',
+        tags=['Реестр платежей'],
     ),
     partial_update=extend_schema(
-        summary='Частично обновить плановый платёж',
-        description='Частично обновить информацию о плановом платеже',
-        tags=['Плановые платежи'],
-    ),
-    destroy=extend_schema(
-        summary='Удалить плановый платёж',
-        description='Удалить запись из реестра плановых платежей',
-        tags=['Плановые платежи'],
+        summary='Частично обновить заявку',
+        description='Частично обновить информацию о заявке (только для статуса planned)',
+        tags=['Реестр платежей'],
     ),
 )
 class PaymentRegistryViewSet(viewsets.ModelViewSet):
     """
-    ViewSet для управления плановыми платежами
+    ViewSet для управления Реестром платежей (согласование расходов).
     
-    list: Получить список плановых платежей
-    retrieve: Получить детали планового платежа
-    create: Создать новый плановый платёж
-    update: Обновить плановый платёж
-    partial_update: Частично обновить плановый платёж
-    destroy: Удалить плановый платёж
+    Заявки создаются автоматически при создании расходного платежа.
+    Этот ViewSet предназначен только для:
+    - Просмотра списка заявок
+    - Согласования (approve)
+    - Проведения оплаты (pay)
+    - Отмены (cancel)
     """
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']  # POST нужен для actions
+    
+    def create(self, request, *args, **kwargs):
+        """Запрещаем создание заявок напрямую через API"""
+        return Response(
+            {'error': 'Заявки создаются автоматически при создании расходного платежа'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
     queryset = PaymentRegistry.objects.select_related(
         'contract',
         'contract__object',

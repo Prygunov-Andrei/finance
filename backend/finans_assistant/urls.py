@@ -19,7 +19,7 @@ from objects.views import ObjectViewSet
 from contracts.views import (
     ContractViewSet, ContractAmendmentViewSet, 
     WorkScheduleItemViewSet, ActViewSet, ActPaymentAllocationViewSet,
-    CommercialProposalViewSet
+    FrameworkContractViewSet
 )
 from payments.views import PaymentViewSet, PaymentRegistryViewSet, ExpenseCategoryViewSet
 from core.views import UserViewSet
@@ -28,8 +28,8 @@ from core.views import UserViewSet
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'objects', ObjectViewSet, basename='object')
-router.register(r'commercial-proposals', CommercialProposalViewSet, basename='commercial-proposal')
 router.register(r'contracts', ContractViewSet, basename='contract')
+router.register(r'framework-contracts', FrameworkContractViewSet, basename='framework-contract')
 router.register(r'contract-amendments', ContractAmendmentViewSet, basename='contract-amendment')
 router.register(r'work-schedule', WorkScheduleItemViewSet, basename='work-schedule')
 router.register(r'acts', ActViewSet, basename='act')
@@ -68,6 +68,15 @@ def api_root(request):
                 'legal-entities': '/api/v1/legal-entities/',
                 'accounts': '/api/v1/accounts/',
                 'counterparties': '/api/v1/counterparties/',
+            },
+            'pricelists': {
+                'worker-grades': '/api/v1/worker-grades/',
+                'work-sections': '/api/v1/work-sections/',
+                'worker-grade-skills': '/api/v1/worker-grade-skills/',
+                'work-items': '/api/v1/work-items/',
+                'price-lists': '/api/v1/price-lists/',
+                'price-list-items': '/api/v1/price-list-items/',
+                'price-list-agreements': '/api/v1/price-list-agreements/',
             }
         }
     })
@@ -86,6 +95,11 @@ urlpatterns = [
     path('api/v1/', include(router.urls)),
     path('api/v1/', include('accounting.urls')),
     path('api/v1/', include('communications.urls')),
+    path('api/v1/', include('pricelists.urls')),
+    path('api/v1/', include('estimates.urls')),
+    path('api/v1/', include('proposals.urls')),
+    path('api/v1/', include('catalog.urls')),
+    path('api/v1/', include('llm_services.urls')),
     path('api/v1/', api_root, name='api-root'),
 ]
 
