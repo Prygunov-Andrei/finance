@@ -494,27 +494,39 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
         # Копируем проекты-основания
         new_estimate.projects.set(self.projects.all())
         
-        # Копируем разделы и подразделы
-        for section in self.sections.all():
-            new_section = EstimateSection.objects.create(
+        # Копируем разделы через bulk_create
+        old_sections = list(self.sections.all().prefetch_related('subsections'))
+        new_sections = [
+            EstimateSection(
                 estimate=new_estimate,
                 name=section.name,
                 sort_order=section.sort_order
             )
-            for subsection in section.subsections.all():
-                EstimateSubsection.objects.create(
-                    section=new_section,
-                    name=subsection.name,
-                    materials_sale=subsection.materials_sale,
-                    works_sale=subsection.works_sale,
-                    materials_purchase=subsection.materials_purchase,
-                    works_purchase=subsection.works_purchase,
-                    sort_order=subsection.sort_order
-                )
+            for section in old_sections
+        ]
+        EstimateSection.objects.bulk_create(new_sections)
         
-        # Копируем характеристики
-        for char in self.characteristics.all():
-            EstimateCharacteristic.objects.create(
+        # Копируем подразделы через bulk_create
+        new_subsections = []
+        for old_section, new_section in zip(old_sections, new_sections):
+            for subsection in old_section.subsections.all():
+                new_subsections.append(
+                    EstimateSubsection(
+                        section=new_section,
+                        name=subsection.name,
+                        materials_sale=subsection.materials_sale,
+                        works_sale=subsection.works_sale,
+                        materials_purchase=subsection.materials_purchase,
+                        works_purchase=subsection.works_purchase,
+                        sort_order=subsection.sort_order
+                    )
+                )
+        if new_subsections:
+            EstimateSubsection.objects.bulk_create(new_subsections)
+        
+        # Копируем характеристики через bulk_create
+        new_characteristics = [
+            EstimateCharacteristic(
                 estimate=new_estimate,
                 name=char.name,
                 purchase_amount=char.purchase_amount,
@@ -523,6 +535,10 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
                 source_type=char.source_type,
                 sort_order=char.sort_order
             )
+            for char in self.characteristics.all()
+        ]
+        if new_characteristics:
+            EstimateCharacteristic.objects.bulk_create(new_characteristics)
         
         return new_estimate
 
@@ -555,6 +571,7 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
         Обновить автоматически рассчитываемые характеристики.
         Вызывается при изменении разделов/подразделов.
         """
+        chars_to_update = []
         for char in self.characteristics.filter(
             is_auto_calculated=True,
             source_type=EstimateCharacteristic.SourceType.SECTIONS
@@ -562,10 +579,16 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
             if char.name == 'Материалы':
                 char.sale_amount = self.total_materials_sale
                 char.purchase_amount = self.total_materials_purchase
+                chars_to_update.append(char)
             elif char.name == 'Работы':
                 char.sale_amount = self.total_works_sale
                 char.purchase_amount = self.total_works_purchase
-            char.save()
+                chars_to_update.append(char)
+        
+        if chars_to_update:
+            EstimateCharacteristic.objects.bulk_update(
+                chars_to_update, ['sale_amount', 'purchase_amount']
+            )
 
 
 class EstimateSection(CachedPropertyMixin, TimestampedModel):

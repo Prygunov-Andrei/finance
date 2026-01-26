@@ -286,14 +286,14 @@ class PriceListCreateSerializer(serializers.ModelSerializer):
         
         price_list.save()
         
-        # Добавляем работы
+        # Добавляем работы через bulk_create для оптимизации
         if work_item_ids:
             work_items = WorkItem.objects.filter(id__in=work_item_ids, is_current=True)
-            for work_item in work_items:
-                PriceListItem.objects.create(
-                    price_list=price_list,
-                    work_item=work_item
-                )
+            price_list_items = [
+                PriceListItem(price_list=price_list, work_item=work_item)
+                for work_item in work_items
+            ]
+            PriceListItem.objects.bulk_create(price_list_items)
         
         return price_list
 

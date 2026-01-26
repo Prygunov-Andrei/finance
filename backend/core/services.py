@@ -117,7 +117,7 @@ class VersioningService:
         fk_field: str
     ) -> List[models.Model]:
         """
-        Копирует связанные объекты из source в target.
+        Копирует связанные объекты из source в target через bulk_create.
         
         Args:
             source: Исходный объект
@@ -128,18 +128,26 @@ class VersioningService:
         Returns:
             Список созданных копий
         """
-        copies = []
         related_manager = getattr(source, relation_name, None)
         
         if related_manager is None:
-            return copies
+            return []
         
-        for related_obj in related_manager.all():
-            # Создаём копию
+        # Получаем все связанные объекты
+        related_objects = list(related_manager.all())
+        if not related_objects:
+            return []
+        
+        # Подготавливаем копии для bulk_create
+        copies = []
+        for related_obj in related_objects:
             related_obj.pk = None
             setattr(related_obj, fk_field, target)
-            related_obj.save()
             copies.append(related_obj)
+        
+        # Получаем модель и создаём через bulk_create
+        model_class = type(related_objects[0])
+        model_class.objects.bulk_create(copies)
         
         return copies
 

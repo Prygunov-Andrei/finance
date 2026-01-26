@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Optional
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes, parser_classes, throttle_classes
@@ -8,7 +9,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.throttling import UserRateThrottle
 from drf_spectacular.utils import extend_schema, OpenApiParameter
-from drf_spectacular.types import OpenApiTypes
 
 from .models import LLMProvider
 from .serializers import LLMProviderSerializer
@@ -34,8 +34,6 @@ MAGIC_BYTES = {
     b'\xff\xd8\xff': 'jpg',  # JPEG
 }
 
-
-from typing import Optional
 
 def detect_file_type(content: bytes) -> Optional[str]:
     """Определяет тип файла по magic bytes"""

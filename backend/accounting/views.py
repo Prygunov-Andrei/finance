@@ -2,9 +2,8 @@ from rest_framework import viewsets, filters, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db import models
-from django.db.models import Sum, F, Q, OuterRef, Subquery, Value
-from django.db.models.functions import TruncMonth, Coalesce
+from django.db.models import Sum, Q, OuterRef, Subquery, Value
+from django.db.models.functions import TruncMonth
 
 from payments.models import Payment
 from contracts.models import Contract, Act

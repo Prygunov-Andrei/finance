@@ -216,6 +216,12 @@ class TechnicalProposal(CachedPropertyMixin, TimestampedModel):
         ordering = ['-date', '-created_at']
         verbose_name = 'ТКП'
         verbose_name_plural = 'ТКП'
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['status', 'date']),
+            models.Index(fields=['object', 'status']),
+            models.Index(fields=['legal_entity', 'status']),
+        ]
 
     def __str__(self):
         return f"ТКП №{self.number} - {self.name}"
@@ -324,43 +330,73 @@ class TechnicalProposal(CachedPropertyMixin, TimestampedModel):
         section_order = 0
         char_order = 0
         
-        for estimate in self.estimates.all():
-            # Копировать разделы
+        # Собираем все данные для bulk_create
+        sections_to_create = []
+        subsections_data = []  # [(section_index, subsection_data), ...]
+        characteristics_to_create = []
+        
+        estimates = list(self.estimates.all().prefetch_related(
+            'sections__subsections', 'characteristics'
+        ))
+        
+        for estimate in estimates:
+            # Собираем разделы
             for section in estimate.sections.all():
-                tkp_section = TKPEstimateSection.objects.create(
-                    tkp=self,
-                    source_estimate=estimate,
-                    source_section=section,
-                    name=section.name,
-                    sort_order=section_order
+                sections_to_create.append(
+                    TKPEstimateSection(
+                        tkp=self,
+                        source_estimate=estimate,
+                        source_section=section,
+                        name=section.name,
+                        sort_order=section_order
+                    )
                 )
+                section_index = len(sections_to_create) - 1
                 section_order += 1
                 
-                # Копировать подразделы
+                # Собираем подразделы для этого раздела
                 for subsection in section.subsections.all():
-                    TKPEstimateSubsection.objects.create(
-                        section=tkp_section,
-                        source_subsection=subsection,
-                        name=subsection.name,
-                        materials_sale=subsection.materials_sale,
-                        works_sale=subsection.works_sale,
-                        materials_purchase=subsection.materials_purchase,
-                        works_purchase=subsection.works_purchase,
-                        sort_order=subsection.sort_order
-                    )
+                    subsections_data.append((section_index, subsection))
             
-            # Копировать характеристики
+            # Собираем характеристики
             for char in estimate.characteristics.all():
-                TKPCharacteristic.objects.create(
-                    tkp=self,
-                    source_estimate=estimate,
-                    source_characteristic=char,
-                    name=f"{char.name} ({estimate.name})",
-                    purchase_amount=char.purchase_amount,
-                    sale_amount=char.sale_amount,
-                    sort_order=char_order
+                characteristics_to_create.append(
+                    TKPCharacteristic(
+                        tkp=self,
+                        source_estimate=estimate,
+                        source_characteristic=char,
+                        name=f"{char.name} ({estimate.name})",
+                        purchase_amount=char.purchase_amount,
+                        sale_amount=char.sale_amount,
+                        sort_order=char_order
+                    )
                 )
                 char_order += 1
+        
+        # Создаём разделы через bulk_create
+        if sections_to_create:
+            TKPEstimateSection.objects.bulk_create(sections_to_create)
+        
+        # Создаём подразделы через bulk_create
+        subsections_to_create = [
+            TKPEstimateSubsection(
+                section=sections_to_create[section_idx],
+                source_subsection=subsection,
+                name=subsection.name,
+                materials_sale=subsection.materials_sale,
+                works_sale=subsection.works_sale,
+                materials_purchase=subsection.materials_purchase,
+                works_purchase=subsection.works_purchase,
+                sort_order=subsection.sort_order
+            )
+            for section_idx, subsection in subsections_data
+        ]
+        if subsections_to_create:
+            TKPEstimateSubsection.objects.bulk_create(subsections_to_create)
+        
+        # Создаём характеристики через bulk_create
+        if characteristics_to_create:
+            TKPCharacteristic.objects.bulk_create(characteristics_to_create)
 
     def create_new_version(self) -> 'TechnicalProposal':
         """
@@ -390,30 +426,43 @@ class TechnicalProposal(CachedPropertyMixin, TimestampedModel):
         # Копировать сметы
         new_tkp.estimates.set(self.estimates.all())
         
-        # Копировать разделы и подразделы
-        for section in self.estimate_sections.all():
-            new_section = TKPEstimateSection.objects.create(
+        # Копировать разделы через bulk_create
+        old_sections = list(self.estimate_sections.all().prefetch_related('subsections'))
+        new_sections = [
+            TKPEstimateSection(
                 tkp=new_tkp,
                 source_estimate=section.source_estimate,
                 source_section=section.source_section,
                 name=section.name,
                 sort_order=section.sort_order
             )
-            for subsection in section.subsections.all():
-                TKPEstimateSubsection.objects.create(
-                    section=new_section,
-                    source_subsection=subsection.source_subsection,
-                    name=subsection.name,
-                    materials_sale=subsection.materials_sale,
-                    works_sale=subsection.works_sale,
-                    materials_purchase=subsection.materials_purchase,
-                    works_purchase=subsection.works_purchase,
-                    sort_order=subsection.sort_order
-                )
+            for section in old_sections
+        ]
+        if new_sections:
+            TKPEstimateSection.objects.bulk_create(new_sections)
         
-        # Копировать характеристики
-        for char in self.characteristics.all():
-            TKPCharacteristic.objects.create(
+        # Копировать подразделы через bulk_create
+        new_subsections = []
+        for old_section, new_section in zip(old_sections, new_sections):
+            for subsection in old_section.subsections.all():
+                new_subsections.append(
+                    TKPEstimateSubsection(
+                        section=new_section,
+                        source_subsection=subsection.source_subsection,
+                        name=subsection.name,
+                        materials_sale=subsection.materials_sale,
+                        works_sale=subsection.works_sale,
+                        materials_purchase=subsection.materials_purchase,
+                        works_purchase=subsection.works_purchase,
+                        sort_order=subsection.sort_order
+                    )
+                )
+        if new_subsections:
+            TKPEstimateSubsection.objects.bulk_create(new_subsections)
+        
+        # Копировать характеристики через bulk_create
+        new_characteristics = [
+            TKPCharacteristic(
                 tkp=new_tkp,
                 source_estimate=char.source_estimate,
                 source_characteristic=char.source_characteristic,
@@ -422,16 +471,24 @@ class TechnicalProposal(CachedPropertyMixin, TimestampedModel):
                 sale_amount=char.sale_amount,
                 sort_order=char.sort_order
             )
+            for char in self.characteristics.all()
+        ]
+        if new_characteristics:
+            TKPCharacteristic.objects.bulk_create(new_characteristics)
         
-        # Копировать фронт работ
-        for front in self.front_of_work.all():
-            TKPFrontOfWork.objects.create(
+        # Копировать фронт работ через bulk_create
+        new_front_of_work = [
+            TKPFrontOfWork(
                 tkp=new_tkp,
                 front_item=front.front_item,
                 when_text=front.when_text,
                 when_date=front.when_date,
                 sort_order=front.sort_order
             )
+            for front in self.front_of_work.all()
+        ]
+        if new_front_of_work:
+            TKPFrontOfWork.objects.bulk_create(new_front_of_work)
         
         return new_tkp
 
@@ -782,6 +839,12 @@ class MountingProposal(TimestampedModel):
         ordering = ['-date', '-created_at']
         verbose_name = 'МП'
         verbose_name_plural = 'МП'
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['status', 'date']),
+            models.Index(fields=['object', 'status']),
+            models.Index(fields=['counterparty', 'status']),
+        ]
 
     def __str__(self):
         return f"МП №{self.number} - {self.name}"

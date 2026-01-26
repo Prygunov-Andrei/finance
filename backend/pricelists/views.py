@@ -3,7 +3,6 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
-from django.db.models import Q
 from io import BytesIO
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side
@@ -200,20 +199,40 @@ class PriceListViewSet(viewsets.ModelViewSet):
         
         work_item_ids = serializer.validated_data['work_item_ids']
         work_items = WorkItem.objects.filter(id__in=work_item_ids, is_current=True)
+        work_items_dict = {wi.id: wi for wi in work_items}
+        
+        # Находим существующие элементы
+        existing_items = PriceListItem.objects.filter(
+            price_list=price_list,
+            work_item__in=work_items
+        ).select_related('work_item')
+        existing_work_item_ids = {item.work_item_id for item in existing_items}
         
         added = []
-        for work_item in work_items:
-            item, created = PriceListItem.objects.get_or_create(
-                price_list=price_list,
-                work_item=work_item,
-                defaults={'is_included': True}
-            )
-            if created:
-                added.append(work_item.id)
-            elif not item.is_included:
+        
+        # Обновляем неактивные элементы через bulk_update
+        items_to_update = [
+            item for item in existing_items 
+            if not item.is_included
+        ]
+        if items_to_update:
+            for item in items_to_update:
                 item.is_included = True
-                item.save()
-                added.append(work_item.id)
+                added.append(item.work_item_id)
+            PriceListItem.objects.bulk_update(items_to_update, ['is_included'])
+        
+        # Создаём новые элементы через bulk_create
+        new_work_items = [
+            work_items_dict[wid] for wid in work_item_ids 
+            if wid in work_items_dict and wid not in existing_work_item_ids
+        ]
+        if new_work_items:
+            new_items = [
+                PriceListItem(price_list=price_list, work_item=wi, is_included=True)
+                for wi in new_work_items
+            ]
+            PriceListItem.objects.bulk_create(new_items)
+            added.extend([wi.id for wi in new_work_items])
         
         return Response({
             'added': added,

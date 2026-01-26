@@ -337,6 +337,15 @@ class Contract(TimestampedModel):
         verbose_name_plural = 'Договоры'
         ordering = ['-contract_date', '-created_at']
         unique_together = ('object', 'number')
+        indexes = [
+            models.Index(fields=['contract_date']),
+            models.Index(fields=['status', 'contract_date']),
+            models.Index(fields=['contract_type', 'status']),
+            models.Index(fields=['object', 'status']),
+            models.Index(fields=['counterparty', 'status']),
+            models.Index(fields=['framework_contract']),
+            models.Index(fields=['end_date']),
+        ]
 
     def __str__(self) -> str:
         return f"{self.number} — {self.name}"
@@ -687,6 +696,17 @@ class Act(TimestampedModel):
 
         self.full_clean()
         super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = 'Акт'
+        verbose_name_plural = 'Акты'
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['contract', 'status']),
+            models.Index(fields=['date']),
+            models.Index(fields=['status', 'date']),
+            models.Index(fields=['due_date']),
+        ]
 
 
 class ActPaymentAllocation(models.Model):
