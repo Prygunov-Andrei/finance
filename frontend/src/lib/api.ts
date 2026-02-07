@@ -2041,6 +2041,151 @@ class ApiClient {
       body: formData,
     });
   }
+
+  // =============================================================================
+  // Worklog API (Сервис фиксации работ)
+  // =============================================================================
+
+  async getWorkJournalSummary(objectId: number): Promise<WorkJournalSummary> {
+    return this.request<WorkJournalSummary>(`/objects/${objectId}/work-journal/`);
+  }
+
+  async getWorklogShifts(params?: {
+    object?: number;
+    contractor?: number;
+    status?: string;
+    date?: string;
+    shift_type?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedResponse<WorklogShift>> {
+    const queryParams = new URLSearchParams();
+    if (params?.object) queryParams.append('object', params.object.toString());
+    if (params?.contractor) queryParams.append('contractor', params.contractor.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.date) queryParams.append('date', params.date);
+    if (params?.shift_type) queryParams.append('shift_type', params.shift_type);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    return this.request<PaginatedResponse<WorklogShift>>(`/worklog/shifts/${qs ? `?${qs}` : ''}`);
+  }
+
+  async getWorklogTeams(params?: {
+    object?: number;
+    shift?: string;
+    status?: string;
+    contractor?: number;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedResponse<WorklogTeam>> {
+    const queryParams = new URLSearchParams();
+    if (params?.object) queryParams.append('object', params.object.toString());
+    if (params?.shift) queryParams.append('shift', params.shift);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.contractor) queryParams.append('contractor', params.contractor.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    return this.request<PaginatedResponse<WorklogTeam>>(`/worklog/teams/${qs ? `?${qs}` : ''}`);
+  }
+
+  async getWorklogMedia(params?: {
+    team?: string;
+    media_type?: string;
+    tag?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedResponse<WorklogMedia>> {
+    const queryParams = new URLSearchParams();
+    if (params?.team) queryParams.append('team', params.team);
+    if (params?.media_type) queryParams.append('media_type', params.media_type);
+    if (params?.tag) queryParams.append('tag', params.tag);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    return this.request<PaginatedResponse<WorklogMedia>>(`/worklog/media/${qs ? `?${qs}` : ''}`);
+  }
+
+  async getWorklogReports(params?: {
+    team?: string;
+    shift?: string;
+    report_type?: string;
+    status?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedResponse<WorklogReport>> {
+    const queryParams = new URLSearchParams();
+    if (params?.team) queryParams.append('team', params.team);
+    if (params?.shift) queryParams.append('shift', params.shift);
+    if (params?.report_type) queryParams.append('report_type', params.report_type);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    return this.request<PaginatedResponse<WorklogReport>>(`/worklog/reports/${qs ? `?${qs}` : ''}`);
+  }
+
+  async getWorklogReportDetail(reportId: string): Promise<WorklogReportDetail> {
+    return this.request<WorklogReportDetail>(`/worklog/reports/${reportId}/`);
+  }
+
+  async getWorklogQuestions(params?: {
+    report?: string;
+    status?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedResponse<WorklogQuestion>> {
+    const queryParams = new URLSearchParams();
+    if (params?.report) queryParams.append('report', params.report);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    return this.request<PaginatedResponse<WorklogQuestion>>(`/worklog/questions/${qs ? `?${qs}` : ''}`);
+  }
+
+  async createWorklogQuestion(data: { report_id: string; text: string }): Promise<WorklogQuestion> {
+    return this.request<WorklogQuestion>('/worklog/questions/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async answerWorklogQuestion(questionId: string, data: { text: string }): Promise<WorklogAnswer> {
+    return this.request<WorklogAnswer>(`/worklog/questions/${questionId}/answer/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateObjectGeo(objectId: number, data: {
+    latitude?: string;
+    longitude?: string;
+    geo_radius?: number;
+  }): Promise<ConstructionObject> {
+    return this.request<ConstructionObject>(`/objects/${objectId}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getWorklogSupergroups(params?: {
+    object?: number;
+    contractor?: number;
+    is_active?: boolean;
+  }): Promise<PaginatedResponse<WorklogSupergroup>> {
+    const queryParams = new URLSearchParams();
+    if (params?.object) queryParams.append('object', params.object.toString());
+    if (params?.contractor) queryParams.append('contractor', params.contractor.toString());
+    if (params?.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
+    const qs = queryParams.toString();
+    return this.request<PaginatedResponse<WorklogSupergroup>>(`/worklog/supergroups/${qs ? `?${qs}` : ''}`);
+  }
 }
 
 // Types
@@ -3284,6 +3429,111 @@ export interface InvoiceItem {
   price_per_unit: string;
   amount?: string; // Calculated
   vat_amount?: string;
+}
+
+// =============================================================================
+// Worklog Types (Сервис фиксации работ)
+// =============================================================================
+
+export interface WorklogShift {
+  id: string;
+  object: number;
+  object_name: string;
+  contractor: number;
+  contractor_name: string;
+  date: string;
+  shift_type: 'day' | 'evening' | 'night';
+  start_time: string;
+  end_time: string;
+  status: 'scheduled' | 'active' | 'closed';
+  registrations_count: number;
+  teams_count: number;
+}
+
+export interface WorklogTeam {
+  id: string;
+  object_name: string;
+  shift: string;
+  topic_name: string;
+  brigadier_name: string | null;
+  status: 'active' | 'closed';
+  is_solo: boolean;
+  media_count: number;
+}
+
+export interface WorklogMedia {
+  id: string;
+  team: string | null;
+  team_name: string | null;
+  author_name: string;
+  media_type: 'photo' | 'video' | 'audio' | 'voice' | 'document' | 'text';
+  tag: string;
+  file_url: string;
+  thumbnail_url: string;
+  text_content: string;
+  status: string;
+  created_at: string;
+}
+
+export interface WorklogReport {
+  id: string;
+  team: string;
+  team_name: string | null;
+  shift: string;
+  report_number: number;
+  report_type: 'intermediate' | 'final' | 'supplement';
+  media_count: number;
+  status: string;
+  created_at: string;
+}
+
+export interface WorkJournalSummary {
+  total_shifts: number;
+  active_shifts: number;
+  total_teams: number;
+  total_media: number;
+  total_reports: number;
+  total_workers: number;
+  recent_shifts: WorklogShift[];
+}
+
+export interface WorklogReportDetail extends WorklogReport {
+  trigger: string;
+  media_items: WorklogMedia[];
+  questions: WorklogQuestion[];
+}
+
+export interface WorklogQuestion {
+  id: string;
+  report: string;
+  author: string;
+  author_name: string;
+  text: string;
+  status: 'pending' | 'answered';
+  created_at: string;
+  answers: WorklogAnswer[];
+}
+
+export interface WorklogAnswer {
+  id: string;
+  question: string;
+  author: string;
+  author_name: string;
+  text: string;
+  created_at: string;
+}
+
+export interface WorklogSupergroup {
+  id: string;
+  object: number;
+  object_name: string;
+  contractor: number;
+  contractor_name: string;
+  telegram_chat_id: number;
+  chat_title: string;
+  invite_link: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 export const api = new ApiClient();

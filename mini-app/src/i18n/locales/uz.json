@@ -1,0 +1,123 @@
+{
+  "common": {
+    "loading": "Yuklanmoqda...",
+    "error": "Xatolik yuz berdi",
+    "retry": "Qayta urinish",
+    "save": "Saqlash",
+    "cancel": "Bekor qilish",
+    "confirm": "Tasdiqlash",
+    "back": "Orqaga",
+    "close": "Yopish",
+    "create": "Yaratish",
+    "delete": "O'chirish",
+    "edit": "Tahrirlash",
+    "search": "Qidiruv",
+    "noData": "Ma'lumot yo'q",
+    "yes": "Ha",
+    "no": "Yo'q"
+  },
+  "auth": {
+    "notRegistered": "Siz tizimda ro'yxatdan o'tmagansiz",
+    "contactContractor": "Qo'shilish uchun Ijrochingizga murojaat qiling",
+    "authError": "Autentifikatsiya xatosi"
+  },
+  "worker": {
+    "title": "Smenaga ro'yxatdan o'tish",
+    "registerButton": "Smenaga ro'yxatdan o'tish!",
+    "scanQr": "QR-kodni skanerlash",
+    "registered": "Siz smenaga ro'yxatdan o'tdingiz",
+    "goToChat": "Zveno chatiga o'tish",
+    "shiftInfo": "Smena haqida ma'lumot",
+    "geoError": "Joylashuvni aniqlab bo'lmadi",
+    "outsideZone": "Siz ob'ekt tashqaridasiz",
+    "alreadyRegistered": "Siz allaqachon ushbu smenaga ro'yxatdan o'tgansiz"
+  },
+  "brigadier": {
+    "title": "Zveno boshqaruvi",
+    "createTeam": "Zveno yaratish",
+    "selectMembers": "Ishtirokchilarni tanlang",
+    "teamCreated": "Zveno yaratildi",
+    "viewMedia": "Mediafayllarni ko'rish",
+    "createReport": "Hisobot yaratish",
+    "closeShift": "Smenani yopish",
+    "addMember": "Ishtirokchi qo'shish",
+    "removeMember": "Ishtirokchini o'chirish",
+    "manageTeam": "Tarkibni boshqarish",
+    "noMedia": "Hozircha media yo'q",
+    "mediaCount": "{{count}} fayl",
+    "reportCreated": "Hisobot yaratildi",
+    "shiftClosed": "Smena yopildi",
+    "unansweredQuestions": "{{count}} ta javobsiz savol bor"
+  },
+  "contractor": {
+    "title": "Ob'ektni boshqarish",
+    "openShift": "Smenani ochish",
+    "allTeams": "Barcha zvenolar",
+    "manageWorkers": "Montajchilarni boshqarish",
+    "addWorker": "Montajchi qo'shish",
+    "settings": "Sozlamalar",
+    "supplementReport": "Hisobotni to'ldirish",
+    "askQuestion": "Savol berish",
+    "shiftOpened": "Smena ochildi",
+    "qrGenerated": "QR-kod yaratildi"
+  },
+  "shift": {
+    "day": "Kunduzgi",
+    "evening": "Kechki",
+    "night": "Tungi",
+    "scheduled": "Rejalashtirilgan",
+    "active": "Faol",
+    "closed": "Yopilgan"
+  },
+  "report": {
+    "intermediate": "Oraliq",
+    "final": "Yakuniy",
+    "supplement": "Qo'shimcha",
+    "selectType": "Hisobot turi",
+    "comment": "Izoh",
+    "commentPlaceholder": "Hisobotga izoh qo'shing...",
+    "selectMedia": "Hisobot uchun media",
+    "selectAll": "Hammasini tanlash",
+    "type": "Turi",
+    "mediaCount": "Media soni",
+    "additionalText": "Qo'shimcha matn",
+    "supplementPlaceholder": "Hisobotga qo'shimcha kiriting...",
+    "additionalMedia": "Qo'shimcha media",
+    "supplemented": "Hisobot to'ldirildi",
+    "supplementSuccess": "Qo'shimcha muvaffaqiyatli qo'shildi"
+  },
+  "team": {
+    "status": "Holat",
+    "brigadier": "Brigadir",
+    "worker": "Montajchi",
+    "members": "Ishtirokchilar",
+    "membersCount": "Ishtirokchilar soni",
+    "mediaTotal": "Jami media",
+    "recentMedia": "So'nggi media",
+    "availableWorkers": "Qo'shish mumkin",
+    "noAvailableWorkers": "Barcha ro'yxatdan o'tganlar allaqachon tarkibda"
+  },
+  "question": {
+    "existing": "Savollar",
+    "new": "Yangi savol",
+    "placeholder": "Savolingizni kiriting...",
+    "send": "Savolni yuborish"
+  },
+  "media": {
+    "fullscreen": "To'liq ekranda ko'rish",
+    "prev": "Oldingi",
+    "next": "Keyingi",
+    "openFile": "Faylni ochish"
+  },
+  "settings": {
+    "teamCreation": "Zveno yaratish",
+    "onlyBrigadier": "Faqat brigadir",
+    "anyRegistered": "Har qanday ro'yxatdan o'tgan",
+    "shiftClose": "Smenani yopish",
+    "onlyContractor": "Faqat ijrochi",
+    "brigadierToo": "Brigadir ham mumkin",
+    "autoClose": "Smenani avtoyopish",
+    "reportWarning": "Hisobot ogohlantirishi",
+    "minutes": "daq"
+  }
+}

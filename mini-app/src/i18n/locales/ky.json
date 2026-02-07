@@ -1,0 +1,123 @@
+{
+  "common": {
+    "loading": "Жүктөлүүдө...",
+    "error": "Ката кетти",
+    "retry": "Кайталоо",
+    "save": "Сактоо",
+    "cancel": "Жокко чыгаруу",
+    "confirm": "Ырастоо",
+    "back": "Артка",
+    "close": "Жабуу",
+    "create": "Түзүү",
+    "delete": "Жок кылуу",
+    "edit": "Өзгөртүү",
+    "search": "Издөө",
+    "noData": "Маалымат жок",
+    "yes": "Ооба",
+    "no": "Жок"
+  },
+  "auth": {
+    "notRegistered": "Сиз системада каттоодон өтө элексиз",
+    "contactContractor": "Кошулуу үчүн Аткаруучуңузга кайрылыңыз",
+    "authError": "Аутентификация катасы"
+  },
+  "worker": {
+    "title": "Сменага каттоо",
+    "registerButton": "Сменага каттоодон өтүү!",
+    "scanQr": "QR-кодду сканерлеңиз",
+    "registered": "Сиз сменага каттоодон өттүңүз",
+    "goToChat": "Звено чатына өтүү",
+    "shiftInfo": "Смена жөнүндө маалымат",
+    "geoError": "Жайгашууну аныктоо мүмкүн болгон жок",
+    "outsideZone": "Сиз объекттен тышкарысыз",
+    "alreadyRegistered": "Сиз бул сменага мурунтан эле каттоодон өткөнсүз"
+  },
+  "brigadier": {
+    "title": "Звенону башкаруу",
+    "createTeam": "Звено түзүү",
+    "selectMembers": "Катышуучуларды тандаңыз",
+    "teamCreated": "Звено түзүлдү",
+    "viewMedia": "Медиа файлдарды көрүү",
+    "createReport": "Отчёт түзүү",
+    "closeShift": "Сменаны жабуу",
+    "addMember": "Катышуучу кошуу",
+    "removeMember": "Катышуучуну алып салуу",
+    "manageTeam": "Курамды башкаруу",
+    "noMedia": "Азырынча медиа жок",
+    "mediaCount": "{{count}} файл",
+    "reportCreated": "Отчёт түзүлдү",
+    "shiftClosed": "Смена жабылды",
+    "unansweredQuestions": "{{count}} жоопсуз суроо бар"
+  },
+  "contractor": {
+    "title": "Объектти башкаруу",
+    "openShift": "Сменаны ачуу",
+    "allTeams": "Бардык звенолор",
+    "manageWorkers": "Монтажчыларды башкаруу",
+    "addWorker": "Монтажчы кошуу",
+    "settings": "Жөндөөлөр",
+    "supplementReport": "Отчётту толуктоо",
+    "askQuestion": "Суроо берүү",
+    "shiftOpened": "Смена ачылды",
+    "qrGenerated": "QR-код түзүлдү"
+  },
+  "shift": {
+    "day": "Күндүзгү",
+    "evening": "Кечки",
+    "night": "Түнкү",
+    "scheduled": "Пландаштырылган",
+    "active": "Активдүү",
+    "closed": "Жабылган"
+  },
+  "report": {
+    "intermediate": "Аралык",
+    "final": "Акыркы",
+    "supplement": "Кошумча",
+    "selectType": "Отчёттун түрү",
+    "comment": "Комментарий",
+    "commentPlaceholder": "Отчётко комментарий кошуңуз...",
+    "selectMedia": "Отчёт үчүн медиа",
+    "selectAll": "Баарын тандоо",
+    "type": "Түрү",
+    "mediaCount": "Медиа саны",
+    "additionalText": "Кошумча текст",
+    "supplementPlaceholder": "Отчётко кошумча жазыңыз...",
+    "additionalMedia": "Кошумча медиа",
+    "supplemented": "Отчёт толукталды",
+    "supplementSuccess": "Кошумча ийгиликтүү кошулду"
+  },
+  "team": {
+    "status": "Статус",
+    "brigadier": "Бригадир",
+    "worker": "Монтажчы",
+    "members": "Катышуучулар",
+    "membersCount": "Катышуучулардын саны",
+    "mediaTotal": "Жалпы медиа",
+    "recentMedia": "Акыркы медиа",
+    "availableWorkers": "Кошууга жеткиликтүү",
+    "noAvailableWorkers": "Бардык каттоодон өткөндөр курамда"
+  },
+  "question": {
+    "existing": "Суроолор",
+    "new": "Жаңы суроо",
+    "placeholder": "Сурооңузду жазыңыз...",
+    "send": "Суроону жөнөтүү"
+  },
+  "media": {
+    "fullscreen": "Толук экранда көрүү",
+    "prev": "Мурунку",
+    "next": "Кийинки",
+    "openFile": "Файлды ачуу"
+  },
+  "settings": {
+    "teamCreation": "Звено түзүү",
+    "onlyBrigadier": "Бригадир гана",
+    "anyRegistered": "Каалаган каттоодон өткөн",
+    "shiftClose": "Сменаны жабуу",
+    "onlyContractor": "Аткаруучу гана",
+    "brigadierToo": "Бригадир да болот",
+    "autoClose": "Сменаны авто-жабуу",
+    "reportWarning": "Отчёт эскертүүсү",
+    "minutes": "мүн"
+  }
+}

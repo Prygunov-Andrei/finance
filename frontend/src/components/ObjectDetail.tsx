@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ConstructionObject, ObjectCashFlowData } from '../lib/api';
-import { formatDate, formatAmount, formatCurrency, getStatusBadgeClass, getStatusLabel } from '../lib/utils';
+import { api, ConstructionObject, ObjectCashFlowData, WorklogShift, WorklogTeam, WorklogMedia, WorklogReport, WorklogReportDetail, WorklogQuestion, WorklogAnswer, WorklogSupergroup, WorkJournalSummary, PaginatedResponse } from '../lib/api';
+import { formatDate, formatDateTime, formatAmount, formatCurrency, getStatusBadgeClass, getStatusLabel, cn } from '../lib/utils';
 import { CONSTANTS } from '../constants';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Building2, Loader2, ArrowLeft, Pencil, Trash2, Calendar, MapPin, FileText, FileSpreadsheet, Briefcase, DollarSign, TrendingUp } from 'lucide-react';
+import { Building2, Loader2, ArrowLeft, Pencil, Trash2, Calendar, MapPin, FileText, FileSpreadsheet, Briefcase, DollarSign, TrendingUp, ClipboardList, Users, Image, Clock, Camera, Video, Mic, FileQuestion, ChevronLeft, ChevronRight, Filter, Eye, MessageCircle, Send, Globe, Save, Link2, CheckCircle2, XCircle, Settings } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
+import { Badge } from './ui/badge';
 
 export function ObjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -190,7 +191,7 @@ export function ObjectDetail() {
 
         {/* Вкладки */}
         <Tabs defaultValue="main" className="w-full">
-          <TabsList className="grid w-full grid-cols-7 mb-6">
+          <TabsList className="grid w-full grid-cols-8 mb-6">
             <TabsTrigger value="main">Основное</TabsTrigger>
             <TabsTrigger value="contracts">Договоры</TabsTrigger>
             <TabsTrigger value="projects">Проекты</TabsTrigger>
@@ -198,6 +199,7 @@ export function ObjectDetail() {
             <TabsTrigger value="tkp">ТКП</TabsTrigger>
             <TabsTrigger value="mp">МП</TabsTrigger>
             <TabsTrigger value="cashflow">Cash-flow</TabsTrigger>
+            <TabsTrigger value="work-journal">Журнал работ</TabsTrigger>
           </TabsList>
 
           <TabsContent value="main">
@@ -226,6 +228,10 @@ export function ObjectDetail() {
 
           <TabsContent value="cashflow">
             <CashFlowTab objectId={objectId} />
+          </TabsContent>
+
+          <TabsContent value="work-journal">
+            <WorkJournalTab objectId={objectId} />
           </TabsContent>
         </Tabs>
       </div>
@@ -666,6 +672,1082 @@ function MPTab({ objectId }: { objectId: number }) {
     </div>
   );
 }
+
+// =============================================================================
+// Журнал работ — полноценная вкладка
+// =============================================================================
+
+const SHIFT_TYPE_LABELS: Record<string, string> = {
+  day: 'Дневная',
+  evening: 'Вечерняя',
+  night: 'Ночная',
+};
+
+const SHIFT_STATUS_STYLES: Record<string, string> = {
+  active: 'bg-green-100 text-green-700',
+  scheduled: 'bg-blue-100 text-blue-700',
+  closed: 'bg-gray-100 text-gray-600',
+};
+
+const MEDIA_TYPE_ICONS: Record<string, typeof Camera> = {
+  photo: Camera,
+  video: Video,
+  voice: Mic,
+  audio: Mic,
+  text: FileText,
+  document: FileSpreadsheet,
+};
+
+const MEDIA_TAG_STYLES: Record<string, string> = {
+  progress: 'bg-blue-100 text-blue-700',
+  problem: 'bg-red-100 text-red-700',
+  safety: 'bg-yellow-100 text-yellow-700',
+  result: 'bg-green-100 text-green-700',
+  other: 'bg-gray-100 text-gray-600',
+};
+
+type JournalSection = 'overview' | 'shifts' | 'media' | 'reports' | 'settings';
+
+function WorkJournalTab({ objectId }: { objectId: number }) {
+  const [activeSection, setActiveSection] = useState<JournalSection>('overview');
+  const [shiftsPage, setShiftsPage] = useState(1);
+  const [mediaPage, setMediaPage] = useState(1);
+  const [reportsPage, setReportsPage] = useState(1);
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<string>('');
+  const [mediaTagFilter, setMediaTagFilter] = useState<string>('');
+  const [shiftStatusFilter, setShiftStatusFilter] = useState<string>('');
+  const [reportTypeFilter, setReportTypeFilter] = useState<string>('');
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['work-journal-summary', objectId],
+    queryFn: () => api.getWorkJournalSummary(objectId),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  });
+
+  const { data: shifts, isLoading: shiftsLoading } = useQuery({
+    queryKey: ['worklog-shifts', objectId, shiftsPage, shiftStatusFilter],
+    queryFn: () => api.getWorklogShifts({
+      object: objectId,
+      page: shiftsPage,
+      page_size: 10,
+      ...(shiftStatusFilter ? { status: shiftStatusFilter } : {}),
+    }),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+    enabled: activeSection === 'shifts' || activeSection === 'overview',
+  });
+
+  const { data: media, isLoading: mediaLoading } = useQuery({
+    queryKey: ['worklog-media', objectId, mediaPage, mediaTypeFilter, mediaTagFilter],
+    queryFn: () => api.getWorklogMedia({
+      page: mediaPage,
+      page_size: 12,
+      ...(mediaTypeFilter ? { media_type: mediaTypeFilter } : {}),
+      ...(mediaTagFilter ? { tag: mediaTagFilter } : {}),
+    }),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+    enabled: activeSection === 'media',
+  });
+
+  const { data: reports, isLoading: reportsLoading } = useQuery({
+    queryKey: ['worklog-reports', objectId, reportsPage, reportTypeFilter],
+    queryFn: () => api.getWorklogReports({
+      page: reportsPage,
+      page_size: 10,
+      ...(reportTypeFilter ? { report_type: reportTypeFilter } : {}),
+    }),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+    enabled: activeSection === 'reports',
+  });
+
+  if (summaryLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (!summary || (summary.total_shifts === 0 && summary.total_media === 0)) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+        <ClipboardList className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">Журнал работ</h3>
+        <p className="text-gray-500 max-w-md mx-auto">
+          Журнал работ будет доступен после подключения объекта к сервису фиксации.
+          Здесь будут отображаться смены, звенья, медиа и отчёты монтажников.
+        </p>
+      </div>
+    );
+  }
+
+  const sectionButtons: { key: JournalSection; label: string; icon: typeof Clock }[] = [
+    { key: 'overview', label: 'Обзор', icon: ClipboardList },
+    { key: 'shifts', label: 'Смены', icon: Clock },
+    { key: 'media', label: 'Медиа', icon: Image },
+    { key: 'reports', label: 'Отчёты', icon: FileText },
+    { key: 'settings', label: 'Настройки', icon: Settings },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <SummaryCard
+          icon={Clock}
+          label="Смены"
+          value={summary.total_shifts}
+          extra={summary.active_shifts > 0 ? `${summary.active_shifts} активных` : undefined}
+          extraColor="text-green-600"
+        />
+        <SummaryCard icon={Users} label="Звенья" value={summary.total_teams} />
+        <SummaryCard icon={Image} label="Медиа" value={summary.total_media} />
+        <SummaryCard icon={FileText} label="Отчёты" value={summary.total_reports} />
+        <SummaryCard icon={Users} label="Монтажники" value={summary.total_workers} />
+      </div>
+
+      {/* Section navigation */}
+      <div className="flex gap-2 border-b border-gray-200 pb-0">
+        {sectionButtons.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeSection === key
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            )}
+            onClick={() => setActiveSection(key)}
+            tabIndex={0}
+            aria-label={`Раздел ${label}`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Section content */}
+      {activeSection === 'overview' && (
+        <OverviewSection shifts={summary.recent_shifts} />
+      )}
+
+      {activeSection === 'shifts' && (
+        <ShiftsSection
+          data={shifts}
+          isLoading={shiftsLoading}
+          page={shiftsPage}
+          onPageChange={setShiftsPage}
+          statusFilter={shiftStatusFilter}
+          onStatusFilterChange={setShiftStatusFilter}
+        />
+      )}
+
+      {activeSection === 'media' && (
+        <MediaSection
+          data={media}
+          isLoading={mediaLoading}
+          page={mediaPage}
+          onPageChange={setMediaPage}
+          typeFilter={mediaTypeFilter}
+          onTypeFilterChange={setMediaTypeFilter}
+          tagFilter={mediaTagFilter}
+          onTagFilterChange={setMediaTagFilter}
+        />
+      )}
+
+      {activeSection === 'reports' && (
+        <ReportsSection
+          data={reports}
+          isLoading={reportsLoading}
+          page={reportsPage}
+          onPageChange={setReportsPage}
+          typeFilter={reportTypeFilter}
+          onTypeFilterChange={setReportTypeFilter}
+          onReportClick={(id) => { setSelectedReportId(id); setReportDialogOpen(true); }}
+        />
+      )}
+
+      {activeSection === 'settings' && (
+        <div className="space-y-6">
+          <GeoSettingsSection objectId={objectId} />
+          <SupergroupSection objectId={objectId} />
+        </div>
+      )}
+
+      {/* Диалог деталей отчёта */}
+      <ReportDetailDialog
+        reportId={selectedReportId}
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+      />
+    </div>
+  );
+}
+
+// --------------- Summary Card ---------------
+
+function SummaryCard({
+  icon: Icon,
+  label,
+  value,
+  extra,
+  extraColor = 'text-gray-500',
+}: {
+  icon: typeof Clock;
+  label: string;
+  value: number;
+  extra?: string;
+  extraColor?: string;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-blue-50 rounded-lg">
+          <Icon className="w-5 h-5 text-blue-600" />
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-gray-900">{value}</div>
+          <div className="text-sm text-gray-500">{label}</div>
+          {extra && <div className={cn('text-xs mt-0.5', extraColor)}>{extra}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --------------- Overview Section ---------------
+
+function OverviewSection({ shifts }: { shifts: WorklogShift[] }) {
+  if (!shifts || shifts.length === 0) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+        <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500">Нет недавних смен</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200">
+        <h3 className="text-base font-semibold text-gray-900">Последние смены</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тип</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Время</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Контрагент</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Регистрации</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Звенья</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {shifts.map((shift) => (
+              <ShiftRow key={shift.id} shift={shift} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// --------------- Shift Row ---------------
+
+function ShiftRow({ shift }: { shift: WorklogShift }) {
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(shift.date)}</td>
+      <td className="px-6 py-4 text-sm text-gray-700">{SHIFT_TYPE_LABELS[shift.shift_type] || shift.shift_type}</td>
+      <td className="px-6 py-4 text-sm text-gray-500 font-mono">{shift.start_time?.slice(0, 5)} — {shift.end_time?.slice(0, 5)}</td>
+      <td className="px-6 py-4 text-sm text-gray-700">{shift.contractor_name || '—'}</td>
+      <td className="px-6 py-4 text-sm text-center text-gray-700">{shift.registrations_count}</td>
+      <td className="px-6 py-4 text-sm text-center text-gray-700">{shift.teams_count}</td>
+      <td className="px-6 py-4">
+        <Badge className={cn('text-xs', SHIFT_STATUS_STYLES[shift.status] || 'bg-gray-100 text-gray-600')}>
+          {shift.status === 'active' ? 'Активна' : shift.status === 'scheduled' ? 'Запланирована' : 'Закрыта'}
+        </Badge>
+      </td>
+    </tr>
+  );
+}
+
+// --------------- Shifts Section ---------------
+
+function ShiftsSection({
+  data,
+  isLoading,
+  page,
+  onPageChange,
+  statusFilter,
+  onStatusFilterChange,
+}: {
+  data: PaginatedResponse<WorklogShift> | undefined;
+  isLoading: boolean;
+  page: number;
+  onPageChange: (p: number) => void;
+  statusFilter: string;
+  onStatusFilterChange: (f: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex items-center gap-3">
+        <Filter className="w-4 h-4 text-gray-400" />
+        <select
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={statusFilter}
+          onChange={(e) => { onStatusFilterChange(e.target.value); onPageChange(1); }}
+          aria-label="Фильтр по статусу"
+        >
+          <option value="">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="scheduled">Запланированные</option>
+          <option value="closed">Закрытые</option>
+        </select>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        </div>
+      ) : !data || data.results.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+          <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500">Нет смен{statusFilter ? ' с выбранным фильтром' : ''}</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тип</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Время</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Контрагент</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Регистрации</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Звенья</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {data.results.map((shift) => (
+                  <ShiftRow key={shift.id} shift={shift} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <PaginationBar count={data.count} page={page} pageSize={10} onPageChange={onPageChange} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --------------- Media Section ---------------
+
+function MediaSection({
+  data,
+  isLoading,
+  page,
+  onPageChange,
+  typeFilter,
+  onTypeFilterChange,
+  tagFilter,
+  onTagFilterChange,
+}: {
+  data: PaginatedResponse<WorklogMedia> | undefined;
+  isLoading: boolean;
+  page: number;
+  onPageChange: (p: number) => void;
+  typeFilter: string;
+  onTypeFilterChange: (f: string) => void;
+  tagFilter: string;
+  onTagFilterChange: (f: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Filter className="w-4 h-4 text-gray-400" />
+        <select
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={typeFilter}
+          onChange={(e) => { onTypeFilterChange(e.target.value); onPageChange(1); }}
+          aria-label="Фильтр по типу медиа"
+        >
+          <option value="">Все типы</option>
+          <option value="photo">Фото</option>
+          <option value="video">Видео</option>
+          <option value="voice">Голосовые</option>
+          <option value="text">Текст</option>
+          <option value="document">Документы</option>
+        </select>
+        <select
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={tagFilter}
+          onChange={(e) => { onTagFilterChange(e.target.value); onPageChange(1); }}
+          aria-label="Фильтр по тегу"
+        >
+          <option value="">Все теги</option>
+          <option value="progress">Прогресс</option>
+          <option value="problem">Проблема</option>
+          <option value="safety">Безопасность</option>
+          <option value="result">Результат</option>
+          <option value="other">Прочее</option>
+        </select>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        </div>
+      ) : !data || data.results.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+          <Image className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500">Нет медиа{typeFilter || tagFilter ? ' с выбранными фильтрами' : ''}</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {data.results.map((item) => (
+              <MediaCard key={item.id} media={item} />
+            ))}
+          </div>
+          <PaginationBar count={data.count} page={page} pageSize={12} onPageChange={onPageChange} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// --------------- Media Card ---------------
+
+function MediaCard({ media }: { media: WorklogMedia }) {
+  const IconComponent = MEDIA_TYPE_ICONS[media.media_type] || FileText;
+  const tagStyle = MEDIA_TAG_STYLES[media.tag] || MEDIA_TAG_STYLES.other;
+  const isVisual = media.media_type === 'photo' || media.media_type === 'video';
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
+      {/* Thumbnail area */}
+      <div className="relative aspect-video bg-gray-100 flex items-center justify-center">
+        {isVisual && media.thumbnail_url ? (
+          <img
+            src={media.thumbnail_url}
+            alt={media.text_content || 'Медиа'}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <IconComponent className="w-10 h-10 text-gray-400" />
+        )}
+        {media.media_type === 'video' && media.thumbnail_url && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center">
+              <Video className="w-5 h-5 text-white" />
+            </div>
+          </div>
+        )}
+        {media.tag && (
+          <Badge className={cn('absolute top-2 right-2 text-xs', tagStyle)}>
+            {media.tag === 'progress' ? 'Прогресс' : media.tag === 'problem' ? 'Проблема' : media.tag === 'safety' ? 'Безопасность' : media.tag === 'result' ? 'Результат' : media.tag}
+          </Badge>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3">
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+          <IconComponent className="w-3.5 h-3.5" />
+          <span>{media.media_type === 'photo' ? 'Фото' : media.media_type === 'video' ? 'Видео' : media.media_type === 'voice' ? 'Голосовое' : media.media_type === 'text' ? 'Текст' : media.media_type}</span>
+        </div>
+        <div className="text-sm text-gray-700 truncate">{media.author_name}</div>
+        {media.text_content && (
+          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{media.text_content}</p>
+        )}
+        <div className="text-xs text-gray-400 mt-1">{formatDateTime(media.created_at)}</div>
+      </div>
+    </div>
+  );
+}
+
+// --------------- Reports Section ---------------
+
+function ReportsSection({
+  data,
+  isLoading,
+  page,
+  onPageChange,
+  typeFilter,
+  onTypeFilterChange,
+  onReportClick,
+}: {
+  data: PaginatedResponse<WorklogReport> | undefined;
+  isLoading: boolean;
+  page: number;
+  onPageChange: (p: number) => void;
+  typeFilter: string;
+  onTypeFilterChange: (f: string) => void;
+  onReportClick?: (reportId: string) => void;
+}) {
+  const reportTypeLabels: Record<string, string> = {
+    intermediate: 'Промежуточный',
+    final: 'Итоговый',
+    supplement: 'Дополнение',
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Filter */}
+      <div className="flex items-center gap-3">
+        <Filter className="w-4 h-4 text-gray-400" />
+        <select
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={typeFilter}
+          onChange={(e) => { onTypeFilterChange(e.target.value); onPageChange(1); }}
+          aria-label="Фильтр по типу отчёта"
+        >
+          <option value="">Все типы</option>
+          <option value="intermediate">Промежуточные</option>
+          <option value="final">Итоговые</option>
+          <option value="supplement">Дополнения</option>
+        </select>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        </div>
+      ) : !data || data.results.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+          <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500">Нет отчётов{typeFilter ? ' с выбранным фильтром' : ''}</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">№</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тип</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Звено</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Медиа</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Создан</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {data.results.map((report) => (
+                  <tr
+                    key={report.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => onReportClick?.(report.id)}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Открыть отчёт #${report.report_number}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter') onReportClick?.(report.id); }}
+                  >
+                    <td className="px-6 py-4 text-sm font-mono text-gray-900">#{report.report_number}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <Badge className={cn('text-xs',
+                        report.report_type === 'final' ? 'bg-green-100 text-green-700'
+                        : report.report_type === 'intermediate' ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-600'
+                      )}>
+                        {reportTypeLabels[report.report_type] || report.report_type}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{report.team_name || '—'}</td>
+                    <td className="px-6 py-4 text-sm text-center text-gray-700">{report.media_count}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{report.status}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{formatDateTime(report.created_at)}</td>
+                    <td className="px-6 py-4">
+                      <Button variant="ghost" size="sm" aria-label="Просмотр" tabIndex={-1}>
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <PaginationBar count={data.count} page={page} pageSize={10} onPageChange={onPageChange} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --------------- Pagination Bar ---------------
+
+function PaginationBar({
+  count,
+  page,
+  pageSize,
+  onPageChange,
+}: {
+  count: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (p: number) => void;
+}) {
+  const totalPages = Math.ceil(count / pageSize);
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+      <div className="text-sm text-gray-500">
+        Всего: {count}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          aria-label="Предыдущая страница"
+          tabIndex={0}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="text-sm text-gray-700 min-w-[80px] text-center">
+          {page} из {totalPages}
+        </span>
+        <button
+          type="button"
+          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          aria-label="Следующая страница"
+          tabIndex={0}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --------------- Report Detail Dialog ---------------
+
+function ReportDetailDialog({
+  reportId,
+  open,
+  onOpenChange,
+}: {
+  reportId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [questionText, setQuestionText] = useState('');
+  const [answerTexts, setAnswerTexts] = useState<Record<string, string>>({});
+
+  const { data: report, isLoading } = useQuery({
+    queryKey: ['worklog-report-detail', reportId],
+    queryFn: () => api.getWorklogReportDetail(reportId!),
+    enabled: !!reportId && open,
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  });
+
+  const askMutation = useMutation({
+    mutationFn: (text: string) => api.createWorklogQuestion({ report_id: reportId!, text }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worklog-report-detail', reportId] });
+      setQuestionText('');
+      toast.success('Вопрос отправлен');
+    },
+    onError: () => toast.error('Ошибка при отправке вопроса'),
+  });
+
+  const answerMutation = useMutation({
+    mutationFn: ({ questionId, text }: { questionId: string; text: string }) =>
+      api.answerWorklogQuestion(questionId, { text }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worklog-report-detail', reportId] });
+      setAnswerTexts({});
+      toast.success('Ответ отправлен');
+    },
+    onError: () => toast.error('Ошибка при отправке ответа'),
+  });
+
+  const handleAskQuestion = () => {
+    if (!questionText.trim()) return;
+    askMutation.mutate(questionText.trim());
+  };
+
+  const handleAnswer = (questionId: string) => {
+    const text = answerTexts[questionId]?.trim();
+    if (!text) return;
+    answerMutation.mutate({ questionId, text });
+  };
+
+  const reportTypeLabels: Record<string, string> = {
+    intermediate: 'Промежуточный',
+    final: 'Итоговый',
+    supplement: 'Дополнение',
+  };
+
+  const mediaTypeIcon: Record<string, typeof Camera> = {
+    photo: Camera,
+    video: Video,
+    voice: Mic,
+    audio: Mic,
+    text: FileText,
+    document: FileSpreadsheet,
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {report ? `${reportTypeLabels[report.report_type] || report.report_type} отчёт #${report.report_number}` : 'Отчёт'}
+          </DialogTitle>
+          <DialogDescription>
+            {report?.team_name ? `Звено: ${report.team_name}` : ''}
+            {report?.created_at ? ` • ${formatDateTime(report.created_at)}` : ''}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          </div>
+        ) : report ? (
+          <div className="space-y-6 py-2">
+            {/* Сводка */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-gray-900">{report.media_count}</div>
+                <div className="text-xs text-gray-500">Медиа</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-gray-900">{report.questions?.length || 0}</div>
+                <div className="text-xs text-gray-500">Вопросы</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-gray-900">{report.status}</div>
+                <div className="text-xs text-gray-500">Статус</div>
+              </div>
+            </div>
+
+            {/* Медиа */}
+            {report.media_items && report.media_items.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <Image className="w-4 h-4" /> Медиа ({report.media_items.length})
+                </h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {report.media_items.map((item) => {
+                    const IconComp = mediaTypeIcon[item.media_type] || FileText;
+                    const isVisual = item.media_type === 'photo' || item.media_type === 'video';
+                    return (
+                      <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="aspect-square bg-gray-100 flex items-center justify-center">
+                          {isVisual && item.thumbnail_url ? (
+                            <img src={item.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <IconComp className="w-8 h-8 text-gray-400" />
+                          )}
+                        </div>
+                        <div className="p-2">
+                          <div className="text-xs text-gray-500 truncate">{item.author_name}</div>
+                          {item.text_content && <div className="text-xs text-gray-600 truncate mt-0.5">{item.text_content}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Вопросы / Ответы */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <MessageCircle className="w-4 h-4" /> Вопросы и ответы
+              </h4>
+
+              {report.questions && report.questions.length > 0 ? (
+                <div className="space-y-3">
+                  {report.questions.map((q) => (
+                    <div key={q.id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <div className={cn('mt-0.5', q.status === 'answered' ? 'text-green-500' : 'text-amber-500')}>
+                          {q.status === 'answered' ? <CheckCircle2 className="w-4 h-4" /> : <FileQuestion className="w-4 h-4" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm text-gray-900">{q.text}</div>
+                          <div className="text-xs text-gray-400 mt-1">{q.author_name} • {formatDateTime(q.created_at)}</div>
+                        </div>
+                      </div>
+
+                      {/* Ответы */}
+                      {q.answers && q.answers.map((a) => (
+                        <div key={a.id} className="ml-6 mt-2 pl-3 border-l-2 border-blue-200">
+                          <div className="text-sm text-gray-700">{a.text}</div>
+                          <div className="text-xs text-gray-400 mt-1">{a.author_name} • {formatDateTime(a.created_at)}</div>
+                        </div>
+                      ))}
+
+                      {/* Форма ответа */}
+                      {q.status === 'pending' && (
+                        <div className="ml-6 mt-2 flex gap-2">
+                          <Input
+                            placeholder="Ответить..."
+                            value={answerTexts[q.id] || ''}
+                            onChange={(e) => setAnswerTexts((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                            className="text-sm"
+                            aria-label={`Ответ на вопрос: ${q.text}`}
+                          />
+                          <Button
+                            size="sm"
+                            disabled={!answerTexts[q.id]?.trim() || answerMutation.isPending}
+                            onClick={() => handleAnswer(q.id)}
+                            aria-label="Отправить ответ"
+                          >
+                            <Send className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">Вопросов нет</p>
+              )}
+
+              {/* Новый вопрос */}
+              <div className="mt-3 flex gap-2">
+                <Input
+                  placeholder="Задать вопрос по отчёту..."
+                  value={questionText}
+                  onChange={(e) => setQuestionText(e.target.value)}
+                  className="text-sm"
+                  aria-label="Задать новый вопрос"
+                />
+                <Button
+                  size="sm"
+                  disabled={!questionText.trim() || askMutation.isPending}
+                  onClick={handleAskQuestion}
+                  aria-label="Отправить вопрос"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-gray-500 text-center py-4">Не удалось загрузить отчёт</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --------------- Geo Settings Section ---------------
+
+function GeoSettingsSection({ objectId }: { objectId: number }) {
+  const queryClient = useQueryClient();
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [geoRadius, setGeoRadius] = useState('200');
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  const { data: object } = useQuery({
+    queryKey: ['construction-object', objectId],
+    queryFn: () => api.getConstructionObjectById(objectId),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  });
+
+  // Заполняем форму данными объекта при загрузке
+  if (object && !hasLoaded) {
+    if ((object as any).latitude) setLatitude((object as any).latitude);
+    if ((object as any).longitude) setLongitude((object as any).longitude);
+    if ((object as any).geo_radius) setGeoRadius(String((object as any).geo_radius));
+    setHasLoaded(true);
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: () => api.updateObjectGeo(objectId, {
+      latitude: latitude || undefined,
+      longitude: longitude || undefined,
+      geo_radius: geoRadius ? parseInt(geoRadius) : undefined,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['construction-object', objectId] });
+      toast.success('Гео-настройки сохранены');
+    },
+    onError: () => toast.error('Ошибка при сохранении'),
+  });
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateMutation.mutate();
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <Globe className="w-5 h-5 text-blue-600" /> Гео-настройки объекта
+      </h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Укажите координаты центра объекта и радиус допустимой зоны для регистрации на смену через Mini App.
+      </p>
+      <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <Label htmlFor="geo-lat">Широта (Latitude)</Label>
+          <Input
+            id="geo-lat"
+            type="text"
+            inputMode="decimal"
+            placeholder="55.7558"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            className="mt-1.5"
+            aria-label="Широта объекта"
+          />
+        </div>
+        <div>
+          <Label htmlFor="geo-lng">Долгота (Longitude)</Label>
+          <Input
+            id="geo-lng"
+            type="text"
+            inputMode="decimal"
+            placeholder="37.6173"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            className="mt-1.5"
+            aria-label="Долгота объекта"
+          />
+        </div>
+        <div>
+          <Label htmlFor="geo-radius">Радиус (метры)</Label>
+          <Input
+            id="geo-radius"
+            type="number"
+            min="50"
+            max="5000"
+            step="50"
+            placeholder="200"
+            value={geoRadius}
+            onChange={(e) => setGeoRadius(e.target.value)}
+            className="mt-1.5"
+            aria-label="Радиус гео-зоны"
+          />
+        </div>
+        <div className="md:col-span-3 flex justify-end">
+          <Button type="submit" disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Сохранение...</>
+            ) : (
+              <><Save className="w-4 h-4 mr-2" /> Сохранить гео-настройки</>
+            )}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// --------------- Supergroup Management Section ---------------
+
+function SupergroupSection({ objectId }: { objectId: number }) {
+  const { data: supergroups, isLoading } = useQuery({
+    queryKey: ['worklog-supergroups', objectId],
+    queryFn: () => api.getWorklogSupergroups({ object: objectId }),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  const groups = supergroups?.results || [];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <Settings className="w-5 h-5 text-blue-600" /> Telegram-супергруппы
+      </h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Супергруппы Telegram привязаны к объекту для фиксации работ. Каждое звено получает отдельный топик в группе.
+      </p>
+
+      {groups.length === 0 ? (
+        <div className="text-center py-8">
+          <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">Нет привязанных супергрупп</p>
+          <p className="text-gray-400 text-xs mt-1">Супергруппы создаются автоматически при открытии смены через бота</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((group) => (
+            <div key={group.id} className="flex items-center justify-between border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <div className={cn('w-3 h-3 rounded-full', group.is_active ? 'bg-green-500' : 'bg-gray-400')} />
+                <div>
+                  <div className="text-sm font-medium text-gray-900">{group.chat_title}</div>
+                  <div className="text-xs text-gray-500">
+                    {group.contractor_name} • ID: {group.telegram_chat_id}
+                  </div>
+                  <div className="text-xs text-gray-400">{formatDateTime(group.created_at)}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {group.is_active ? (
+                  <Badge className="bg-green-100 text-green-700 text-xs">Активна</Badge>
+                ) : (
+                  <Badge className="bg-gray-100 text-gray-600 text-xs">Неактивна</Badge>
+                )}
+                {group.invite_link && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(group.invite_link, '_blank')}
+                    aria-label={`Открыть ссылку на группу ${group.chat_title}`}
+                  >
+                    <Link2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Экспорты для тестирования worklog-компонентов
+export {
+  WorkJournalTab,
+  SummaryCard,
+  OverviewSection,
+  ShiftsSection,
+  MediaSection,
+  MediaCard,
+  PaginationBar,
+  ReportsSection,
+  ReportDetailDialog,
+  GeoSettingsSection,
+  SupergroupSection,
+};
 
 function CashFlowTab({ objectId }: { objectId: number }) {
   const [startDate, setStartDate] = useState('');

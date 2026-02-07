@@ -1,0 +1,123 @@
+{
+  "common": {
+    "loading": "Бор шудан...",
+    "error": "Хатогӣ рух дод",
+    "retry": "Такрор кунед",
+    "save": "Сабт кардан",
+    "cancel": "Бекор кардан",
+    "confirm": "Тасдиқ кардан",
+    "back": "Бозгашт",
+    "close": "Пӯшидан",
+    "create": "Сохтан",
+    "delete": "Нест кардан",
+    "edit": "Таҳрир кардан",
+    "search": "Ҷустуҷӯ",
+    "noData": "Маълумот нест",
+    "yes": "Ҳа",
+    "no": "Не"
+  },
+  "auth": {
+    "notRegistered": "Шумо дар система бақайд нашудаед",
+    "contactContractor": "Барои илова шудан ба Иҷрокунанда муроҷиат кунед",
+    "authError": "Хатогии аутентификатсия"
+  },
+  "worker": {
+    "title": "Бақайдгирӣ ба смена",
+    "registerButton": "Ба смена бақайд шавед!",
+    "scanQr": "QR-кодро скан кунед",
+    "registered": "Шумо ба смена бақайд шудед",
+    "goToChat": "Ба чати звено гузаред",
+    "shiftInfo": "Маълумот дар бораи смена",
+    "geoError": "Ҷойгиршавиро муайян кардан нашуд",
+    "outsideZone": "Шумо берун аз объект ҳастед",
+    "alreadyRegistered": "Шумо аллакай ба ин смена бақайд шудаед"
+  },
+  "brigadier": {
+    "title": "Идоракунии звено",
+    "createTeam": "Звено сохтан",
+    "selectMembers": "Иштирокчиёнро интихоб кунед",
+    "teamCreated": "Звено сохта шуд",
+    "viewMedia": "Дидани медиа",
+    "createReport": "Ҳисобот сохтан",
+    "closeShift": "Сменаро пӯшидан",
+    "addMember": "Иштирокчӣ илова кардан",
+    "removeMember": "Иштирокчиро нест кардан",
+    "manageTeam": "Идоракунии таркиб",
+    "noMedia": "Ҳоло медиа нест",
+    "mediaCount": "{{count}} файл",
+    "reportCreated": "Ҳисобот сохта шуд",
+    "shiftClosed": "Смена пӯшида шуд",
+    "unansweredQuestions": "{{count}} саволи беҷавоб ҳаст"
+  },
+  "contractor": {
+    "title": "Идоракунии объект",
+    "openShift": "Сменаро кушодан",
+    "allTeams": "Ҳамаи звеноҳо",
+    "manageWorkers": "Идоракунии монтажчиён",
+    "addWorker": "Монтажчӣ илова кардан",
+    "settings": "Танзимот",
+    "supplementReport": "Ҳисоботро пурра кардан",
+    "askQuestion": "Савол додан",
+    "shiftOpened": "Смена кушода шуд",
+    "qrGenerated": "QR-код сохта шуд"
+  },
+  "shift": {
+    "day": "Рӯзона",
+    "evening": "Бегоҳӣ",
+    "night": "Шабона",
+    "scheduled": "Банақшагирифташуда",
+    "active": "Фаъол",
+    "closed": "Пӯшидашуда"
+  },
+  "report": {
+    "intermediate": "Мобайнӣ",
+    "final": "Ниҳоӣ",
+    "supplement": "Иловагӣ",
+    "selectType": "Навъи ҳисобот",
+    "comment": "Тавзеҳ",
+    "commentPlaceholder": "Тавзеҳ ба ҳисобот илова кунед...",
+    "selectMedia": "Медиа барои ҳисобот",
+    "selectAll": "Ҳамаро интихоб кунед",
+    "type": "Навъ",
+    "mediaCount": "Шумораи медиа",
+    "additionalText": "Матни иловагӣ",
+    "supplementPlaceholder": "Иловагиро ба ҳисобот ворид кунед...",
+    "additionalMedia": "Медиаи иловагӣ",
+    "supplemented": "Ҳисобот пурра карда шуд",
+    "supplementSuccess": "Иловагӣ бомуваффақият илова шуд"
+  },
+  "team": {
+    "status": "Ҳолат",
+    "brigadier": "Бригадир",
+    "worker": "Монтажчӣ",
+    "members": "Иштирокчиён",
+    "membersCount": "Шумораи иштирокчиён",
+    "mediaTotal": "Ҳамагӣ медиа",
+    "recentMedia": "Медиаи охирин",
+    "availableWorkers": "Барои илова дастрас",
+    "noAvailableWorkers": "Ҳамаи бақайдшудагон аллакай дар таркибанд"
+  },
+  "question": {
+    "existing": "Саволҳо",
+    "new": "Саволи нав",
+    "placeholder": "Саволи худро ворид кунед...",
+    "send": "Саволро фиристодан"
+  },
+  "media": {
+    "fullscreen": "Дар экрани пурра",
+    "prev": "Пешина",
+    "next": "Навбатӣ",
+    "openFile": "Файлро кушодан"
+  },
+  "settings": {
+    "teamCreation": "Сохтани звено",
+    "onlyBrigadier": "Танҳо бригадир",
+    "anyRegistered": "Ҳар як бақайдшуда",
+    "shiftClose": "Пӯшидани смена",
+    "onlyContractor": "Танҳо иҷрокунанда",
+    "brigadierToo": "Бригадир ҳам метавонад",
+    "autoClose": "Автопӯшии смена",
+    "reportWarning": "Огоҳии ҳисобот",
+    "minutes": "дақ"
+  }
+}

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -67,6 +68,7 @@ INSTALLED_APPS = [
     'pricelists',
     'estimates',
     'proposals',
+    'worklog',
 ]
 
 MIDDLEWARE = [
@@ -277,4 +279,101 @@ SPECTACULAR_SETTINGS = {
 
 # Настройки нумерации коммерческих предложений
 COMMERCIAL_PROPOSAL_START_NUMBER = 210  # Начальный порядковый номер для ТКП (можно изменить)
+
+# =============================================================================
+# Celery Configuration
+# =============================================================================
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 300  # 5 минут
+
+# =============================================================================
+# MinIO / S3 Configuration (для медиа сервиса фиксации работ)
+# =============================================================================
+WORKLOG_S3_ENDPOINT_URL = 'http://localhost:9000'
+WORKLOG_S3_ACCESS_KEY = 'minioadmin'
+WORKLOG_S3_SECRET_KEY = 'minioadmin'
+WORKLOG_S3_BUCKET_NAME = 'worklog-media'
+WORKLOG_S3_REGION = 'us-east-1'
+
+# =============================================================================
+# Telegram Bot Configuration
+# =============================================================================
+TELEGRAM_BOT_TOKEN = ''  # Заполнить реальным токеном
+
+# =============================================================================
+# Sentry Configuration (мониторинг ошибок)
+# =============================================================================
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+            RedisIntegration(),
+        ],
+        traces_sample_rate=0.2,  # 20% трассировок для мониторинга производительности
+        send_default_pii=False,
+        environment=os.environ.get('SENTRY_ENVIRONMENT', 'development'),
+    )
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {module}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'worklog.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'worklog': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}
 

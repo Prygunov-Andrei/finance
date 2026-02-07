@@ -1,0 +1,22 @@
+[run]
+source = worklog
+omit =
+    */migrations/*
+    */tests/*
+    */__pycache__/*
+    */admin.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    pass
+    class Meta:
+show_missing = True
+precision = 2
+fail_under = 85

@@ -23,6 +23,22 @@
 | [IMPLEMENTATION_INVOICE_PARSING_BACKEND.md](./IMPLEMENTATION_INVOICE_PARSING_BACKEND.md) | План внедрения парсинга счетов через LLM на бекенде |
 | [IMPLEMENTATION_INVOICE_PARSING_FRONTEND.md](./IMPLEMENTATION_INVOICE_PARSING_FRONTEND.md) | План внедрения UI для каталога товаров и парсинга счетов |
 
+### 🔧 Сервис фиксации работ (Work Logging)
+
+**Индекс**: [work_logging/README.md](./work_logging/README.md)
+
+| Документ | Описание |
+|----------|----------|
+| [work_logging/CONCEPT.md](./work_logging/CONCEPT.md) | Концепция сервиса v5.2 — бизнес-логика, роли, сценарии |
+| [work_logging/PRESENTATION.md](./work_logging/PRESENTATION.md) | Презентация сервиса |
+| [work_logging/ARCHITECTURE.md](./work_logging/ARCHITECTURE.md) | Архитектура — компоненты, потоки данных |
+| [work_logging/MODELS.md](./work_logging/MODELS.md) | Модели данных — 10 моделей, поля, связи |
+| [work_logging/API.md](./work_logging/API.md) | REST API — эндпоинты, форматы |
+| [work_logging/BOT.md](./work_logging/BOT.md) | Telegram Bot — aiogram 3.x |
+| [work_logging/MINI_APP.md](./work_logging/MINI_APP.md) | Mini App — React, экраны, i18n |
+| [work_logging/DEPLOYMENT.md](./work_logging/DEPLOYMENT.md) | Развёртывание и настройка |
+| [work_logging/IMPLEMENTATION_PLAN.md](./work_logging/IMPLEMENTATION_PLAN.md) | План реализации с прогрессом |
+
 ### 📄 [schema.yaml](./schema.yaml)
 OpenAPI схема API в формате YAML для интеграции и документации эндпоинтов.
 
@@ -50,8 +66,11 @@ finans_assistant/
 │   ├── estimates/    # Проекты, сметы
 │   ├── proposals/    # ТКП, МП
 │   ├── catalog/      # Каталог товаров
-│   └── llm_services/ # Парсинг счетов через LLM
-├── frontend/         # React + Vite приложение
+│   ├── llm_services/ # Парсинг счетов через LLM
+│   └── worklog/      # Сервис фиксации работ
+├── frontend/         # React + Vite приложение (ERP)
+├── bot/              # Telegram бот (aiogram 3.x)
+├── mini-app/         # Telegram Mini App (React + Vite)
 └── docs/             # Документация проекта
 ```
 
@@ -76,4 +95,4 @@ python manage.py test
 
 ---
 
-*Последнее обновление: Январь 2026*
+*Последнее обновление: Февраль 2026*

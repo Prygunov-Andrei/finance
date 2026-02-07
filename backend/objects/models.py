@@ -42,6 +42,21 @@ class Object(TimestampedModel):
         null=True, blank=True,
         verbose_name='Дата окончания'
     )
+    latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        null=True, blank=True,
+        verbose_name='Широта (центр геозоны)'
+    )
+    longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        null=True, blank=True,
+        verbose_name='Долгота (центр геозоны)'
+    )
+    geo_radius = models.IntegerField(
+        default=500,
+        verbose_name='Радиус геозоны в метрах',
+        help_text='Радиус для проверки геолокации при регистрации на смену'
+    )
 
     class Meta:
         verbose_name = 'Объект'

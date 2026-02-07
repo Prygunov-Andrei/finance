@@ -1,0 +1,123 @@
+{
+  "common": {
+    "loading": "Загрузка...",
+    "error": "Произошла ошибка",
+    "retry": "Повторить",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "confirm": "Подтвердить",
+    "back": "Назад",
+    "close": "Закрыть",
+    "create": "Создать",
+    "delete": "Удалить",
+    "edit": "Изменить",
+    "search": "Поиск",
+    "noData": "Нет данных",
+    "yes": "Да",
+    "no": "Нет"
+  },
+  "auth": {
+    "notRegistered": "Вы не зарегистрированы в системе",
+    "contactContractor": "Обратитесь к вашему Исполнителю для добавления",
+    "authError": "Ошибка аутентификации"
+  },
+  "worker": {
+    "title": "Регистрация на смену",
+    "registerButton": "Зарегистрироваться на смену!",
+    "scanQr": "Сканировать QR-код",
+    "registered": "Вы зарегистрированы на смену",
+    "goToChat": "Перейти в чат звена",
+    "shiftInfo": "Информация о смене",
+    "geoError": "Не удалось определить местоположение",
+    "outsideZone": "Вы находитесь за пределами объекта",
+    "alreadyRegistered": "Вы уже зарегистрированы на эту смену"
+  },
+  "brigadier": {
+    "title": "Управление звеном",
+    "createTeam": "Создать звено",
+    "selectMembers": "Выберите участников",
+    "teamCreated": "Звено создано",
+    "viewMedia": "Просмотр медиа",
+    "createReport": "Создать отчёт",
+    "closeShift": "Закрыть смену",
+    "addMember": "Добавить участника",
+    "removeMember": "Удалить участника",
+    "manageTeam": "Управление составом",
+    "noMedia": "Пока нет медиа",
+    "mediaCount": "{{count}} файлов",
+    "reportCreated": "Отчёт создан",
+    "shiftClosed": "Смена закрыта",
+    "unansweredQuestions": "Есть {{count}} неотвеченных вопросов"
+  },
+  "contractor": {
+    "title": "Управление объектом",
+    "openShift": "Открыть смену",
+    "allTeams": "Все звенья",
+    "manageWorkers": "Управление монтажниками",
+    "addWorker": "Добавить монтажника",
+    "settings": "Настройки",
+    "supplementReport": "Дополнить отчёт",
+    "askQuestion": "Задать вопрос",
+    "shiftOpened": "Смена открыта",
+    "qrGenerated": "QR-код сгенерирован"
+  },
+  "shift": {
+    "day": "Дневная",
+    "evening": "Вечерняя",
+    "night": "Ночная",
+    "scheduled": "Запланирована",
+    "active": "Активна",
+    "closed": "Закрыта"
+  },
+  "report": {
+    "intermediate": "Промежуточный",
+    "final": "Финальный",
+    "supplement": "Дополнение",
+    "selectType": "Тип отчёта",
+    "comment": "Комментарий",
+    "commentPlaceholder": "Добавьте комментарий к отчёту...",
+    "selectMedia": "Медиа для отчёта",
+    "selectAll": "Выбрать все",
+    "type": "Тип",
+    "mediaCount": "Кол-во медиа",
+    "additionalText": "Дополнительный текст",
+    "supplementPlaceholder": "Введите дополнение к отчёту...",
+    "additionalMedia": "Дополнительные медиа",
+    "supplemented": "Отчёт дополнен",
+    "supplementSuccess": "Дополнение успешно добавлено"
+  },
+  "team": {
+    "status": "Статус",
+    "brigadier": "Бригадир",
+    "worker": "Монтажник",
+    "members": "Участники",
+    "membersCount": "Количество участников",
+    "mediaTotal": "Всего медиа",
+    "recentMedia": "Последние медиа",
+    "availableWorkers": "Доступные для добавления",
+    "noAvailableWorkers": "Все зарегистрированные уже в составе"
+  },
+  "question": {
+    "existing": "Вопросы",
+    "new": "Новый вопрос",
+    "placeholder": "Введите ваш вопрос...",
+    "send": "Отправить вопрос"
+  },
+  "media": {
+    "fullscreen": "Полноэкранный просмотр",
+    "prev": "Предыдущий",
+    "next": "Следующий",
+    "openFile": "Открыть файл"
+  },
+  "settings": {
+    "teamCreation": "Создание звеньев",
+    "onlyBrigadier": "Только бригадир",
+    "anyRegistered": "Любой зарегистрированный",
+    "shiftClose": "Закрытие смены",
+    "onlyContractor": "Только исполнитель",
+    "brigadierToo": "Бригадир тоже может",
+    "autoClose": "Авто-закрытие смены",
+    "reportWarning": "Предупреждение об отчёте",
+    "minutes": "мин"
+  }
+}
