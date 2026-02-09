@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Cell, Section, Button, Spinner } from '@telegram-apps/telegram-ui';
+import { Cell, Section, Button } from '@telegram-apps/telegram-ui';
 import { useNavigate } from 'react-router-dom';
 import { showBackButton, hideBackButton, hapticNotification } from '@/lib/telegram';
 

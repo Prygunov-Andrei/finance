@@ -10,6 +10,7 @@ router.register(r'teams', views.TeamViewSet, basename='worklog-team')
 router.register(r'media', views.MediaViewSet, basename='worklog-media')
 router.register(r'reports', views.ReportViewSet, basename='worklog-report')
 router.register(r'questions', views.QuestionViewSet, basename='worklog-question')
+router.register(r'invites', views.InviteTokenViewSet, basename='worklog-invite')
 
 urlpatterns = [
     path('worklog/', include(router.urls)),

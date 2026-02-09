@@ -39,7 +39,7 @@
 - [x] **T0.2**: `pip install -r requirements.txt` — установить зависимости ✅ (7 фев 2026)
 - [ ] **T0.3**: Проверить подключение Celery: `celery -A finans_assistant inspect ping`
 - [ ] **T0.4**: Проверить MinIO Console: http://localhost:9001, bucket `worklog-media` создан
-- [ ] **T0.5**: Создать `.env` файл для бота с реальным BOT_TOKEN
+- [x] **T0.5**: Создать `.env` файл для бота с реальным BOT_TOKEN ✅ (7 фев 2026)
 - [x] **T0.6**: Создать `.env` файл для mini-app с VITE_API_BASE_URL ✅ (7 фев 2026)
 
 ### Тестирование Этапа 0
@@ -235,7 +235,7 @@
 
 ### Осталось сделать
 
-- [ ] **T2.1**: Получить BOT_TOKEN от @BotFather
+- [x] **T2.1**: Получить BOT_TOKEN от @BotFather — @avgust_tasks_bot ✅ (7 фев 2026)
 - [x] **T2.2**: Создать `.env.example` файл для бота ✅ (7 фев 2026)
 - [ ] **T2.3**: `pip install -r requirements.txt`
 - [ ] **T2.4**: Запустить бота в polling-режиме
@@ -605,7 +605,7 @@
 - [x] **T8.4**: Уведомления о закрытии смены — Celery task `notify_shift_closed` + интеграция с `auto_close_expired_shifts` ✅ (7 фев 2026)
 - [x] **T8.5**: Автозакрытие смены по таймеру — Celery beat каждые 15 мин ✅ (7 фев 2026)
 - [x] **T8.6**: Предупреждение об отчёте — Celery beat task `send_report_warnings` каждые 10 мин ✅ (7 фев 2026)
-- [x] **T8.7**: Транскрибация голосовых — OpenAI Whisper API (`transcribe_voice` task) ✅ (7 фев 2026)
+- [x] **T8.7**: Транскрибация голосовых — ElevenLabs Scribe v2 (`transcribe_voice` task, языки: rus/uzb/tgk/kir) ✅ (7 фев 2026)
 - [x] **T8.8**: Полноэкранный просмотр медиа в Mini App — MediaViewer с навигацией ✅ (7 фев 2026)
 - [x] **T8.9**: Оптимизация запросов — кэширование work_journal_summary, aggregate вместо count, prefetch для questions ✅ (7 фев 2026)
 - [x] **T8.10**: Логирование и мониторинг — Sentry SDK + Django LOGGING (RotatingFileHandler) ✅ (7 фев 2026)

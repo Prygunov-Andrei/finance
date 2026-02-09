@@ -15,6 +15,11 @@ class ObjectSerializer(serializers.ModelSerializer):
             'start_date',
             'end_date',
             'status',
+            'latitude',
+            'longitude',
+            'geo_radius',
+            'allow_geo_bypass',
+            'registration_window_minutes',
             'created_at',
             'updated_at',
         ]

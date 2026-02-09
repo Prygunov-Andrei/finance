@@ -51,14 +51,14 @@ cd frontend && npm run dev
 
 - ✅ **Инфраструктура**: Docker (Redis + MinIO) запущена, зависимости установлены
 - ✅ **Backend**: Модели, API, 8 Celery tasks (медиа + уведомления + транскрибация + автозакрытие), pytest + coverage
-- ✅ **Bot**: Handlers, DB-сервис, middleware авторизации, утилиты Telegram — 33 теста
+- ✅ **Bot**: Handlers, DB-сервис, middleware авторизации, утилиты Telegram — 33 теста, BOT_TOKEN получен (@avgust_tasks_bot)
 - ✅ **Mini App**: 13 экранов, 4 языка, API-клиент, MediaViewer — 41 тест
 - ✅ **ERP Frontend**: Журнал работ — обзор, смены, медиа, отчёты с Q&A, гео, супергруппы — 35 тестов
-- ✅ **Доработки (Этап 8)**: Автосоздание топиков, уведомления, транскрибация, кэширование, Sentry, logging
+- ✅ **Доработки (Этап 8)**: Автосоздание топиков, уведомления, транскрибация (ElevenLabs Scribe v2), кэширование, Sentry, logging
 - ✅ **CI/CD**: GitHub Actions — 5 jobs (backend, bot, mini-app, frontend, lint)
 - ✅ **Тесты**: 199 unit-тестов пройдены (Backend 90 + Bot 33 + Mini App 41 + ERP Frontend 35)
+- ✅ **Конфигурация**: BOT_TOKEN, ELEVENLABS_API_KEY, SENTRY_DSN — настроены через .env
 - ⬜ **Интеграционное тестирование**: не начато (Этап 7)
-- ⏳ **Блокер**: нужен `BOT_TOKEN` для запуска бота и Mini App в Telegram
 
 Подробный прогресс: [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)  
 Тестирование: [TESTING.md](./TESTING.md)

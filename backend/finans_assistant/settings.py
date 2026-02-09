@@ -13,19 +13,23 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import os
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Загрузка переменных из .env файла (если существует)
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-^)16g74+k9b!4mfbp3r6ih4h$1===oca==rjvsijbtr4uq&-=^'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-^)16g74+k9b!4mfbp3r6ih4h$1===oca==rjvsijbtr4uq&-=^')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -74,6 +78,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Должен быть ПЕРВЫМ!
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Раздача static файлов (production)
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -109,11 +114,11 @@ WSGI_APPLICATION = 'finans_assistant.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'finans_assistant',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_NAME', 'finans_assistant'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
@@ -153,6 +158,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files (загружаемые пользователями)
 MEDIA_URL = '/media/'
@@ -283,8 +289,8 @@ COMMERCIAL_PROPOSAL_START_NUMBER = 210  # Начальный порядковы�
 # =============================================================================
 # Celery Configuration
 # =============================================================================
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -295,16 +301,22 @@ CELERY_TASK_TIME_LIMIT = 300  # 5 минут
 # =============================================================================
 # MinIO / S3 Configuration (для медиа сервиса фиксации работ)
 # =============================================================================
-WORKLOG_S3_ENDPOINT_URL = 'http://localhost:9000'
-WORKLOG_S3_ACCESS_KEY = 'minioadmin'
-WORKLOG_S3_SECRET_KEY = 'minioadmin'
-WORKLOG_S3_BUCKET_NAME = 'worklog-media'
+WORKLOG_S3_ENDPOINT_URL = os.environ.get('WORKLOG_S3_ENDPOINT_URL', 'http://localhost:9000')
+WORKLOG_S3_PUBLIC_URL = os.environ.get('WORKLOG_S3_PUBLIC_URL', WORKLOG_S3_ENDPOINT_URL)
+WORKLOG_S3_ACCESS_KEY = os.environ.get('WORKLOG_S3_ACCESS_KEY', 'minioadmin')
+WORKLOG_S3_SECRET_KEY = os.environ.get('WORKLOG_S3_SECRET_KEY', 'minioadmin')
+WORKLOG_S3_BUCKET_NAME = os.environ.get('WORKLOG_S3_BUCKET_NAME', 'worklog-media')
 WORKLOG_S3_REGION = 'us-east-1'
 
 # =============================================================================
 # Telegram Bot Configuration
 # =============================================================================
-TELEGRAM_BOT_TOKEN = ''  # Заполнить реальным токеном
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+# =============================================================================
+# ElevenLabs Configuration (транскрибация голосовых — Scribe v2)
+# =============================================================================
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
 
 # =============================================================================
 # Sentry Configuration (мониторинг ошибок)

@@ -204,4 +204,4 @@ dp.callback_query.middleware(WorkerAuthMiddleware())
 | `notify_shift_closed` | По требованию (из auto_close_expired_shifts) | Уведомляет все звенья о закрытии смены |
 | `send_report_warnings` | Каждые 10 мин (Celery Beat) | Предупреждает за 30 мин до закрытия смены |
 | `auto_close_expired_shifts` | Каждые 15 мин (Celery Beat) | Закрывает истёкшие смены |
-| `transcribe_voice` | По требованию (после upload_media_to_s3) | Транскрибирует голосовые через OpenAI Whisper |
+| `transcribe_voice` | По требованию (после upload_media_to_s3) | Транскрибирует голосовые через ElevenLabs Scribe v2 (rus/uzb/tgk/kir) |

@@ -112,8 +112,24 @@ export const getShift = (id: string): Promise<Shift> =>
 export const createShift = (data: Partial<Shift>): Promise<Shift> =>
   request('/worklog/shifts/', { method: 'POST', body: JSON.stringify(data) });
 
-export const registerForShift = (shiftId: string, data: { qr_token: string; latitude: number; longitude: number }) =>
-  request(`/worklog/shifts/${shiftId}/register/`, { method: 'POST', body: JSON.stringify(data) });
+export const registerForShift = async (shiftId: string, data: { qr_token: string; latitude: number; longitude: number }): Promise<{ geo_valid?: boolean; warning?: string }> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+  const response = await fetch(`${API_BASE}/worklog/shifts/${shiftId}/register/`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+
+  const body = await response.json().catch(() => ({ detail: response.statusText }));
+
+  if (!response.ok) {
+    throw new Error(body.error || body.detail || 'Ошибка регистрации');
+  }
+
+  return body;
+};
 
 // =============================================================================
 // Teams

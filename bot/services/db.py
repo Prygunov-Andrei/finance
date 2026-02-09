@@ -1,5 +1,6 @@
 """Прямое подключение к PostgreSQL через asyncpg."""
 
+import uuid
 import asyncpg
 import logging
 from typing import Optional
@@ -178,3 +179,127 @@ async def get_supergroup_invite_link(telegram_id: int) -> Optional[str]:
     if row:
         return row['invite_link']
     return None
+
+
+# =============================================================================
+# InviteToken — deep-link регистрация
+# =============================================================================
+
+async def validate_invite_token(code: str) -> Optional[dict]:
+    """
+    Проверяет invite-токен: существует, не использован, не истёк.
+    Возвращает dict с данными токена или None.
+    """
+    pool = await get_pool()
+    row = await pool.fetchrow(
+        """
+        SELECT it.id, it.code, it.role, it.used, it.expires_at,
+               it.contractor_id,
+               c.short_name AS contractor_name
+        FROM worklog_invitetoken it
+        JOIN accounting_counterparty c ON c.id = it.contractor_id
+        WHERE it.code = $1
+        """,
+        code,
+    )
+    if not row:
+        return None
+
+    data = dict(row)
+    from datetime import datetime, timezone as tz
+    now = datetime.now(tz.utc)
+
+    data['is_valid'] = not data['used'] and data['expires_at'] > now
+    data['expired'] = data['expires_at'] <= now
+    return data
+
+
+async def accept_invite_token(
+    code: str,
+    telegram_id: int,
+    name: str,
+    language: str = 'ru',
+) -> Optional[dict]:
+    """
+    Принимает invite-токен: создаёт Worker и помечает токен как использованный.
+    Возвращает dict с данными созданного Worker или None при ошибке.
+    """
+    pool = await get_pool()
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Получаем и блокируем токен
+            invite = await conn.fetchrow(
+                """
+                SELECT id, code, role, contractor_id, used, expires_at
+                FROM worklog_invitetoken
+                WHERE code = $1
+                FOR UPDATE
+                """,
+                code,
+            )
+            if not invite:
+                logger.warning(f"Invite token not found: {code}")
+                return None
+
+            from datetime import datetime, timezone as tz
+            now = datetime.now(tz.utc)
+
+            if invite['used'] or invite['expires_at'] <= now:
+                logger.warning(f"Invite token invalid: {code} used={invite['used']}")
+                return None
+
+            # Проверяем что Worker с таким telegram_id ещё нет
+            existing = await conn.fetchrow(
+                "SELECT id, name FROM worklog_worker WHERE telegram_id = $1",
+                telegram_id,
+            )
+            if existing:
+                logger.info(f"Worker already exists for tg_id={telegram_id}")
+                return {
+                    'id': str(existing['id']),
+                    'name': existing['name'],
+                    'already_existed': True,
+                }
+
+            # Создаём Worker
+            worker_id = str(uuid.uuid4())
+            await conn.execute(
+                """
+                INSERT INTO worklog_worker (
+                    id, telegram_id, name, phone, photo_url,
+                    role, language, contractor_id, bot_started,
+                    created_at, updated_at
+                ) VALUES (
+                    $1::uuid, $2, $3, '', '',
+                    $4, $5, $6, true,
+                    NOW(), NOW()
+                )
+                """,
+                worker_id, telegram_id, name,
+                invite['role'], language, invite['contractor_id'],
+            )
+
+            # Помечаем токен как использованный
+            await conn.execute(
+                """
+                UPDATE worklog_invitetoken
+                SET used = true, used_by_id = $1::uuid, used_at = NOW(), updated_at = NOW()
+                WHERE code = $2
+                """,
+                worker_id, code,
+            )
+
+            logger.info(
+                f"Worker created via invite: id={worker_id}, "
+                f"tg_id={telegram_id}, name={name}, code={code}"
+            )
+
+            return {
+                'id': worker_id,
+                'name': name,
+                'role': invite['role'],
+                'language': language,
+                'contractor_id': invite['contractor_id'],
+                'already_existed': False,
+            }

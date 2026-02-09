@@ -10,6 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import (
     Worker, Supergroup, Shift, ShiftRegistration,
     Team, TeamMembership, Media, Report, Question, Answer,
+    InviteToken,
 )
 
 
@@ -60,25 +61,28 @@ class SupergroupSerializer(serializers.ModelSerializer):
 class ShiftSerializer(serializers.ModelSerializer):
     object_name = serializers.CharField(source='object.name', read_only=True)
     contractor_name = serializers.CharField(source='contractor.short_name', read_only=True)
+    contract_number = serializers.CharField(source='contract.number', read_only=True, default=None)
+    contract_name = serializers.CharField(source='contract.name', read_only=True, default=None)
     registrations_count = serializers.IntegerField(read_only=True, default=0)
     teams_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Shift
         fields = [
-            'id', 'object', 'object_name', 'contractor', 'contractor_name',
+            'id', 'contract', 'contract_number', 'contract_name',
+            'object', 'object_name', 'contractor', 'contractor_name',
             'date', 'shift_type', 'start_time', 'end_time',
             'qr_code', 'qr_token', 'status', 'extended_until',
             'registrations_count', 'teams_count',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'qr_code', 'qr_token', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'object', 'contractor', 'qr_code', 'qr_token', 'created_at', 'updated_at']
 
 
 class ShiftCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shift
-        fields = ['object', 'contractor', 'date', 'shift_type', 'start_time', 'end_time']
+        fields = ['contract', 'date', 'shift_type', 'start_time', 'end_time']
 
 
 # =============================================================================
@@ -101,8 +105,8 @@ class ShiftRegistrationSerializer(serializers.ModelSerializer):
 class ShiftRegistrationCreateSerializer(serializers.Serializer):
     """Регистрация на смену через QR-код (из Mini App)."""
     qr_token = serializers.CharField()
-    latitude = serializers.DecimalField(max_digits=10, decimal_places=7)
-    longitude = serializers.DecimalField(max_digits=10, decimal_places=7)
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
 
 
 # =============================================================================
@@ -234,6 +238,51 @@ class QuestionSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']
+
+
+# =============================================================================
+# InviteToken
+# =============================================================================
+
+class InviteTokenSerializer(serializers.ModelSerializer):
+    contractor_name = serializers.CharField(source='contractor.short_name', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, default=None)
+    used_by_name = serializers.CharField(source='used_by.name', read_only=True, default=None)
+    bot_link = serializers.CharField(read_only=True)
+    is_valid = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = InviteToken
+        fields = [
+            'id', 'code', 'contractor', 'contractor_name',
+            'created_by', 'created_by_username',
+            'role', 'expires_at',
+            'used', 'used_by', 'used_by_name', 'used_at',
+            'bot_link', 'is_valid',
+            'created_at',
+        ]
+        read_only_fields = [
+            'id', 'code', 'created_by', 'used', 'used_by', 'used_at', 'created_at',
+        ]
+
+
+class InviteTokenCreateSerializer(serializers.Serializer):
+    contractor = serializers.IntegerField(help_text='ID контрагента (Counterparty)')
+    role = serializers.ChoiceField(
+        choices=Worker.Role.choices,
+        default=Worker.Role.WORKER,
+        help_text='Роль приглашённого (worker/brigadier)',
+    )
+
+
+class InviteAcceptSerializer(serializers.Serializer):
+    """Принятие invite-токена ботом: создание Worker."""
+    telegram_id = serializers.IntegerField()
+    name = serializers.CharField(max_length=255)
+    language = serializers.ChoiceField(
+        choices=Worker.Language.choices,
+        default=Worker.Language.RU,
+    )
 
 
 # =============================================================================

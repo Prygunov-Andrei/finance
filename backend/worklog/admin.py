@@ -2,6 +2,7 @@ from django.contrib import admin
 from .models import (
     Worker, Supergroup, Shift, ShiftRegistration,
     Team, TeamMembership, Media, Report, Question, Answer,
+    InviteToken,
 )
 
 
@@ -83,3 +84,11 @@ class QuestionAdmin(admin.ModelAdmin):
 class AnswerAdmin(admin.ModelAdmin):
     list_display = ('answered_by', 'question', 'created_at')
     search_fields = ('answer_text',)
+
+
+@admin.register(InviteToken)
+class InviteTokenAdmin(admin.ModelAdmin):
+    list_display = ('code', 'contractor', 'role', 'expires_at', 'used', 'used_by', 'created_at')
+    list_filter = ('used', 'role', 'contractor')
+    search_fields = ('code',)
+    readonly_fields = ('code', 'bot_link', 'used_at')

@@ -80,7 +80,7 @@
 | `serializers.py` | DRF-сериализаторы + TelegramAuthSerializer с HMAC-SHA256 валидацией |
 | `views.py` | ViewSets + telegram_auth + work_journal_summary |
 | `urls.py` | Router + кастомные эндпоинты |
-| `tasks.py` | 8 Celery-задач: обработка медиа, транскрибация, уведомления, автозакрытие |
+| `tasks.py` | 8 Celery-задач: обработка медиа, транскрибация (ElevenLabs Scribe v2), уведомления, автозакрытие |
 | `admin.py` | Все модели зарегистрированы в Django Admin |
 
 ### 2. Telegram Bot — `/bot/`
@@ -156,7 +156,7 @@ download_media_from_telegram
     └── upload_media_to_s3
             ├── compute_phash (дедупликация фото)
             ├── create_thumbnail (превью 320x320)
-            └── transcribe_voice (OpenAI Whisper — для voice/audio)
+            └── transcribe_voice (ElevenLabs Scribe v2 — для voice/audio, языки: rus/uzb/tgk/kir)
 ```
 
 Периодические задачи (Celery Beat):
@@ -284,7 +284,9 @@ finans_assistant/
 │   │   ├── settings.py         # +Celery +MinIO +worklog
 │   │   ├── celery.py           # Celery config
 │   │   └── urls.py             # +worklog urls
-│   └── requirements.txt        # +celery redis boto3 imagehash
+│   ├── .env                    # Секреты (BOT_TOKEN, ELEVENLABS_API_KEY, SENTRY_DSN) — НЕ в Git
+│   ├── .env.example            # Шаблон переменных окружения
+│   └── requirements.txt        # +celery redis boto3 imagehash elevenlabs sentry-sdk
 ├── bot/                        # Telegram bot (aiogram 3.x)
 │   ├── main.py                 # Entry point
 │   ├── config.py               # pydantic-settings

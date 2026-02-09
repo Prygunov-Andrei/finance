@@ -440,6 +440,48 @@ def _send_topic_message(bot_token: str, chat_id: int, thread_id: int, text: str)
 
 
 @shared_task
+def auto_activate_scheduled_shifts():
+    """
+    Автоактивация запланированных смен, у которых наступило start_time.
+
+    Активирует все смены, где:
+    - status = 'scheduled'
+    - date < сегодня (пропущенные смены) ИЛИ (date == сегодня И start_time <= текущее время)
+
+    Запускается периодически через Celery Beat (каждые 5 минут).
+    """
+    from django.utils import timezone
+    from worklog.models import Shift
+
+    now = timezone.now()
+    today = now.date()
+    current_time = now.time()
+
+    # Смены за прошлые дни — активируем (были пропущены)
+    past_scheduled = Shift.objects.filter(
+        status=Shift.Status.SCHEDULED,
+        date__lt=today,
+    )
+
+    # Смены за сегодня, у которых start_time наступило
+    today_ready = Shift.objects.filter(
+        status=Shift.Status.SCHEDULED,
+        date=today,
+        start_time__lte=current_time,
+    )
+
+    total_activated = 0
+    for qs in [past_scheduled, today_ready]:
+        count = qs.update(status=Shift.Status.ACTIVE)
+        total_activated += count
+
+    if total_activated > 0:
+        logger.info(f"Auto-activated {total_activated} scheduled shifts")
+
+    return total_activated
+
+
+@shared_task
 def auto_close_expired_shifts():
     """
     Автозакрытие смен, у которых end_time прошёл.
@@ -502,17 +544,20 @@ def auto_close_expired_shifts():
 @shared_task(bind=True, max_retries=2, default_retry_delay=30)
 def transcribe_voice(self, media_id: str):
     """
-    Транскрибирует голосовое/аудио сообщение через OpenAI Whisper API.
+    Транскрибирует голосовое/аудио сообщение через ElevenLabs Scribe v2.
 
     1. Скачивает файл из S3 (file_url).
-    2. Отправляет на OpenAI Whisper API (модель whisper-1).
+    2. Отправляет на ElevenLabs Speech-to-Text API (модель scribe_v2).
     3. Сохраняет транскрипцию в Media.text_content.
 
-    Поддерживаемые языки: ru, uz, tg, ky.
+    Поддерживаемые языки (ISO 639-3):
+      ru → rus (отличная точность, WER ≤5%)
+      uz → uzb (хорошая точность, WER 10-20%)
+      tg → tgk (хорошая точность, WER 10-20%)
+      ky → kir (хорошая точность, WER 10-20%)
     """
     import httpx
-    import tempfile
-    import os
+    from io import BytesIO
     from worklog.models import Media
 
     try:
@@ -533,56 +578,48 @@ def transcribe_voice(self, media_id: str):
         logger.info(f"Media {media_id} already has text_content, skipping")
         return
 
-    openai_api_key = getattr(settings, 'OPENAI_API_KEY', None)
-    if not openai_api_key:
-        logger.error("OPENAI_API_KEY not configured — cannot transcribe")
+    elevenlabs_api_key = getattr(settings, 'ELEVENLABS_API_KEY', '')
+    if not elevenlabs_api_key:
+        logger.error("ELEVENLABS_API_KEY not configured — cannot transcribe")
         return
 
     try:
         # Скачиваем файл из S3
-        with httpx.Client(timeout=60) as client:
-            resp = client.get(media.file_url)
+        with httpx.Client(timeout=60) as http_client:
+            resp = http_client.get(media.file_url)
             resp.raise_for_status()
             audio_content = resp.content
 
-        # Определяем расширение
-        ext = media.file_url.rsplit('.', 1)[-1] if '.' in media.file_url else 'ogg'
-        if ext not in ('ogg', 'mp3', 'wav', 'mp4', 'm4a', 'webm', 'flac', 'oga'):
-            ext = 'ogg'
+        # Маппинг языков Worker.language → ElevenLabs ISO 639-3
+        lang_map = {
+            'ru': 'rus',
+            'uz': 'uzb',
+            'tg': 'tgk',
+            'ky': 'kir',
+        }
+        language_code = lang_map.get(media.author.language, 'rus')
 
-        # Определяем язык по worker.language
-        lang_map = {'ru': 'ru', 'uz': 'uz', 'tg': 'tg', 'ky': 'ky'}
-        language = lang_map.get(media.author.language, 'ru')
+        # ElevenLabs Scribe v2 — транскрибация
+        from elevenlabs.client import ElevenLabs
 
-        # Сохраняем во временный файл (Whisper API требует файл)
-        with tempfile.NamedTemporaryFile(suffix=f'.{ext}', delete=False) as tmp:
-            tmp.write(audio_content)
-            tmp_path = tmp.name
+        client = ElevenLabs(api_key=elevenlabs_api_key)
+        audio_data = BytesIO(audio_content)
 
-        try:
-            # Отправляем на Whisper API
-            with httpx.Client(timeout=120) as client:
-                with open(tmp_path, 'rb') as audio_file:
-                    resp = client.post(
-                        'https://api.openai.com/v1/audio/transcriptions',
-                        headers={'Authorization': f'Bearer {openai_api_key}'},
-                        data={
-                            'model': 'whisper-1',
-                            'language': language,
-                            'response_format': 'text',
-                        },
-                        files={'file': (f'voice.{ext}', audio_file, f'audio/{ext}')},
-                    )
-                    resp.raise_for_status()
-                    transcription = resp.text.strip()
-        finally:
-            os.unlink(tmp_path)
+        transcription = client.speech_to_text.convert(
+            file=audio_data,
+            model_id="scribe_v2",
+            language_code=language_code,
+            tag_audio_events=False,
+            diarize=False,
+        )
 
-        if transcription:
-            # Добавляем метку транскрипции
-            media.text_content = f"[Транскрипция] {transcription}"
+        text = transcription.text.strip() if transcription.text else ""
+
+        if text:
+            detected_lang = getattr(transcription, 'language_code', language_code)
+            media.text_content = f"[Транскрипция ({detected_lang})] {text}"
             media.save(update_fields=['text_content'])
-            logger.info(f"Transcribed media {media_id}: {len(transcription)} chars")
+            logger.info(f"Transcribed media {media_id} via ElevenLabs Scribe v2: {len(text)} chars, lang={detected_lang}")
         else:
             logger.warning(f"Empty transcription for media {media_id}")
 

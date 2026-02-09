@@ -46,6 +46,8 @@ pip install -r requirements.txt
 - `redis>=5.0.0`
 - `boto3>=1.34.0`
 - `imagehash>=4.3.0`
+- `elevenlabs>=1.0.0`
+- `sentry-sdk[django,celery]>=1.40.0`
 
 ### Миграции
 
@@ -74,7 +76,13 @@ WORKLOG_S3_SECRET_KEY = 'minioadmin'
 WORKLOG_S3_BUCKET_NAME = 'worklog-media'
 
 # Telegram
-TELEGRAM_BOT_TOKEN = ''  # ← заполнить!
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+# ElevenLabs (транскрибация голосовых — Scribe v2)
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
+
+# Sentry (мониторинг ошибок)
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
 ```
 
 ### Запуск Celery Worker
@@ -233,12 +241,45 @@ cd frontend && npm run dev
 | Django | `WORKLOG_S3_ACCESS_KEY` | `minioadmin` |
 | Django | `WORKLOG_S3_SECRET_KEY` | `minioadmin` |
 | Django | `WORKLOG_S3_BUCKET_NAME` | `worklog-media` |
-| Django | `TELEGRAM_BOT_TOKEN` | — (обязательно) |
+| Django | `TELEGRAM_BOT_TOKEN` | — (обязательно, из .env) |
+| Django | `ELEVENLABS_API_KEY` | — (обязательно, для транскрибации) |
+| Django | `SENTRY_DSN` | — (опционально, для мониторинга) |
+| Django | `SENTRY_ENVIRONMENT` | `development` |
 | Bot | `BOT_TOKEN` | — (обязательно) |
 | Bot | `WEBHOOK_URL` | — (пусто = polling) |
 | Bot | `DB_*` | localhost:5432 finans_assistant |
 | Bot | `REDIS_URL` | `redis://localhost:6379/0` |
 | Mini App | `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` |
+
+---
+
+## Файлы .env (секреты)
+
+Все секретные ключи хранятся в `.env` файлах, которые **НЕ коммитятся** в Git (см. `.gitignore`).
+
+### Backend (`backend/.env`)
+
+```bash
+cp backend/.env.example backend/.env
+# Заполнить:
+# TELEGRAM_BOT_TOKEN=...
+# ELEVENLABS_API_KEY=...
+# SENTRY_DSN=...
+```
+
+### Bot (`bot/.env`)
+
+```bash
+cp bot/.env.example bot/.env
+# Заполнить:
+# BOT_TOKEN=...
+```
+
+Django читает все переменные через `os.environ.get()`. Для загрузки `.env` файла используйте `python-dotenv` или экспортируйте переменные вручную:
+
+```bash
+export $(cat backend/.env | xargs)
+```
 
 ---
 

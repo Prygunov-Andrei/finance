@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Cell, Checkbox, Section, Spinner, Placeholder } from '@telegram-apps/telegram-ui';
 import { useNavigate } from 'react-router-dom';
-import { getShifts, getShiftRegistrations, createTeam, type Worker } from '@/api/client';
+import { getShifts, getShiftRegistrations, createTeam } from '@/api/client';
 import { showBackButton, hideBackButton, hapticNotification } from '@/lib/telegram';
 
 interface CreateTeamPageProps {

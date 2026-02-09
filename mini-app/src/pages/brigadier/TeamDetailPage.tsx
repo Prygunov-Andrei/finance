@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Spinner, Placeholder, Section, Cell, Button, Badge } from '@telegram-apps/telegram-ui';
+import { Spinner, Placeholder, Section, Cell, Button } from '@telegram-apps/telegram-ui';
 import { getTeam, getMedia, type Team, type MediaItem } from '@/api/client';
 import { showBackButton, hideBackButton } from '@/lib/telegram';
 

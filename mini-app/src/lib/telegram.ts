@@ -27,19 +27,33 @@ export const getUserLanguage = (): string => {
  */
 export const scanQrCode = (): Promise<string> => {
   return new Promise((resolve, reject) => {
+    let resolved = false;
+
+    const handleClose = () => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error('QR_CANCELLED'));
+      }
+    };
+
     try {
+      // Слушаем событие закрытия сканера (пользователь нажал "Отмена")
+      WebApp.onEvent('scanQrPopupClosed', handleClose);
+
       WebApp.showScanQrPopup(
         { text: 'Наведите камеру на QR-код смены' },
-        (data) => {
-          if (data) {
+        (data: string) => {
+          if (data && !resolved) {
+            resolved = true;
+            WebApp.offEvent('scanQrPopupClosed', handleClose);
             WebApp.closeScanQrPopup();
             resolve(data);
-            return true;
+            return true as true;
           }
-          return false;
         },
       );
     } catch (error) {
+      resolved = true;
       reject(error);
     }
   });

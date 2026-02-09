@@ -6,9 +6,12 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 
+from django.utils import timezone
+
 from .models import (
     Worker, Supergroup, Shift, ShiftRegistration,
     Team, TeamMembership, Media, Report, Question, Answer,
+    InviteToken,
 )
 from .serializers import (
     WorkerSerializer, WorkerCreateSerializer,
@@ -21,6 +24,7 @@ from .serializers import (
     QuestionSerializer, AnswerSerializer,
     TelegramAuthSerializer, TelegramAuthResponseSerializer,
     WorkJournalSummarySerializer,
+    InviteTokenSerializer, InviteTokenCreateSerializer, InviteAcceptSerializer,
 )
 
 
@@ -114,20 +118,46 @@ class SupergroupViewSet(viewsets.ModelViewSet):
 class ShiftViewSet(viewsets.ModelViewSet):
     queryset = (
         Shift.objects
-        .select_related('object', 'contractor')
+        .select_related('object', 'contractor', 'contract')
         .annotate(
             registrations_count=Count('registrations', distinct=True),
             teams_count=Count('teams', distinct=True),
         )
     )
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['object', 'contractor', 'status', 'date', 'shift_type']
+    filterset_fields = ['object', 'contractor', 'contract', 'status', 'date', 'shift_type']
     search_fields = ['object__name']
 
     def get_serializer_class(self):
         if self.action == 'create':
             return ShiftCreateSerializer
         return ShiftSerializer
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """Ручная активация запланированной смены."""
+        shift = self.get_object()
+        if shift.status != Shift.Status.SCHEDULED:
+            return Response(
+                {'error': f'Смена не может быть активирована (текущий статус: {shift.get_status_display()})'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        shift.status = Shift.Status.ACTIVE
+        shift.save(update_fields=['status', 'updated_at'])
+        return Response(ShiftSerializer(shift).data)
+
+    @action(detail=True, methods=['post'])
+    def close(self, request, pk=None):
+        """Ручное закрытие активной смены."""
+        shift = self.get_object()
+        if shift.status != Shift.Status.ACTIVE:
+            return Response(
+                {'error': f'Смена не может быть закрыта (текущий статус: {shift.get_status_display()})'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        shift.status = Shift.Status.CLOSED
+        shift.save(update_fields=['status', 'updated_at'])
+        return Response(ShiftSerializer(shift).data)
 
     @action(detail=True, methods=['get'])
     def registrations(self, request, pk=None):
@@ -163,15 +193,72 @@ class ShiftViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Проверка геозоны
+        # ─── Защита 1: Запрет одновременных (пересекающихся) смен ───
+        from datetime import datetime, timedelta
+
+        def _shift_to_dt_range(s):
+            """Нормализует start/end смены в datetime с учётом ночных смен."""
+            start_dt = datetime.combine(s.date, s.start_time)
+            end_dt = datetime.combine(s.date, s.end_time)
+            if s.end_time <= s.start_time:
+                end_dt += timedelta(days=1)
+            return start_dt, end_dt
+
+        current_start, current_end = _shift_to_dt_range(shift)
+
+        overlapping_regs = ShiftRegistration.objects.filter(
+            worker=worker,
+            shift__status=Shift.Status.ACTIVE,
+        ).exclude(
+            shift=shift,
+        ).select_related('shift')
+
+        for reg in overlapping_regs:
+            other = reg.shift
+            other_start, other_end = _shift_to_dt_range(other)
+            if current_start < other_end and current_end > other_start:
+                return Response(
+                    {
+                        'error': (
+                            f'Вы уже зарегистрированы на пересекающуюся смену '
+                            f'({other.object.name}, '
+                            f'{other.start_time.strftime("%H:%M")}–{other.end_time.strftime("%H:%M")})'
+                        ),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        # ─── Защита 2: Проверка временного окна регистрации ───
+        obj = shift.object
+        if obj.registration_window_minutes > 0:
+            now = timezone.localtime()
+            shift_start_dt = datetime.combine(shift.date, shift.start_time, tzinfo=now.tzinfo)
+            shift_end_dt = datetime.combine(shift.date, shift.end_time, tzinfo=now.tzinfo)
+            if shift.end_time <= shift.start_time:
+                shift_end_dt += timedelta(days=1)
+            window = timedelta(minutes=obj.registration_window_minutes)
+            window_open = shift_start_dt - window
+            window_close = shift_end_dt + window
+            if not (window_open <= now <= window_close):
+                return Response(
+                    {
+                        'error': (
+                            f'Регистрация доступна с '
+                            f'{window_open.strftime("%H:%M")} до {window_close.strftime("%H:%M")}'
+                        ),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        # ─── Проверка геозоны ───
         from decimal import Decimal
         import math
 
         lat = float(serializer.validated_data['latitude'])
         lon = float(serializer.validated_data['longitude'])
-        obj = shift.object
 
         geo_valid = False
+        distance = None
         if obj.latitude and obj.longitude:
             # Haversine distance
             R = 6371000  # metres
@@ -184,6 +271,18 @@ class ShiftViewSet(viewsets.ModelViewSet):
             c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
             distance = R * c
             geo_valid = distance <= obj.geo_radius
+
+        # Если вне геозоны и bypass не разрешён — блокируем регистрацию
+        if not geo_valid and not obj.allow_geo_bypass:
+            return Response(
+                {
+                    'error': 'Вы находитесь за пределами геозоны объекта',
+                    'geo_valid': False,
+                    'distance': round(distance) if distance is not None else None,
+                    'geo_radius': obj.geo_radius,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         registration, created = ShiftRegistration.objects.get_or_create(
             shift=shift,
@@ -201,9 +300,13 @@ class ShiftViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        if not geo_valid:
+        if not geo_valid and obj.allow_geo_bypass:
             return Response(
-                {'warning': 'Registered but outside geo zone', 'geo_valid': False},
+                {
+                    'warning': 'Зарегистрировано, но вы вне геозоны объекта',
+                    'geo_valid': False,
+                    'registration': ShiftRegistrationSerializer(registration).data,
+                },
                 status=status.HTTP_201_CREATED,
             )
 
@@ -331,6 +434,141 @@ class QuestionViewSet(viewsets.ModelViewSet):
         question.status = Question.Status.ANSWERED
         question.save(update_fields=['status'])
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+# =============================================================================
+# InviteToken ViewSet
+# =============================================================================
+
+class InviteTokenViewSet(viewsets.ModelViewSet):
+    """
+    CRUD для invite-токенов.
+    - POST /invites/           — создать invite
+    - GET  /invites/           — список invite-ов
+    - GET  /invites/{code}/validate/ — проверить токен (для бота)
+    - POST /invites/{code}/accept/   — принять invite, создать Worker (бот вызывает)
+    """
+    queryset = InviteToken.objects.select_related('contractor', 'created_by', 'used_by').all()
+    serializer_class = InviteTokenSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['contractor', 'used', 'role']
+    lookup_field = 'code'
+
+    def create(self, request, *args, **kwargs):
+        """Создание invite-токена (из ERP Frontend)."""
+        serializer = InviteTokenCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from accounting.models import Counterparty
+        try:
+            contractor = Counterparty.objects.get(id=serializer.validated_data['contractor'])
+        except Counterparty.DoesNotExist:
+            return Response(
+                {'error': 'Контрагент не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        invite = InviteToken.objects.create(
+            contractor=contractor,
+            role=serializer.validated_data.get('role', 'worker'),
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+
+        return Response(
+            InviteTokenSerializer(invite).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['get'], url_path='validate', permission_classes=[permissions.AllowAny])
+    def validate_token(self, request, code=None):
+        """Валидация invite-токена (бот вызывает перед началом регистрации)."""
+        try:
+            invite = InviteToken.objects.select_related('contractor').get(code=code)
+        except InviteToken.DoesNotExist:
+            return Response(
+                {'valid': False, 'error': 'Токен не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if invite.used:
+            return Response(
+                {'valid': False, 'error': 'Токен уже использован'},
+                status=status.HTTP_410_GONE,
+            )
+
+        if invite.expires_at <= timezone.now():
+            return Response(
+                {'valid': False, 'error': 'Токен истёк'},
+                status=status.HTTP_410_GONE,
+            )
+
+        return Response({
+            'valid': True,
+            'contractor_id': invite.contractor_id,
+            'contractor_name': invite.contractor.short_name,
+            'role': invite.role,
+        })
+
+    @action(detail=True, methods=['post'], url_path='accept', permission_classes=[permissions.AllowAny])
+    def accept_token(self, request, code=None):
+        """
+        Принятие invite-токена: создание Worker.
+        Бот вызывает после сбора ФИО и языка.
+        """
+        serializer = InviteAcceptSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        telegram_id = serializer.validated_data['telegram_id']
+
+        # Проверяем: может, монтажник уже есть
+        existing_worker = Worker.objects.filter(telegram_id=telegram_id).first()
+        if existing_worker:
+            return Response({
+                'status': 'already_registered',
+                'worker': WorkerSerializer(existing_worker).data,
+            }, status=status.HTTP_200_OK)
+
+        # Валидируем invite
+        try:
+            invite = InviteToken.objects.select_related('contractor').get(code=code)
+        except InviteToken.DoesNotExist:
+            return Response(
+                {'error': 'Токен не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if invite.used:
+            return Response(
+                {'error': 'Токен уже использован'},
+                status=status.HTTP_410_GONE,
+            )
+
+        if invite.expires_at <= timezone.now():
+            return Response(
+                {'error': 'Токен истёк'},
+                status=status.HTTP_410_GONE,
+            )
+
+        # Создаём Worker
+        worker = Worker.objects.create(
+            telegram_id=telegram_id,
+            name=serializer.validated_data['name'],
+            language=serializer.validated_data.get('language', 'ru'),
+            role=invite.role,
+            contractor=invite.contractor,
+            bot_started=True,
+        )
+
+        # Помечаем invite как использованный
+        invite.used = True
+        invite.used_by = worker
+        invite.used_at = timezone.now()
+        invite.save(update_fields=['used', 'used_by', 'used_at'])
+
+        return Response({
+            'status': 'created',
+            'worker': WorkerSerializer(worker).data,
+        }, status=status.HTTP_201_CREATED)
 
 
 # =============================================================================

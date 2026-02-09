@@ -1,20 +1,21 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ConstructionObject, ObjectCashFlowData, WorklogShift, WorklogTeam, WorklogMedia, WorklogReport, WorklogReportDetail, WorklogQuestion, WorklogAnswer, WorklogSupergroup, WorkJournalSummary, PaginatedResponse } from '../lib/api';
+import { api, ConstructionObject, ObjectCashFlowData, WorklogShift, WorklogTeam, WorklogMedia, WorklogReport, WorklogReportDetail, WorklogQuestion, WorklogAnswer, WorklogSupergroup, WorkJournalSummary, PaginatedResponse, InviteToken, Counterparty } from '../lib/api';
 import { formatDate, formatDateTime, formatAmount, formatCurrency, getStatusBadgeClass, getStatusLabel, cn } from '../lib/utils';
 import { CONSTANTS } from '../constants';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Building2, Loader2, ArrowLeft, Pencil, Trash2, Calendar, MapPin, FileText, FileSpreadsheet, Briefcase, DollarSign, TrendingUp, ClipboardList, Users, Image, Clock, Camera, Video, Mic, FileQuestion, ChevronLeft, ChevronRight, Filter, Eye, MessageCircle, Send, Globe, Save, Link2, CheckCircle2, XCircle, Settings } from 'lucide-react';
+import { Building2, Loader2, ArrowLeft, Pencil, Trash2, Calendar, MapPin, FileText, FileSpreadsheet, Briefcase, DollarSign, TrendingUp, ClipboardList, Users, Image, Clock, Camera, Video, Mic, FileQuestion, ChevronLeft, ChevronRight, Filter, Eye, MessageCircle, Send, Globe, Save, Link2, CheckCircle2, XCircle, Settings, UserPlus, Copy, ExternalLink, Plus, QrCode } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
 import { Badge } from './ui/badge';
+import { QRCodeSVG } from 'qrcode.react';
 
 export function ObjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -191,7 +192,7 @@ export function ObjectDetail() {
 
         {/* Вкладки */}
         <Tabs defaultValue="main" className="w-full">
-          <TabsList className="grid w-full grid-cols-8 mb-6">
+          <TabsList className="flex w-full flex-wrap mb-6">
             <TabsTrigger value="main">Основное</TabsTrigger>
             <TabsTrigger value="contracts">Договоры</TabsTrigger>
             <TabsTrigger value="projects">Проекты</TabsTrigger>
@@ -769,18 +770,7 @@ function WorkJournalTab({ objectId }: { objectId: number }) {
     );
   }
 
-  if (!summary || (summary.total_shifts === 0 && summary.total_media === 0)) {
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
-        <ClipboardList className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Журнал работ</h3>
-        <p className="text-gray-500 max-w-md mx-auto">
-          Журнал работ будет доступен после подключения объекта к сервису фиксации.
-          Здесь будут отображаться смены, звенья, медиа и отчёты монтажников.
-        </p>
-      </div>
-    );
-  }
+  const isEmpty = !summary || (summary.total_shifts === 0 && summary.total_media === 0);
 
   const sectionButtons: { key: JournalSection; label: string; icon: typeof Clock }[] = [
     { key: 'overview', label: 'Обзор', icon: ClipboardList },
@@ -792,20 +782,22 @@ function WorkJournalTab({ objectId }: { objectId: number }) {
 
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <SummaryCard
-          icon={Clock}
-          label="Смены"
-          value={summary.total_shifts}
-          extra={summary.active_shifts > 0 ? `${summary.active_shifts} активных` : undefined}
-          extraColor="text-green-600"
-        />
-        <SummaryCard icon={Users} label="Звенья" value={summary.total_teams} />
-        <SummaryCard icon={Image} label="Медиа" value={summary.total_media} />
-        <SummaryCard icon={FileText} label="Отчёты" value={summary.total_reports} />
-        <SummaryCard icon={Users} label="Монтажники" value={summary.total_workers} />
-      </div>
+      {/* Summary cards — только если есть данные */}
+      {!isEmpty && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <SummaryCard
+            icon={Clock}
+            label="Смены"
+            value={summary!.total_shifts}
+            extra={summary!.active_shifts > 0 ? `${summary!.active_shifts} активных` : undefined}
+            extraColor="text-green-600"
+          />
+          <SummaryCard icon={Users} label="Звенья" value={summary!.total_teams} />
+          <SummaryCard icon={Image} label="Медиа" value={summary!.total_media} />
+          <SummaryCard icon={FileText} label="Отчёты" value={summary!.total_reports} />
+          <SummaryCard icon={Users} label="Монтажники" value={summary!.total_workers} />
+        </div>
+      )}
 
       {/* Section navigation */}
       <div className="flex gap-2 border-b border-gray-200 pb-0">
@@ -831,11 +823,30 @@ function WorkJournalTab({ objectId }: { objectId: number }) {
 
       {/* Section content */}
       {activeSection === 'overview' && (
-        <OverviewSection shifts={summary.recent_shifts} />
+        isEmpty ? (
+          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+            <ClipboardList className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Журнал работ</h3>
+            <p className="text-gray-500 max-w-md mx-auto mb-6">
+              Здесь будут отображаться смены, звенья, медиа и отчёты монтажников.
+              Для начала работы пригласите монтажников и откройте первую смену.
+            </p>
+            <Button
+              onClick={() => setActiveSection('settings')}
+              aria-label="Перейти к настройкам"
+              tabIndex={0}
+            >
+              <UserPlus className="w-4 h-4 mr-2" /> Пригласить монтажника
+            </Button>
+          </div>
+        ) : (
+          <OverviewSection shifts={summary!.recent_shifts} />
+        )
       )}
 
       {activeSection === 'shifts' && (
         <ShiftsSection
+          objectId={objectId}
           data={shifts}
           isLoading={shiftsLoading}
           page={shiftsPage}
@@ -872,6 +883,7 @@ function WorkJournalTab({ objectId }: { objectId: number }) {
 
       {activeSection === 'settings' && (
         <div className="space-y-6">
+          <InviteSection objectId={objectId} />
           <GeoSettingsSection objectId={objectId} />
           <SupergroupSection objectId={objectId} />
         </div>
@@ -961,27 +973,111 @@ function OverviewSection({ shifts }: { shifts: WorklogShift[] }) {
 
 // --------------- Shift Row ---------------
 
-function ShiftRow({ shift }: { shift: WorklogShift }) {
+function ShiftRow({ shift, onActivate, onClose }: {
+  shift: WorklogShift;
+  onActivate?: (id: string) => void;
+  onClose?: (id: string) => void;
+}) {
+  const [qrOpen, setQrOpen] = useState(false);
+
+  const qrValue = JSON.stringify({ shift_id: shift.id, token: shift.qr_token });
+
   return (
-    <tr className="hover:bg-gray-50">
-      <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(shift.date)}</td>
-      <td className="px-6 py-4 text-sm text-gray-700">{SHIFT_TYPE_LABELS[shift.shift_type] || shift.shift_type}</td>
-      <td className="px-6 py-4 text-sm text-gray-500 font-mono">{shift.start_time?.slice(0, 5)} — {shift.end_time?.slice(0, 5)}</td>
-      <td className="px-6 py-4 text-sm text-gray-700">{shift.contractor_name || '—'}</td>
-      <td className="px-6 py-4 text-sm text-center text-gray-700">{shift.registrations_count}</td>
-      <td className="px-6 py-4 text-sm text-center text-gray-700">{shift.teams_count}</td>
-      <td className="px-6 py-4">
-        <Badge className={cn('text-xs', SHIFT_STATUS_STYLES[shift.status] || 'bg-gray-100 text-gray-600')}>
-          {shift.status === 'active' ? 'Активна' : shift.status === 'scheduled' ? 'Запланирована' : 'Закрыта'}
-        </Badge>
-      </td>
-    </tr>
+    <>
+      <tr className="hover:bg-gray-50">
+        <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatDate(shift.date)}</td>
+        <td className="px-6 py-4 text-sm text-gray-700">{SHIFT_TYPE_LABELS[shift.shift_type] || shift.shift_type}</td>
+        <td className="px-6 py-4 text-sm text-gray-500 font-mono">{shift.start_time?.slice(0, 5)} — {shift.end_time?.slice(0, 5)}</td>
+        <td className="px-6 py-4 text-sm text-gray-700">{shift.contract_number ? `${shift.contract_number}` : '—'}</td>
+        <td className="px-6 py-4 text-sm text-gray-700">{shift.contractor_name || '—'}</td>
+        <td className="px-6 py-4 text-sm text-center text-gray-700">{shift.registrations_count}</td>
+        <td className="px-6 py-4 text-sm text-center text-gray-700">{shift.teams_count}</td>
+        <td className="px-6 py-4">
+          <Badge className={cn('text-xs', SHIFT_STATUS_STYLES[shift.status] || 'bg-gray-100 text-gray-600')}>
+            {shift.status === 'active' ? 'Активна' : shift.status === 'scheduled' ? 'Запланирована' : 'Закрыта'}
+          </Badge>
+        </td>
+        {(onActivate || onClose) && (
+          <td className="px-6 py-4">
+            <div className="flex items-center gap-2">
+              {shift.status === 'active' && shift.qr_token && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setQrOpen(true)}
+                  className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                  aria-label="Показать QR-код смены"
+                  tabIndex={0}
+                >
+                  <QrCode className="w-3.5 h-3.5 mr-1" /> QR
+                </Button>
+              )}
+              {shift.status === 'scheduled' && onActivate && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onActivate(shift.id)}
+                  className="text-green-600 border-green-300 hover:bg-green-50"
+                  aria-label="Активировать смену"
+                  tabIndex={0}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Активировать
+                </Button>
+              )}
+              {shift.status === 'active' && onClose && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onClose(shift.id)}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                  aria-label="Закрыть смену"
+                  tabIndex={0}
+                >
+                  <XCircle className="w-3.5 h-3.5 mr-1" /> Закрыть
+                </Button>
+              )}
+            </div>
+          </td>
+        )}
+      </tr>
+
+      {/* QR-код диалог */}
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>QR-код смены</DialogTitle>
+            <DialogDescription>
+              Покажите этот QR-код монтажникам для регистрации на смену
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+              <QRCodeSVG
+                value={qrValue}
+                size={256}
+                level="M"
+                includeMargin
+              />
+            </div>
+            <div className="text-center text-sm text-gray-500 space-y-1">
+              <p className="font-medium text-gray-700">
+                {formatDate(shift.date)} · {SHIFT_TYPE_LABELS[shift.shift_type] || shift.shift_type}
+              </p>
+              <p>{shift.start_time?.slice(0, 5)} — {shift.end_time?.slice(0, 5)}</p>
+              {shift.contractor_name && <p>{shift.contractor_name}</p>}
+              {shift.contract_number && <p>Договор: {shift.contract_number}</p>}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 // --------------- Shifts Section ---------------
 
 function ShiftsSection({
+  objectId,
   data,
   isLoading,
   page,
@@ -989,6 +1085,7 @@ function ShiftsSection({
   statusFilter,
   onStatusFilterChange,
 }: {
+  objectId: number;
   data: PaginatedResponse<WorklogShift> | undefined;
   isLoading: boolean;
   page: number;
@@ -996,22 +1093,100 @@ function ShiftsSection({
   statusFilter: string;
   onStatusFilterChange: (f: string) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [shiftDate, setShiftDate] = useState(new Date().toISOString().slice(0, 10));
+  const [shiftType, setShiftType] = useState('day');
+  const [startTime, setStartTime] = useState('08:00');
+  const [endTime, setEndTime] = useState('18:00');
+  const [selectedContract, setSelectedContract] = useState('');
+
+  const { data: contractsData } = useQuery({
+    queryKey: ['object-contracts-for-shift', objectId],
+    queryFn: () => api.getContracts({ object: objectId, contract_type: 'expense', page_size: 100 }),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+    enabled: createOpen,
+  });
+
+  const contracts = contractsData?.results || [];
+
+  const createMutation = useMutation({
+    mutationFn: () => api.createWorklogShift({
+      contract: parseInt(selectedContract),
+      date: shiftDate,
+      shift_type: shiftType,
+      start_time: startTime + ':00',
+      end_time: endTime + ':00',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worklog-shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['work-journal-summary'] });
+      setCreateOpen(false);
+      toast.success('Смена создана');
+    },
+    onError: () => toast.error('Ошибка при создании смены'),
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: (shiftId: string) => api.activateWorklogShift(shiftId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worklog-shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['work-journal-summary'] });
+      toast.success('Смена активирована');
+    },
+    onError: () => toast.error('Ошибка при активации смены'),
+  });
+
+  const closeMutation = useMutation({
+    mutationFn: (shiftId: string) => api.closeWorklogShift(shiftId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worklog-shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['work-journal-summary'] });
+      toast.success('Смена закрыта');
+    },
+    onError: () => toast.error('Ошибка при закрытии смены'),
+  });
+
+  const handleCreate = () => {
+    if (!selectedContract) {
+      toast.error('Выберите договор');
+      return;
+    }
+    createMutation.mutate();
+  };
+
+  const handleActivate = (shiftId: string) => activateMutation.mutate(shiftId);
+  const handleClose = (shiftId: string) => closeMutation.mutate(shiftId);
+
+  // Автозаполнение времени по типу смены
+  const handleShiftTypeChange = (type: string) => {
+    setShiftType(type);
+    if (type === 'day') { setStartTime('08:00'); setEndTime('18:00'); }
+    else if (type === 'evening') { setStartTime('18:00'); setEndTime('02:00'); }
+    else if (type === 'night') { setStartTime('22:00'); setEndTime('08:00'); }
+  };
+
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <Filter className="w-4 h-4 text-gray-400" />
-        <select
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          value={statusFilter}
-          onChange={(e) => { onStatusFilterChange(e.target.value); onPageChange(1); }}
-          aria-label="Фильтр по статусу"
-        >
-          <option value="">Все статусы</option>
-          <option value="active">Активные</option>
-          <option value="scheduled">Запланированные</option>
-          <option value="closed">Закрытые</option>
-        </select>
+      {/* Filters + Create button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Filter className="w-4 h-4 text-gray-400" />
+          <select
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={statusFilter}
+            onChange={(e) => { onStatusFilterChange(e.target.value); onPageChange(1); }}
+            aria-label="Фильтр по статусу"
+          >
+            <option value="">Все статусы</option>
+            <option value="active">Активные</option>
+            <option value="scheduled">Запланированные</option>
+            <option value="closed">Закрытые</option>
+          </select>
+        </div>
+        <Button onClick={() => setCreateOpen(true)} aria-label="Открыть смену" tabIndex={0}>
+          <Plus className="w-4 h-4 mr-2" /> Открыть смену
+        </Button>
       </div>
 
       {isLoading ? (
@@ -1032,15 +1207,17 @@ function ShiftsSection({
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тип</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Время</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Договор</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Контрагент</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Регистрации</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Звенья</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Действия</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {data.results.map((shift) => (
-                  <ShiftRow key={shift.id} shift={shift} />
+                  <ShiftRow key={shift.id} shift={shift} onActivate={handleActivate} onClose={handleClose} />
                 ))}
               </tbody>
             </table>
@@ -1048,6 +1225,91 @@ function ShiftsSection({
           <PaginationBar count={data.count} page={page} pageSize={10} onPageChange={onPageChange} />
         </div>
       )}
+
+      {/* Диалог создания смены */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Открыть смену</DialogTitle>
+            <DialogDescription>Создайте новую рабочую смену на объекте</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label htmlFor="shift-contract">Договор</Label>
+              <Select value={selectedContract} onValueChange={setSelectedContract}>
+                <SelectTrigger className="mt-1.5" id="shift-contract" aria-label="Выбор договора">
+                  <SelectValue placeholder="Выберите договор" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contracts.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.number} — {c.name} ({c.counterparty_name})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="shift-date">Дата</Label>
+              <Input
+                id="shift-date"
+                type="date"
+                value={shiftDate}
+                onChange={(e) => setShiftDate(e.target.value)}
+                className="mt-1.5"
+                aria-label="Дата смены"
+              />
+            </div>
+            <div>
+              <Label htmlFor="shift-type">Тип смены</Label>
+              <Select value={shiftType} onValueChange={handleShiftTypeChange}>
+                <SelectTrigger className="mt-1.5" id="shift-type" aria-label="Тип смены">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Дневная</SelectItem>
+                  <SelectItem value="evening">Вечерняя</SelectItem>
+                  <SelectItem value="night">Ночная</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="shift-start">Начало</Label>
+                <Input
+                  id="shift-start"
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="mt-1.5"
+                  aria-label="Время начала"
+                />
+              </div>
+              <div>
+                <Label htmlFor="shift-end">Окончание</Label>
+                <Input
+                  id="shift-end"
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="mt-1.5"
+                  aria-label="Время окончания"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setCreateOpen(false)}>Отмена</Button>
+              <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                {createMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Создание...</>
+                ) : (
+                  <><Plus className="w-4 h-4 mr-2" /> Создать смену</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1563,6 +1825,8 @@ function GeoSettingsSection({ objectId }: { objectId: number }) {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [geoRadius, setGeoRadius] = useState('200');
+  const [allowGeoBypass, setAllowGeoBypass] = useState(false);
+  const [registrationWindow, setRegistrationWindow] = useState('0');
   const [hasLoaded, setHasLoaded] = useState(false);
 
   const { data: object } = useQuery({
@@ -1576,6 +1840,8 @@ function GeoSettingsSection({ objectId }: { objectId: number }) {
     if ((object as any).latitude) setLatitude((object as any).latitude);
     if ((object as any).longitude) setLongitude((object as any).longitude);
     if ((object as any).geo_radius) setGeoRadius(String((object as any).geo_radius));
+    if ((object as any).allow_geo_bypass !== undefined) setAllowGeoBypass((object as any).allow_geo_bypass);
+    if ((object as any).registration_window_minutes !== undefined) setRegistrationWindow(String((object as any).registration_window_minutes));
     setHasLoaded(true);
   }
 
@@ -1584,6 +1850,8 @@ function GeoSettingsSection({ objectId }: { objectId: number }) {
       latitude: latitude || undefined,
       longitude: longitude || undefined,
       geo_radius: geoRadius ? parseInt(geoRadius) : undefined,
+      allow_geo_bypass: allowGeoBypass,
+      registration_window_minutes: registrationWindow ? parseInt(registrationWindow) : 0,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['construction-object', objectId] });
@@ -1605,54 +1873,98 @@ function GeoSettingsSection({ objectId }: { objectId: number }) {
       <p className="text-sm text-gray-500 mb-4">
         Укажите координаты центра объекта и радиус допустимой зоны для регистрации на смену через Mini App.
       </p>
-      <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <Label htmlFor="geo-lat">Широта (Latitude)</Label>
-          <Input
-            id="geo-lat"
-            type="text"
-            inputMode="decimal"
-            placeholder="55.7558"
-            value={latitude}
-            onChange={(e) => setLatitude(e.target.value)}
-            className="mt-1.5"
-            aria-label="Широта объекта"
-          />
+      <form onSubmit={handleSave} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <Label htmlFor="geo-lat">Широта (Latitude)</Label>
+            <Input
+              id="geo-lat"
+              type="text"
+              inputMode="decimal"
+              placeholder="55.7558"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              className="mt-1.5"
+              aria-label="Широта объекта"
+            />
+          </div>
+          <div>
+            <Label htmlFor="geo-lng">Долгота (Longitude)</Label>
+            <Input
+              id="geo-lng"
+              type="text"
+              inputMode="decimal"
+              placeholder="37.6173"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              className="mt-1.5"
+              aria-label="Долгота объекта"
+            />
+          </div>
+          <div>
+            <Label htmlFor="geo-radius">Радиус (метры)</Label>
+            <Input
+              id="geo-radius"
+              type="number"
+              min="50"
+              max="50000"
+              step="50"
+              placeholder="200"
+              value={geoRadius}
+              onChange={(e) => setGeoRadius(e.target.value)}
+              className="mt-1.5"
+              aria-label="Радиус гео-зоны"
+            />
+          </div>
         </div>
-        <div>
-          <Label htmlFor="geo-lng">Долгота (Longitude)</Label>
-          <Input
-            id="geo-lng"
-            type="text"
-            inputMode="decimal"
-            placeholder="37.6173"
-            value={longitude}
-            onChange={(e) => setLongitude(e.target.value)}
-            className="mt-1.5"
-            aria-label="Долгота объекта"
+        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <input
+            id="allow-geo-bypass"
+            type="checkbox"
+            checked={allowGeoBypass}
+            onChange={(e) => setAllowGeoBypass(e.target.checked)}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            aria-label="Разрешить регистрацию вне геозоны"
           />
+          <div>
+            <Label htmlFor="allow-geo-bypass" className="cursor-pointer font-medium text-gray-700">
+              Разрешить регистрацию вне геозоны
+            </Label>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Если включено, монтажники смогут регистрироваться находясь за пределами геозоны (с пометкой). По умолчанию регистрация вне зоны заблокирована.
+            </p>
+          </div>
         </div>
-        <div>
-          <Label htmlFor="geo-radius">Радиус (метры)</Label>
-          <Input
-            id="geo-radius"
-            type="number"
-            min="50"
-            max="5000"
-            step="50"
-            placeholder="200"
-            value={geoRadius}
-            onChange={(e) => setGeoRadius(e.target.value)}
-            className="mt-1.5"
-            aria-label="Радиус гео-зоны"
-          />
+        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <Label htmlFor="reg-window" className="font-medium text-gray-700">
+                Окно регистрации (минуты)
+              </Label>
+              <p className="text-xs text-gray-500 mt-0.5">
+                За сколько минут до начала и после окончания смены разрешена регистрация. 0 = без ограничений.
+              </p>
+            </div>
+            <Input
+              id="reg-window"
+              type="number"
+              min="0"
+              max="1440"
+              step="5"
+              placeholder="0"
+              value={registrationWindow}
+              onChange={(e) => setRegistrationWindow(e.target.value)}
+              className="w-24"
+              aria-label="Окно регистрации в минутах"
+            />
+          </div>
         </div>
-        <div className="md:col-span-3 flex justify-end">
+        <div className="flex justify-end">
           <Button type="submit" disabled={updateMutation.isPending}>
             {updateMutation.isPending ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Сохранение...</>
             ) : (
-              <><Save className="w-4 h-4 mr-2" /> Сохранить гео-настройки</>
+              <><Save className="w-4 h-4 mr-2" /> Сохранить настройки</>
             )}
           </Button>
         </div>
@@ -1734,6 +2046,232 @@ function SupergroupSection({ objectId }: { objectId: number }) {
   );
 }
 
+// --------------- Invite Section ---------------
+
+function InviteSection({ objectId }: { objectId: number }) {
+  const queryClient = useQueryClient();
+  const [selectedContractor, setSelectedContractor] = useState<string>('');
+  const [selectedRole, setSelectedRole] = useState<string>('worker');
+  const [generatedLink, setGeneratedLink] = useState<string>('');
+  const [copied, setCopied] = useState(false);
+
+  const { data: counterparties } = useQuery({
+    queryKey: ['counterparties'],
+    queryFn: () => api.getCounterparties(),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  });
+
+  const { data: invites, isLoading: invitesLoading } = useQuery({
+    queryKey: ['worklog-invites', selectedContractor],
+    queryFn: () => api.getInviteTokens({
+      ...(selectedContractor ? { contractor: parseInt(selectedContractor) } : {}),
+      page_size: 10,
+    }),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => api.createInviteToken({
+      contractor: parseInt(selectedContractor),
+      role: selectedRole,
+    }),
+    onSuccess: (data) => {
+      setGeneratedLink(data.bot_link);
+      setCopied(false);
+      queryClient.invalidateQueries({ queryKey: ['worklog-invites'] });
+      toast.success('Приглашение создано');
+    },
+    onError: () => toast.error('Ошибка при создании приглашения'),
+  });
+
+  const handleCreate = () => {
+    if (!selectedContractor) {
+      toast.error('Выберите контрагента');
+      return;
+    }
+    createMutation.mutate();
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedLink);
+      setCopied(true);
+      toast.success('Ссылка скопирована');
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      toast.error('Не удалось скопировать');
+    }
+  };
+
+  const inviteList = invites?.results || [];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <UserPlus className="w-5 h-5 text-blue-600" /> Пригласить монтажника
+      </h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Создайте ссылку-приглашение и отправьте её монтажнику. Он откроет ссылку в Telegram,
+        бот попросит ввести ФИО и выбрать язык — и монтажник будет зарегистрирован автоматически.
+      </p>
+
+      {/* Форма создания */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <Label htmlFor="invite-contractor">Контрагент</Label>
+          <Select value={selectedContractor} onValueChange={setSelectedContractor}>
+            <SelectTrigger className="mt-1.5" id="invite-contractor" aria-label="Выбор контрагента">
+              <SelectValue placeholder="Выберите контрагента" />
+            </SelectTrigger>
+            <SelectContent>
+              {(counterparties || []).map((c: Counterparty) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.short_name || c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="invite-role">Роль</Label>
+          <Select value={selectedRole} onValueChange={setSelectedRole}>
+            <SelectTrigger className="mt-1.5" id="invite-role" aria-label="Выбор роли">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="worker">Монтажник</SelectItem>
+              <SelectItem value="brigadier">Бригадир</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-end">
+          <Button
+            onClick={handleCreate}
+            disabled={!selectedContractor || createMutation.isPending}
+            className="w-full"
+            aria-label="Создать приглашение"
+          >
+            {createMutation.isPending ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Создание...</>
+            ) : (
+              <><UserPlus className="w-4 h-4 mr-2" /> Создать приглашение</>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Сгенерированная ссылка */}
+      {generatedLink && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-green-800 mb-1">Ссылка готова!</div>
+              <div className="text-xs text-green-700 font-mono truncate">{generatedLink}</div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopy}
+                className={cn(
+                  'transition-colors',
+                  copied ? 'border-green-500 text-green-700' : ''
+                )}
+                aria-label="Скопировать ссылку"
+                tabIndex={0}
+              >
+                {copied ? (
+                  <><CheckCircle2 className="w-4 h-4 mr-1" /> Скопировано</>
+                ) : (
+                  <><Copy className="w-4 h-4 mr-1" /> Скопировать</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(generatedLink, '_blank')}
+                aria-label="Открыть ссылку"
+                tabIndex={0}
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Список приглашений */}
+      <div className="mt-4">
+        <h4 className="text-sm font-medium text-gray-700 mb-3">Последние приглашения</h4>
+        {invitesLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+          </div>
+        ) : inviteList.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">Нет приглашений</p>
+        ) : (
+          <div className="space-y-2">
+            {inviteList.map((invite) => (
+              <div
+                key={invite.id}
+                className="flex items-center justify-between border border-gray-200 rounded-lg px-4 py-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn(
+                    'w-2.5 h-2.5 rounded-full flex-shrink-0',
+                    invite.is_valid ? 'bg-green-500' : (invite.used ? 'bg-blue-500' : 'bg-gray-400')
+                  )} />
+                  <div className="min-w-0">
+                    <div className="text-sm text-gray-900 font-mono truncate">
+                      {invite.code}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {invite.contractor_name}
+                      {' • '}
+                      {invite.role === 'brigadier' ? 'Бригадир' : 'Монтажник'}
+                      {' • '}
+                      {formatDateTime(invite.created_at)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {invite.used ? (
+                    <Badge className="bg-blue-100 text-blue-700 text-xs">
+                      {invite.used_by_name || 'Использован'}
+                    </Badge>
+                  ) : invite.is_valid ? (
+                    <Badge className="bg-green-100 text-green-700 text-xs">Активен</Badge>
+                  ) : (
+                    <Badge className="bg-gray-100 text-gray-600 text-xs">Истёк</Badge>
+                  )}
+                  {invite.is_valid && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(invite.bot_link);
+                          toast.success('Ссылка скопирована');
+                        } catch {
+                          toast.error('Не удалось скопировать');
+                        }
+                      }}
+                      aria-label={`Скопировать ссылку приглашения ${invite.code}`}
+                      tabIndex={0}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Экспорты для тестирования worklog-компонентов
 export {
   WorkJournalTab,
@@ -1747,6 +2285,7 @@ export {
   ReportDetailDialog,
   GeoSettingsSection,
   SupergroupSection,
+  InviteSection,
 };
 
 function CashFlowTab({ objectId }: { objectId: number }) {

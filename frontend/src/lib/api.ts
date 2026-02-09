@@ -354,7 +354,7 @@ class ApiClient {
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     const queryString = queryParams.toString();
-    const endpoint = `/objects/${id}/cash_flow/${queryString ? `?${queryString}` : ''}`;
+    const endpoint = `/objects/${id}/cash-flow/${queryString ? `?${queryString}` : ''}`;
     return this.request<Array<{ date: string; income: number; expense: number; net: number }>>(endpoint);
   }
 
@@ -540,7 +540,7 @@ class ApiClient {
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     const queryString = queryParams.toString();
-    return this.request<any>(`/contracts/${id}/cash_flow/${queryString ? `?${queryString}` : ''}`);
+    return this.request<any>(`/contracts/${id}/cash-flow/${queryString ? `?${queryString}` : ''}`);
   }
 
   async getContractCashFlowPeriods(id: number, params?: { period_type?: string; start_date?: string; end_date?: string }) {
@@ -549,7 +549,7 @@ class ApiClient {
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     const queryString = queryParams.toString();
-    return this.request<any>(`/contracts/${id}/cash_flow_periods/${queryString ? `?${queryString}` : ''}`);
+    return this.request<any>(`/contracts/${id}/cash-flow-periods/${queryString ? `?${queryString}` : ''}`);
   }
 
   async getContractCorrespondence(contractId: number) {
@@ -2149,6 +2149,31 @@ class ApiClient {
     return this.request<PaginatedResponse<WorklogQuestion>>(`/worklog/questions/${qs ? `?${qs}` : ''}`);
   }
 
+  async createWorklogShift(data: {
+    contract: number;
+    date: string;
+    shift_type: string;
+    start_time: string;
+    end_time: string;
+  }): Promise<WorklogShift> {
+    return this.request<WorklogShift>('/worklog/shifts/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async activateWorklogShift(shiftId: string): Promise<WorklogShift> {
+    return this.request<WorklogShift>(`/worklog/shifts/${shiftId}/activate/`, {
+      method: 'POST',
+    });
+  }
+
+  async closeWorklogShift(shiftId: string): Promise<WorklogShift> {
+    return this.request<WorklogShift>(`/worklog/shifts/${shiftId}/close/`, {
+      method: 'POST',
+    });
+  }
+
   async createWorklogQuestion(data: { report_id: string; text: string }): Promise<WorklogQuestion> {
     return this.request<WorklogQuestion>('/worklog/questions/', {
       method: 'POST',
@@ -2167,6 +2192,8 @@ class ApiClient {
     latitude?: string;
     longitude?: string;
     geo_radius?: number;
+    allow_geo_bypass?: boolean;
+    registration_window_minutes?: number;
   }): Promise<ConstructionObject> {
     return this.request<ConstructionObject>(`/objects/${objectId}/`, {
       method: 'PATCH',
@@ -2185,6 +2212,37 @@ class ApiClient {
     if (params?.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
     const qs = queryParams.toString();
     return this.request<PaginatedResponse<WorklogSupergroup>>(`/worklog/supergroups/${qs ? `?${qs}` : ''}`);
+  }
+
+  // ========================
+  // InviteToken (deep-link)
+  // ========================
+
+  async createInviteToken(data: {
+    contractor: number;
+    role?: string;
+  }): Promise<InviteToken> {
+    return this.request<InviteToken>('/worklog/invites/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getInviteTokens(params?: {
+    contractor?: number;
+    used?: boolean;
+    role?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedResponse<InviteToken>> {
+    const queryParams = new URLSearchParams();
+    if (params?.contractor) queryParams.append('contractor', params.contractor.toString());
+    if (params?.used !== undefined) queryParams.append('used', params.used.toString());
+    if (params?.role) queryParams.append('role', params.role);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    return this.request<PaginatedResponse<InviteToken>>(`/worklog/invites/${qs ? `?${qs}` : ''}`);
   }
 }
 
@@ -3437,6 +3495,9 @@ export interface InvoiceItem {
 
 export interface WorklogShift {
   id: string;
+  contract: number | null;
+  contract_number: string | null;
+  contract_name: string | null;
   object: number;
   object_name: string;
   contractor: number;
@@ -3445,6 +3506,7 @@ export interface WorklogShift {
   shift_type: 'day' | 'evening' | 'night';
   start_time: string;
   end_time: string;
+  qr_token: string;
   status: 'scheduled' | 'active' | 'closed';
   registrations_count: number;
   teams_count: number;
@@ -3533,6 +3595,24 @@ export interface WorklogSupergroup {
   chat_title: string;
   invite_link: string;
   is_active: boolean;
+  created_at: string;
+}
+
+export interface InviteToken {
+  id: string;
+  code: string;
+  contractor: number;
+  contractor_name: string;
+  created_by: number | null;
+  created_by_username: string | null;
+  role: string;
+  expires_at: string;
+  used: boolean;
+  used_by: string | null;
+  used_by_name: string | null;
+  used_at: string | null;
+  bot_link: string;
+  is_valid: boolean;
   created_at: string;
 }
 

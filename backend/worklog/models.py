@@ -1,5 +1,9 @@
+import secrets
+import string
 import uuid
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 from core.models import TimestampedModel
 
 
@@ -111,6 +115,14 @@ class Shift(TimestampedModel):
         CLOSED = 'closed', 'Закрыта'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    contract = models.ForeignKey(
+        'contracts.Contract',
+        on_delete=models.CASCADE,
+        related_name='shifts',
+        verbose_name='Договор',
+        null=True,
+        blank=True,
+    )
     object = models.ForeignKey(
         'objects.Object',
         on_delete=models.CASCADE,
@@ -155,7 +167,24 @@ class Shift(TimestampedModel):
         verbose_name_plural = 'Смены'
         ordering = ['-date', '-start_time']
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        super().clean()
+        if self.contract:
+            if self.object_id and self.contract.object_id != self.object_id:
+                raise ValidationError({
+                    'contract': 'Объект договора не совпадает с объектом смены.'
+                })
+            if self.contractor_id and self.contract.counterparty_id != self.contractor_id:
+                raise ValidationError({
+                    'contract': 'Исполнитель договора не совпадает с исполнителем смены.'
+                })
+
     def save(self, *args, **kwargs):
+        # Автозаполнение object и contractor из contract
+        if self.contract:
+            self.object = self.contract.object
+            self.contractor = self.contract.counterparty
         if not self.qr_token:
             self.qr_token = uuid.uuid4().hex
         super().save(*args, **kwargs)
@@ -683,3 +712,81 @@ class Answer(TimestampedModel):
 
     def __str__(self):
         return f"Ответ от {self.answered_by.name}"
+
+
+def _generate_invite_code():
+    """Генерирует случайный 12-символьный код (base62)."""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(12))
+
+
+def _default_invite_expires():
+    """Срок по умолчанию: +7 дней."""
+    return timezone.now() + timedelta(days=7)
+
+
+class InviteToken(TimestampedModel):
+    """Токен-приглашение для регистрации монтажника через Telegram deep-link."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(
+        max_length=32,
+        unique=True,
+        default=_generate_invite_code,
+        verbose_name='Код приглашения'
+    )
+    contractor = models.ForeignKey(
+        'accounting.Counterparty',
+        on_delete=models.CASCADE,
+        related_name='invite_tokens',
+        verbose_name='Исполнитель'
+    )
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_invites',
+        verbose_name='Кто создал'
+    )
+    role = models.CharField(
+        max_length=16,
+        choices=Worker.Role.choices,
+        default=Worker.Role.WORKER,
+        verbose_name='Роль приглашённого'
+    )
+    expires_at = models.DateTimeField(
+        default=_default_invite_expires,
+        verbose_name='Действителен до'
+    )
+    used = models.BooleanField(
+        default=False,
+        verbose_name='Использован'
+    )
+    used_by = models.ForeignKey(
+        Worker,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='used_invite',
+        verbose_name='Кто использовал'
+    )
+    used_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Когда использован'
+    )
+
+    class Meta:
+        verbose_name = 'Приглашение'
+        verbose_name_plural = 'Приглашения'
+        ordering = ['-created_at']
+
+    @property
+    def is_valid(self):
+        return not self.used and self.expires_at > timezone.now()
+
+    @property
+    def bot_link(self):
+        return f"https://t.me/avgust_worklog_bot?start=inv_{self.code}"
+
+    def __str__(self):
+        status = 'использован' if self.used else ('истёк' if self.expires_at <= timezone.now() else 'активен')
+        return f"Invite {self.code[:8]}… ({status}) — {self.contractor}"

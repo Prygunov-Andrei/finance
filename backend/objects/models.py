@@ -57,6 +57,16 @@ class Object(TimestampedModel):
         verbose_name='Радиус геозоны в метрах',
         help_text='Радиус для проверки геолокации при регистрации на смену'
     )
+    allow_geo_bypass = models.BooleanField(
+        default=False,
+        verbose_name='Разрешить регистрацию вне геозоны',
+        help_text='Если включено, монтажники смогут регистрироваться на смену находясь за пределами геозоны (с пометкой)'
+    )
+    registration_window_minutes = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Окно регистрации (минуты)',
+        help_text='За сколько минут до начала и после окончания смены разрешена регистрация. 0 = без ограничений.'
+    )
 
     class Meta:
         verbose_name = 'Объект'
