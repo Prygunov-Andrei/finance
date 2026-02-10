@@ -34,17 +34,29 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
+    '72.56.83.95',  # Production server IP
     '.ngrok-free.app',
-    'finance.ngrok.app', # Ваш постоянный домен
+    'finance.ngrok.app',  # Development ngrok domain
     '.ngrok.io',
-    '*', 
 ]
+
+# Add production domain from environment variable
+PRODUCTION_DOMAIN = os.environ.get('PRODUCTION_DOMAIN', '')
+if PRODUCTION_DOMAIN:
+    ALLOWED_HOSTS.extend([PRODUCTION_DOMAIN, f'www.{PRODUCTION_DOMAIN}'])
 
 CSRF_TRUSTED_ORIGINS = [
     'https://finance.ngrok.app',
     'https://*.figmaiframepreview.figma.site',
     'https://*.figma.site',
 ]
+
+# Add production domain to CSRF trusted origins
+if PRODUCTION_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f'https://{PRODUCTION_DOMAIN}',
+        f'https://www.{PRODUCTION_DOMAIN}',
+    ])
 
 
 # Application definition
@@ -388,4 +400,31 @@ LOGGING = {
         },
     },
 }
+
+# =========================================================================
+# PRODUCTION SECURITY SETTINGS
+# =========================================================================
+
+if not DEBUG:
+    # Secure cookies
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    
+    # HTTPS redirect (if behind reverse proxy like Cloudflare/nginx)
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    
+    # HSTS (HTTP Strict Transport Security)
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # Additional security headers
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = 'DENY'
+    
+    # Logging configuration for production
+    LOGGING['loggers']['django']['level'] = 'ERROR'
+    LOGGING['loggers']['worklog']['handlers'].append('file')
+    LOGGING['loggers']['celery']['handlers'].append('file')
 

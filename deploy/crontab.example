@@ -1,0 +1,12 @@
+# Crontab для автоматических бэкапов
+# Установка: crontab -e
+# Добавить эти строки:
+
+# Ежедневный бэкап в 3:00 AM
+0 3 * * * /opt/finans_assistant/deploy/backup.sh >> /var/log/finans_backup.log 2>&1
+
+# Еженедельная проверка Docker контейнеров (каждое воскресенье в 4:00 AM)
+0 4 * * 0 cd /opt/finans_assistant && docker compose -f docker-compose.prod.yml ps >> /var/log/finans_docker_check.log 2>&1
+
+# Ежемесячная очистка Docker (неиспользуемые образы, контейнеры) - первое число месяца в 5:00 AM
+0 5 1 * * docker system prune -af --volumes=false >> /var/log/docker_cleanup.log 2>&1

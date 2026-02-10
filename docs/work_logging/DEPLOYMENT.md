@@ -4,6 +4,41 @@
 
 ---
 
+## Production Deployment (Recommended)
+
+Для production развертывания используйте специализированные скрипты и конфигурации.
+
+### Быстрый старт
+
+```bash
+ssh root@your-production-server
+cd /opt
+git clone https://github.com/Prygunov-Andrei/finance.git finans_assistant
+cd finans_assistant/deploy
+chmod +x *.sh
+./master_setup.sh
+```
+
+Подробности: [`deploy/README.md`](../../deploy/README.md)
+
+### Что включает production setup:
+
+- 🐳 Docker Compose с production настройками (resource limits, health checks, logging)
+- 🔒 Безопасность: secure cookies, HSTS, firewall (ufw)
+- 🔐 Автогенерация безопасных паролей для PostgreSQL и MinIO
+- 🌐 Nginx reverse proxy с SSL termination
+- ☁️ Cloudflare интеграция (DNS, SSL/TLS proxy)
+- 📦 Автоматические бэкапы (PostgreSQL + MinIO) через cron
+- 📊 Sentry мониторинг ошибок
+- 🔄 Скрипты для обновления кода (`deploy.sh`)
+- 🤖 Telegram Bot webhook configuration
+
+---
+
+## Development Setup (Local)
+
+Для локальной разработки и тестирования.
+
 ## Зависимости
 
 ### Системные сервисы
