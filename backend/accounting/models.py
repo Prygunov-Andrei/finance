@@ -323,6 +323,12 @@ class Counterparty(TimestampedModel):
         verbose_name='Контактная информация',
         help_text='Телефоны, email, ответственные лица'
     )
+    notes = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Заметки',
+        help_text='Произвольные заметки по контрагенту'
+    )
     is_active = models.BooleanField(
         default=True,
         verbose_name='Активен'

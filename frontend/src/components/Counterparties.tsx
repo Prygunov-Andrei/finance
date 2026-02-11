@@ -8,9 +8,9 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Plus, Loader2, Users, MoreVertical, Pencil, Trash2, Search, Database, Globe, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle } from 'lucide-react';
+import { Plus, Loader2, Users, MoreVertical, Pencil, Trash2, Search, Database, Globe, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, FileText, StickyNote, XCircle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCounterparties } from '../hooks';
 
@@ -426,67 +426,6 @@ function FNSSuggestDropdown({ query, onSelect, isVisible, onClose }: FNSSuggestD
   );
 }
 
-// ─── Компонент быстрой проверки ФНС ────────────────────────────
-
-interface QuickCheckResultProps {
-  data: FNSQuickCheckResponse | null;
-  isLoading: boolean;
-}
-
-function QuickCheckResult({ data, isLoading }: QuickCheckResultProps) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        Проверка в ФНС...
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const { summary } = data;
-  const RiskIcon = summary.risk_level === 'low' ? ShieldCheck 
-    : summary.risk_level === 'medium' ? ShieldAlert 
-    : summary.risk_level === 'high' ? ShieldX 
-    : AlertTriangle;
-
-  const riskColor = summary.risk_level === 'low' ? 'text-green-600 bg-green-50 border-green-200'
-    : summary.risk_level === 'medium' ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
-    : summary.risk_level === 'high' ? 'text-red-600 bg-red-50 border-red-200'
-    : 'text-gray-600 bg-gray-50 border-gray-200';
-
-  const riskLabel = summary.risk_level === 'low' ? 'Низкий риск'
-    : summary.risk_level === 'medium' ? 'Средний риск'
-    : summary.risk_level === 'high' ? 'Высокий риск'
-    : 'Нет данных';
-
-  return (
-    <div className={`p-3 rounded-lg border ${riskColor}`}>
-      <div className="flex items-center gap-2 mb-2">
-        <RiskIcon className="w-4 h-4" />
-        <span className="text-sm font-medium">{riskLabel}</span>
-        <span className="text-xs ml-auto">
-          +{summary.positive_count} / -{summary.negative_count}
-        </span>
-      </div>
-      {summary.negative.length > 0 && (
-        <div className="space-y-0.5">
-          {summary.negative.slice(0, 3).map((item, i) => (
-            <div key={i} className="text-xs">- {item}</div>
-          ))}
-          {summary.negative.length > 3 && (
-            <div className="text-xs opacity-70">...и ещё {summary.negative.length - 3}</div>
-          )}
-        </div>
-      )}
-      {summary.positive.length > 0 && summary.negative.length === 0 && (
-        <div className="text-xs">Негативных факторов не обнаружено</div>
-      )}
-    </div>
-  );
-}
-
 // ─── Форма создания контрагента ─────────────────────────────────
 
 interface CreateCounterpartyFormProps {
@@ -506,8 +445,10 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
     legal_form: 'ooo',
     address: '',
     contact_info: '',
+    notes: '',
   });
 
+  const [activeTab, setActiveTab] = useState('requisites');
   const [showInnSuggestions, setShowInnSuggestions] = useState(false);
   const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   const [quickCheck, setQuickCheck] = useState<FNSQuickCheckResponse | null>(null);
@@ -521,7 +462,6 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
     if (result.is_local) {
       toast.info(`Контрагент "${result.name}" уже есть в базе`);
     }
-    // Сначала заполняем данными из suggest
     setFormData((prev) => ({
       ...prev,
       name: result.name || prev.name,
@@ -535,7 +475,6 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
     setShowInnSuggestions(false);
     setShowNameSuggestions(false);
 
-    // Если есть ИНН и результат из ФНС — обогащаем через EGR для КПП, адреса и пр.
     const inn = result.inn || '';
     if (inn && inn.match(/^\d{10,12}$/) && !result.is_local) {
       setIsEnriching(true);
@@ -571,6 +510,7 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
     try {
       const result = await api.fnsQuickCheck(inn);
       setQuickCheck(result);
+      setActiveTab('fns-check');
     } catch (e: any) {
       toast.error(`Ошибка проверки: ${e?.message || 'Неизвестная ошибка'}`);
     } finally {
@@ -582,10 +522,12 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
     e.preventDefault();
     if (!formData.name.trim() || !formData.inn.trim() || !formData.legal_form) {
       toast.error('Заполните обязательные поля');
+      setActiveTab('requisites');
       return;
     }
     if (formData.vendor_subtype && formData.type === 'customer') {
       toast.error('Подтип можно указывать только для контрагентов типа "Исполнитель-Поставщик"');
+      setActiveTab('requisites');
       return;
     }
     const dataToSubmit: CreateCounterpartyData = {
@@ -595,6 +537,7 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
       ogrn: formData.ogrn?.trim() || undefined,
       address: formData.address?.trim() || undefined,
       contact_info: formData.contact_info?.trim() || undefined,
+      notes: formData.notes?.trim() || undefined,
       vendor_subtype: (formData.type === 'vendor' || formData.type === 'both') ? formData.vendor_subtype : undefined,
     };
     onSubmit(dataToSubmit);
@@ -603,227 +546,286 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
   const showVendorSubtype = formData.type === 'vendor' || formData.type === 'both';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-      {/* ИНН с автозаполнением */}
-      <div ref={innFieldRef} className="relative">
-        <Label htmlFor="create-inn">
-          ИНН <span className="text-red-500">*</span>
-        </Label>
-        <div className="flex gap-2 mt-1.5">
-          <Input
-            id="create-inn"
-            value={formData.inn}
-            onChange={(e) => {
-              setFormData({ ...formData, inn: e.target.value });
-              if (e.target.value.length >= 3) {
-                setShowInnSuggestions(true);
-              }
-              setQuickCheck(null);
-            }}
-            onFocus={() => {
-              if (formData.inn.length >= 3) setShowInnSuggestions(true);
-            }}
-            placeholder="Введите ИНН для автозаполнения"
-            disabled={isLoading}
-            required
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleQuickCheck}
-            disabled={isLoading || isChecking || !formData.inn.trim()}
-            className="shrink-0 text-xs"
-            title="Проверить контрагента в ФНС"
-          >
-            {isChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
-            <span className="ml-1">Проверить</span>
-          </Button>
-        </div>
-        <FNSSuggestDropdown
-          query={formData.inn}
-          onSelect={handleSuggestSelect}
-          isVisible={showInnSuggestions}
-          onClose={() => setShowInnSuggestions(false)}
-        />
-      </div>
+    <form onSubmit={handleSubmit} className="mt-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-3 mb-4">
+          <TabsTrigger value="requisites" className="text-xs gap-1">
+            <FileText className="w-3.5 h-3.5" /> Реквизиты
+          </TabsTrigger>
+          <TabsTrigger value="fns-check" className="text-xs gap-1 relative">
+            <ShieldCheck className="w-3.5 h-3.5" /> Проверка ФНС
+            {quickCheck && (
+              <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
+                quickCheck.summary.risk_level === 'low' ? 'bg-green-500' :
+                quickCheck.summary.risk_level === 'medium' ? 'bg-yellow-500' :
+                quickCheck.summary.risk_level === 'high' ? 'bg-red-500' : 'bg-gray-400'
+              }`} />
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="text-xs gap-1">
+            <StickyNote className="w-3.5 h-3.5" /> Заметки
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Результат быстрой проверки */}
-      <QuickCheckResult data={quickCheck} isLoading={isChecking} />
+        {/* ═══ Вкладка 1: Реквизиты ═══ */}
+        <TabsContent value="requisites" className="space-y-4 mt-0">
+          {/* ИНН с автозаполнением */}
+          <div ref={innFieldRef} className="relative">
+            <Label htmlFor="create-inn">
+              ИНН <span className="text-red-500">*</span>
+            </Label>
+            <div className="flex gap-2 mt-1.5">
+              <Input
+                id="create-inn"
+                value={formData.inn}
+                onChange={(e) => {
+                  setFormData({ ...formData, inn: e.target.value });
+                  if (e.target.value.length >= 3) {
+                    setShowInnSuggestions(true);
+                  }
+                  setQuickCheck(null);
+                }}
+                onFocus={() => {
+                  if (formData.inn.length >= 3) setShowInnSuggestions(true);
+                }}
+                placeholder="Введите ИНН для автозаполнения"
+                disabled={isLoading}
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleQuickCheck}
+                disabled={isLoading || isChecking || !formData.inn.trim()}
+                className="shrink-0 text-xs"
+                title="Проверить контрагента в ФНС"
+              >
+                {isChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                <span className="ml-1">Проверить</span>
+              </Button>
+            </div>
+            <FNSSuggestDropdown
+              query={formData.inn}
+              onSelect={handleSuggestSelect}
+              isVisible={showInnSuggestions}
+              onClose={() => setShowInnSuggestions(false)}
+            />
+          </div>
 
-      {/* Индикатор обогащения данных */}
-      {isEnriching && (
-        <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg text-sm text-blue-600">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Загрузка реквизитов из ЕГРЮЛ/ЕГРИП...
-        </div>
-      )}
+          {/* Индикатор обогащения данных */}
+          {isEnriching && (
+            <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg text-sm text-blue-600">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Загрузка реквизитов из ЕГРЮЛ/ЕГРИП...
+            </div>
+          )}
 
-      {/* Название с автозаполнением */}
-      <div ref={nameFieldRef} className="relative">
-        <Label htmlFor="create-name">
-          Название <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="create-name"
-          value={formData.name}
-          onChange={(e) => {
-            setFormData({ ...formData, name: e.target.value });
-            if (e.target.value.length >= 3 && !e.target.value.match(/^\d+$/)) {
-              setShowNameSuggestions(true);
-            }
-          }}
-          onFocus={() => {
-            if (formData.name.length >= 3 && !formData.name.match(/^\d+$/)) {
-              setShowNameSuggestions(true);
-            }
-          }}
-          placeholder="Введите название для поиска"
-          disabled={isLoading}
-          className="mt-1.5"
-          required
-        />
-        <FNSSuggestDropdown
-          query={formData.name}
-          onSelect={handleSuggestSelect}
-          isVisible={showNameSuggestions}
-          onClose={() => setShowNameSuggestions(false)}
-        />
-      </div>
+          {/* Название с автозаполнением */}
+          <div ref={nameFieldRef} className="relative">
+            <Label htmlFor="create-name">
+              Название <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="create-name"
+              value={formData.name}
+              onChange={(e) => {
+                setFormData({ ...formData, name: e.target.value });
+                if (e.target.value.length >= 3 && !e.target.value.match(/^\d+$/)) {
+                  setShowNameSuggestions(true);
+                }
+              }}
+              onFocus={() => {
+                if (formData.name.length >= 3 && !formData.name.match(/^\d+$/)) {
+                  setShowNameSuggestions(true);
+                }
+              }}
+              placeholder="Введите название для поиска"
+              disabled={isLoading}
+              className="mt-1.5"
+              required
+            />
+            <FNSSuggestDropdown
+              query={formData.name}
+              onSelect={handleSuggestSelect}
+              isVisible={showNameSuggestions}
+              onClose={() => setShowNameSuggestions(false)}
+            />
+          </div>
 
-      <div>
-        <Label htmlFor="create-short_name">Краткое название</Label>
-        <Input
-          id="create-short_name"
-          value={formData.short_name}
-          onChange={(e) => setFormData({ ...formData, short_name: e.target.value })}
-          placeholder="Ромашка"
-          disabled={isLoading}
-          className="mt-1.5"
-        />
-      </div>
+          <div>
+            <Label htmlFor="create-short_name">Краткое название</Label>
+            <Input
+              id="create-short_name"
+              value={formData.short_name}
+              onChange={(e) => setFormData({ ...formData, short_name: e.target.value })}
+              placeholder="Ромашка"
+              disabled={isLoading}
+              className="mt-1.5"
+            />
+          </div>
 
-      <div>
-        <Label htmlFor="create-legal_form">
-          Правовая форма <span className="text-red-500">*</span>
-        </Label>
-        <Select
-          value={formData.legal_form}
-          onValueChange={(value: any) => setFormData({ ...formData, legal_form: value })}
-          disabled={isLoading}
-        >
-          <SelectTrigger className="mt-1.5">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ooo">ООО</SelectItem>
-            <SelectItem value="ip">ИП</SelectItem>
-            <SelectItem value="fiz">Физ.лицо</SelectItem>
-            <SelectItem value="self_employed">Самозанятый</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          <div>
+            <Label htmlFor="create-legal_form">
+              Правовая форма <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={formData.legal_form}
+              onValueChange={(value: any) => setFormData({ ...formData, legal_form: value })}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ooo">ООО</SelectItem>
+                <SelectItem value="ip">ИП</SelectItem>
+                <SelectItem value="fiz">Физ.лицо</SelectItem>
+                <SelectItem value="self_employed">Самозанятый</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label htmlFor="create-kpp">КПП</Label>
-          <Input
-            id="create-kpp"
-            value={formData.kpp}
-            onChange={(e) => setFormData({ ...formData, kpp: e.target.value })}
-            placeholder="123456789"
-            disabled={isLoading}
-            className="mt-1.5"
-          />
-        </div>
-        <div>
-          <Label htmlFor="create-ogrn">ОГРН</Label>
-          <Input
-            id="create-ogrn"
-            value={formData.ogrn}
-            onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })}
-            placeholder="1234567890123"
-            disabled={isLoading}
-            className="mt-1.5"
-          />
-        </div>
-      </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="create-kpp">КПП</Label>
+              <Input
+                id="create-kpp"
+                value={formData.kpp}
+                onChange={(e) => setFormData({ ...formData, kpp: e.target.value })}
+                placeholder="Заполнится из ФНС"
+                disabled={isLoading}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="create-ogrn">ОГРН</Label>
+              <Input
+                id="create-ogrn"
+                value={formData.ogrn}
+                onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })}
+                placeholder="Заполнится из ФНС"
+                disabled={isLoading}
+                className="mt-1.5"
+              />
+            </div>
+          </div>
 
-      <div>
-        <Label htmlFor="create-address">Юридический адрес</Label>
-        <Input
-          id="create-address"
-          value={formData.address}
-          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-          placeholder="Заполнится автоматически из ФНС"
-          disabled={isLoading}
-          className="mt-1.5"
-        />
-      </div>
+          <div>
+            <Label htmlFor="create-address">Юридический адрес</Label>
+            <Input
+              id="create-address"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="Заполнится автоматически из ФНС"
+              disabled={isLoading}
+              className="mt-1.5"
+            />
+          </div>
 
-      <div>
-        <Label htmlFor="create-type">
-          Тип <span className="text-red-500">*</span>
-        </Label>
-        <Select
-          value={formData.type}
-          onValueChange={(value: any) => {
-            setFormData({ 
-              ...formData, 
-              type: value,
-              vendor_subtype: value === 'customer' ? null : formData.vendor_subtype
-            });
-          }}
-          disabled={isLoading}
-        >
-          <SelectTrigger className="mt-1.5">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="customer">Заказчик</SelectItem>
-            <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
-            <SelectItem value="both">Заказчик и Исполнитель-Поставщик</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          <div>
+            <Label htmlFor="create-type">
+              Тип <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={formData.type}
+              onValueChange={(value: any) => {
+                setFormData({ 
+                  ...formData, 
+                  type: value,
+                  vendor_subtype: value === 'customer' ? null : formData.vendor_subtype
+                });
+              }}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="customer">Заказчик</SelectItem>
+                <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
+                <SelectItem value="both">Заказчик и Исполнитель-Поставщик</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      {showVendorSubtype && (
-        <div>
-          <Label htmlFor="create-vendor_subtype">Подтип</Label>
-          <Select
-            value={formData.vendor_subtype || 'null'}
-            onValueChange={(value: any) => {
-              setFormData({ ...formData, vendor_subtype: value === 'null' ? null : value });
-            }}
-            disabled={isLoading}
-          >
-            <SelectTrigger className="mt-1.5">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="null">Не указано</SelectItem>
-              <SelectItem value="supplier">Поставщик</SelectItem>
-              <SelectItem value="executor">Исполнитель</SelectItem>
-              <SelectItem value="both">Исполнитель и Поставщик</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+          {showVendorSubtype && (
+            <div>
+              <Label htmlFor="create-vendor_subtype">Подтип</Label>
+              <Select
+                value={formData.vendor_subtype || 'null'}
+                onValueChange={(value: any) => {
+                  setFormData({ ...formData, vendor_subtype: value === 'null' ? null : value });
+                }}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Не указано</SelectItem>
+                  <SelectItem value="supplier">Поставщик</SelectItem>
+                  <SelectItem value="executor">Исполнитель</SelectItem>
+                  <SelectItem value="both">Исполнитель и Поставщик</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-      <div>
-        <Label htmlFor="create-contact_info">Контакты</Label>
-        <Textarea
-          id="create-contact_info"
-          value={formData.contact_info}
-          onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
-          placeholder="Email, телефон..."
-          disabled={isLoading}
-          className="mt-1.5"
-          rows={2}
-        />
-      </div>
+          <div>
+            <Label htmlFor="create-contact_info">Контакты</Label>
+            <Textarea
+              id="create-contact_info"
+              value={formData.contact_info}
+              onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
+              placeholder="Email, телефон..."
+              disabled={isLoading}
+              className="mt-1.5"
+              rows={2}
+            />
+          </div>
+        </TabsContent>
 
-      <div className="flex gap-3 pt-4">
+        {/* ═══ Вкладка 2: Проверка ФНС ═══ */}
+        <TabsContent value="fns-check" className="mt-0">
+          {isChecking ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <Loader2 className="w-8 h-8 animate-spin mb-3" />
+              <span className="text-sm">Проверка контрагента в ФНС...</span>
+            </div>
+          ) : quickCheck ? (
+            <FNSCheckTabContent data={quickCheck} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <ShieldCheck className="w-10 h-10 mb-3 opacity-40" />
+              <p className="text-sm text-center">
+                Введите ИНН на вкладке «Реквизиты» и нажмите
+                <br />
+                <span className="font-medium text-gray-600">«Проверить»</span> для загрузки данных из ФНС
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ═══ Вкладка 3: Заметки ═══ */}
+        <TabsContent value="notes" className="mt-0">
+          <div>
+            <Label htmlFor="create-notes">Заметки по контрагенту</Label>
+            <Textarea
+              id="create-notes"
+              value={formData.notes || ''}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Произвольные заметки, комментарии, важная информация..."
+              disabled={isLoading}
+              className="mt-1.5"
+              rows={8}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Кнопка создания — всегда видна */}
+      <div className="flex gap-3 pt-4 border-t mt-4">
         <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
           {isLoading ? (
             <>
@@ -836,6 +838,85 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
         </Button>
       </div>
     </form>
+  );
+}
+
+// ─── Компонент полной проверки ФНС (для вкладки) ─────────────────
+
+function FNSCheckTabContent({ data }: { data: FNSQuickCheckResponse }) {
+  const { summary } = data;
+
+  const RiskIcon = summary.risk_level === 'low' ? ShieldCheck
+    : summary.risk_level === 'medium' ? ShieldAlert
+    : summary.risk_level === 'high' ? ShieldX
+    : AlertTriangle;
+
+  const riskColor = summary.risk_level === 'low' ? 'text-green-600 bg-green-50 border-green-200'
+    : summary.risk_level === 'medium' ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
+    : summary.risk_level === 'high' ? 'text-red-600 bg-red-50 border-red-200'
+    : 'text-gray-600 bg-gray-50 border-gray-200';
+
+  const riskLabel = summary.risk_level === 'low' ? 'Низкий риск'
+    : summary.risk_level === 'medium' ? 'Средний риск'
+    : summary.risk_level === 'high' ? 'Высокий риск'
+    : 'Нет данных';
+
+  return (
+    <div className="space-y-4">
+      {/* Заголовок с уровнем риска */}
+      <div className={`p-3 rounded-lg border ${riskColor}`}>
+        <div className="flex items-center gap-2">
+          <RiskIcon className="w-5 h-5" />
+          <span className="text-sm font-semibold">{riskLabel}</span>
+          <span className="text-xs ml-auto font-mono">
+            +{summary.positive_count} / -{summary.negative_count}
+          </span>
+        </div>
+      </div>
+
+      {/* Негативные факторы */}
+      {summary.negative.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <XCircle className="w-3.5 h-3.5" />
+            Негативные факторы ({summary.negative.length})
+          </h4>
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+            {summary.negative.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 p-2 bg-red-50 rounded text-xs text-red-800 border border-red-100">
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Позитивные факторы */}
+      {summary.positive.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Позитивные факторы ({summary.positive.length})
+          </h4>
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+            {summary.positive.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 p-2 bg-green-50 rounded text-xs text-green-800 border border-green-100">
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Если нет ни позитивных, ни негативных */}
+      {summary.positive.length === 0 && summary.negative.length === 0 && (
+        <div className="text-center py-6 text-gray-400 text-sm">
+          Факторы не обнаружены
+        </div>
+      )}
+    </div>
   );
 }
 

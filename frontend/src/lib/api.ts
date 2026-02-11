@@ -2399,6 +2399,7 @@ export interface CreateCounterpartyData {
   legal_form: string;
   address?: string;
   contact_info?: string;
+  notes?: string;
 }
 
 export interface CreateLegalEntityData {

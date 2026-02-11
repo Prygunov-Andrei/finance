@@ -240,6 +240,31 @@ class FNSClient:
     # ─── Утилиты ─────────────────────────────────────────────────────
 
     @staticmethod
+    def _extract_address(value) -> str:
+        """
+        Извлекает адрес из значения, которое может быть строкой или dict.
+
+        API-FNS может вернуть адрес как:
+        - строку "АдресПолн": "123456, г. Москва, ул. Ленина, д. 1"
+        - dict "Адрес": {"Индекс": "123456", "Регион": "Москва", ...}
+        """
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            parts = []
+            for key in ('Индекс', 'Регион', 'Район', 'Город', 'НаселПункт',
+                        'Улица', 'Дом', 'Корпус', 'Кварт'):
+                v = value.get(key, '')
+                if v and isinstance(v, str):
+                    parts.append(v)
+            if parts:
+                return ', '.join(parts)
+            # Fallback: склеить все строковые значения
+            str_vals = [str(v) for v in value.values() if v and isinstance(v, str)]
+            return ', '.join(str_vals) if str_vals else ''
+        return str(value) if value else ''
+
+    @staticmethod
     def parse_egr_requisites(raw_data: dict) -> dict:
         """
         Извлекает реквизиты из EGR-ответа для предзаполнения формы.
@@ -261,7 +286,8 @@ class FNSClient:
         full_name = data.get('НаимПолнЮЛ', '') or data.get('ФИОПолн', '')
         short_name = data.get('НаимСокрЮЛ', '')
         kpp = data.get('КПП', '')
-        address = data.get('АдресПолн', '') or data.get('Адрес', '')
+        raw_address = data.get('АдресПолн', '') or data.get('Адрес', '')
+        address = FNSClient._extract_address(raw_address)
         status = data.get('Статус', '')
         reg_date = data.get('ДатаРег', '') or data.get('ДатаОГРН', '')
 
@@ -331,7 +357,8 @@ class FNSClient:
             ogrn = data.get('ОГРН', '') or data.get('ОГРНИП', '')
             full_name = data.get('НаимПолнЮЛ', '') or data.get('ФИОПолн', '')
             short_name = data.get('НаимСокрЮЛ', '')
-            address = data.get('АдресПолн', '')
+            raw_address = data.get('АдресПолн', '') or data.get('Адрес', '')
+            address = FNSClient._extract_address(raw_address)
             status = data.get('Статус', '')
             reg_date = data.get('ДатаРег', '') or data.get('ДатаОГРН', '')
 
