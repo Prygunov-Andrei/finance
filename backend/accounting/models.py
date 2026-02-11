@@ -257,6 +257,7 @@ class Counterparty(TimestampedModel):
         CUSTOMER = 'customer', 'Заказчик'
         VENDOR = 'vendor', 'Исполнитель/Поставщик'
         BOTH = 'both', 'Заказчик и Исполнитель'
+        EMPLOYEE = 'employee', 'Сотрудник'
 
     class VendorSubtype(models.TextChoices):
         SUPPLIER = 'supplier', 'Поставщик'

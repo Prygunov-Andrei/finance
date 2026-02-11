@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { Textarea } from './ui/textarea';
-import { Building2, CreditCard, Loader2, Plus, MoreVertical, Pencil, Trash2, FolderTree, ListTree, ScrollText, Check, X, ChevronRight, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Building2, CreditCard, Loader2, Plus, MoreVertical, Pencil, Trash2, FolderTree, ListTree, ScrollText, Check, X, ChevronRight, ShieldCheck, RefreshCw, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { TaxSystemsTab } from './TaxSystemsTab';
+import { PersonnelTab } from './PersonnelTab';
 import { useLegalEntities, useTaxSystems, useAccounts, useExpenseCategories } from '../hooks';
 import { formatAmount } from '../lib/utils';
 import { CONSTANTS } from '../constants';
@@ -26,7 +27,7 @@ export function Settings() {
         <h1 className="text-3xl font-semibold mb-6">Настройки</h1>
         
         <Tabs defaultValue="entities" className="w-full">
-          <TabsList className="grid w-full max-w-4xl grid-cols-5 mb-6">
+          <TabsList className="grid w-full max-w-5xl grid-cols-6 mb-6">
             <TabsTrigger value="tax-systems" className="flex items-center gap-2">
               <ScrollText className="w-4 h-4" />
               Налоговые системы
@@ -34,6 +35,10 @@ export function Settings() {
             <TabsTrigger value="entities" className="flex items-center gap-2">
               <Building2 className="w-4 h-4" />
               Мои компании
+            </TabsTrigger>
+            <TabsTrigger value="personnel" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Персонал
             </TabsTrigger>
             <TabsTrigger value="accounts" className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
@@ -55,6 +60,10 @@ export function Settings() {
           
           <TabsContent value="entities">
             <LegalEntitiesTab />
+          </TabsContent>
+          
+          <TabsContent value="personnel">
+            <PersonnelTab />
           </TabsContent>
           
           <TabsContent value="accounts">

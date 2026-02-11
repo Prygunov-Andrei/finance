@@ -2292,6 +2292,104 @@ class ApiClient {
     const qs = queryParams.toString();
     return this.request<PaginatedResponse<InviteToken>>(`/worklog/invites/${qs ? `?${qs}` : ''}`);
   }
+
+  // =====================================================================
+  // PERSONNEL (Персонал)
+  // =====================================================================
+
+  async getEmployees(params?: {
+    search?: string;
+    legal_entity?: number;
+    is_active?: boolean;
+  }): Promise<Employee[]> {
+    const qp = new URLSearchParams();
+    if (params?.search) qp.append('search', params.search);
+    if (params?.legal_entity) qp.append('legal_entity', params.legal_entity.toString());
+    if (params?.is_active !== undefined) qp.append('is_active', params.is_active.toString());
+    const qs = qp.toString();
+    return this.request<Employee[]>(`/personnel/employees/${qs ? `?${qs}` : ''}`);
+  }
+
+  async getEmployee(id: number): Promise<EmployeeDetail> {
+    return this.request<EmployeeDetail>(`/personnel/employees/${id}/`);
+  }
+
+  async createEmployee(data: CreateEmployeeData): Promise<EmployeeDetail> {
+    return this.request<EmployeeDetail>('/personnel/employees/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateEmployee(id: number, data: Partial<CreateEmployeeData>): Promise<EmployeeDetail> {
+    return this.request<EmployeeDetail>(`/personnel/employees/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEmployee(id: number): Promise<void> {
+    return this.request<void>(`/personnel/employees/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Должности сотрудника
+  async getEmployeePositions(employeeId: number): Promise<PositionRecord[]> {
+    return this.request<PositionRecord[]>(`/personnel/employees/${employeeId}/positions/`);
+  }
+
+  async createPositionRecord(employeeId: number, data: CreatePositionRecordData): Promise<PositionRecord> {
+    return this.request<PositionRecord>(`/personnel/employees/${employeeId}/positions/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePositionRecord(id: number, data: Partial<CreatePositionRecordData>): Promise<PositionRecord> {
+    return this.request<PositionRecord>(`/personnel/position-records/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePositionRecord(id: number): Promise<void> {
+    return this.request<void>(`/personnel/position-records/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // История оклада
+  async getEmployeeSalaryHistory(employeeId: number): Promise<SalaryHistoryRecord[]> {
+    return this.request<SalaryHistoryRecord[]>(`/personnel/employees/${employeeId}/salary-history/`);
+  }
+
+  async createSalaryRecord(employeeId: number, data: CreateSalaryRecordData): Promise<SalaryHistoryRecord> {
+    return this.request<SalaryHistoryRecord>(`/personnel/employees/${employeeId}/salary-history/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSalaryRecord(id: number): Promise<void> {
+    return this.request<void>(`/personnel/salary-history/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Оргсхема
+  async getOrgChart(legalEntityId?: number): Promise<OrgChartData> {
+    const qs = legalEntityId ? `?legal_entity=${legalEntityId}` : '';
+    return this.request<OrgChartData>(`/personnel/org-chart/${qs}`);
+  }
+
+  // Создание контрагента из сотрудника
+  async createCounterpartyFromEmployee(employeeId: number): Promise<{ id: number; name: string; message: string }> {
+    return this.request<{ id: number; name: string; message: string }>(
+      `/personnel/employees/${employeeId}/create-counterparty/`,
+      { method: 'POST' }
+    );
+  }
 }
 
 // Types
@@ -2356,7 +2454,7 @@ export interface Counterparty {
   inn: string;
   kpp?: string;
   ogrn?: string;
-  type: 'customer' | 'vendor' | 'both';
+  type: 'customer' | 'vendor' | 'both' | 'employee';
   vendor_subtype?: 'supplier' | 'executor' | 'both' | null;
   vendor_subtype_display?: string;
   legal_form?: string;
@@ -2395,7 +2493,7 @@ export interface CreateCounterpartyData {
   inn: string;
   kpp?: string;
   ogrn?: string;
-  type: 'customer' | 'vendor' | 'both';
+  type: 'customer' | 'vendor' | 'both' | 'employee';
   vendor_subtype?: 'supplier' | 'executor' | 'both' | null;
   legal_form: string;
   address?: string;
@@ -3770,6 +3868,153 @@ export interface FNSEnrichResponse {
   capital: string;
   contact_info: string;
   error?: string;
+}
+
+// =====================================================================
+// PERSONNEL TYPES (Персонал)
+// =====================================================================
+
+export const ERP_SECTIONS = [
+  { code: 'objects', label: 'Объекты' },
+  { code: 'payments', label: 'Платежи' },
+  { code: 'projects', label: 'Проекты и Сметы' },
+  { code: 'proposals', label: 'Предложения' },
+  { code: 'contracts', label: 'Договоры' },
+  { code: 'catalog', label: 'Каталог' },
+  { code: 'communications', label: 'Переписка' },
+  { code: 'settings', label: 'Настройки' },
+] as const;
+
+export type ERPPermissionLevel = 'none' | 'read' | 'edit';
+export type ERPPermissions = Record<string, ERPPermissionLevel>;
+
+export interface EmployeeBrief {
+  id: number;
+  full_name: string;
+  current_position: string;
+}
+
+export interface PositionRecord {
+  id: number;
+  employee: number;
+  legal_entity: number;
+  legal_entity_name: string;
+  position_title: string;
+  start_date: string;
+  end_date: string | null;
+  is_current: boolean;
+  order_number: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalaryHistoryRecord {
+  id: number;
+  employee: number;
+  salary_full: string;
+  salary_official: string;
+  effective_date: string;
+  reason: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Employee {
+  id: number;
+  full_name: string;
+  date_of_birth: string | null;
+  gender: 'M' | 'F' | '';
+  current_position: string;
+  hire_date: string | null;
+  salary_full: string;
+  salary_official: string;
+  is_active: boolean;
+  current_legal_entities: Array<{
+    id: number;
+    short_name: string;
+    position_title: string;
+  }>;
+  supervisors_brief: EmployeeBrief[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeDetail extends Employee {
+  responsibilities: string;
+  bank_name: string;
+  bank_bik: string;
+  bank_corr_account: string;
+  bank_account: string;
+  bank_card_number: string;
+  user: number | null;
+  user_username: string | null;
+  counterparty: number | null;
+  counterparty_name: string | null;
+  subordinates_brief: EmployeeBrief[];
+  erp_permissions: ERPPermissions;
+  positions: PositionRecord[];
+  salary_history: SalaryHistoryRecord[];
+}
+
+export interface CreateEmployeeData {
+  full_name: string;
+  date_of_birth?: string | null;
+  gender?: 'M' | 'F' | '';
+  current_position?: string;
+  hire_date?: string | null;
+  salary_full?: number;
+  salary_official?: number;
+  responsibilities?: string;
+  bank_name?: string;
+  bank_bik?: string;
+  bank_corr_account?: string;
+  bank_account?: string;
+  bank_card_number?: string;
+  user?: number | null;
+  counterparty?: number | null;
+  supervisor_ids?: number[];
+  erp_permissions?: ERPPermissions;
+  is_active?: boolean;
+}
+
+export interface CreatePositionRecordData {
+  legal_entity: number;
+  position_title: string;
+  start_date: string;
+  end_date?: string | null;
+  is_current?: boolean;
+  order_number?: string;
+  notes?: string;
+}
+
+export interface CreateSalaryRecordData {
+  salary_full: number;
+  salary_official: number;
+  effective_date: string;
+  reason?: string;
+}
+
+export interface OrgChartNode {
+  id: number;
+  full_name: string;
+  current_position: string;
+  is_active: boolean;
+  legal_entities: Array<{
+    id: number;
+    short_name: string;
+    position_title: string;
+  }>;
+}
+
+export interface OrgChartEdge {
+  source: number;
+  target: number;
+}
+
+export interface OrgChartData {
+  nodes: OrgChartNode[];
+  edges: OrgChartEdge[];
 }
 
 export const api = new ApiClient();

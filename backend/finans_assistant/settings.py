@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'proposals',
     'worklog',
     'fns',
+    'personnel',
 ]
 
 MIDDLEWARE = [
