@@ -38,6 +38,7 @@ import {
   Hash,
   ChevronDown,
   ChevronUp,
+  StickyNote,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -107,8 +108,8 @@ export function CounterpartyDetail() {
             <TabsTrigger value="fns-check">
               <ShieldCheck className="w-4 h-4 mr-1.5" /> Проверка ФНС
             </TabsTrigger>
-            <TabsTrigger value="fns-bo">
-              <BarChart3 className="w-4 h-4 mr-1.5" /> Бух. отчетность
+            <TabsTrigger value="notes">
+              <StickyNote className="w-4 h-4 mr-1.5" /> Заметки
             </TabsTrigger>
             <TabsTrigger value="contracts">
               <ScrollText className="w-4 h-4 mr-1.5" /> Договоры
@@ -123,8 +124,8 @@ export function CounterpartyDetail() {
             <FNSCheckTab counterpartyId={counterpartyId} inn={counterparty.inn} />
           </TabsContent>
 
-          <TabsContent value="fns-bo">
-            <FNSFinanceTab counterpartyId={counterpartyId} inn={counterparty.inn} />
+          <TabsContent value="notes">
+            <NotesTab counterparty={counterparty} />
           </TabsContent>
 
           <TabsContent value="contracts">
@@ -359,6 +360,7 @@ function FNSCheckTab({ counterpartyId, inn }: { counterpartyId: number; inn: str
 
   const checkReports = (reports || []).filter((r) => r.report_type === 'check');
   const egrReports = (reports || []).filter((r) => r.report_type === 'egr');
+  const boReports = (reports || []).filter((r) => r.report_type === 'bo');
 
   return (
     <div className="space-y-6">
@@ -421,6 +423,39 @@ function FNSCheckTab({ counterpartyId, inn }: { counterpartyId: number; inn: str
           {egrReports.map((report) => (
             <EgrReportCard key={report.id} report={report} onViewDetail={() => setSelectedReportId(report.id)} />
           ))}
+        </div>
+      )}
+
+      {/* Результаты bo — Бухгалтерская отчетность */}
+      {boReports.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-green-500" /> Бухгалтерская отчетность
+          </h3>
+          <div className="space-y-2">
+            {boReports.map((report) => (
+              <div
+                key={report.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setSelectedReportId(report.id)}
+                tabIndex={0}
+                role="button"
+                aria-label="Открыть бухгалтерскую отчетность"
+                onKeyDown={(e) => { if (e.key === 'Enter') setSelectedReportId(report.id); }}
+              >
+                <div className="flex items-center gap-3">
+                  <BarChart3 className="w-5 h-5 text-green-500" />
+                  <div>
+                    <div className="text-sm font-medium">Бухгалтерская отчетность</div>
+                    <div className="text-xs text-gray-500">{new Date(report.report_date).toLocaleString('ru-RU')}</div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" className="text-xs" onClick={(e) => { e.stopPropagation(); setSelectedReportId(report.id); }}>
+                  Просмотреть
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -756,100 +791,57 @@ function FNSStatsBadge({ stats }: { stats: FNSStats }) {
   );
 }
 
-// ─── Вкладка "Бух. отчетность" ─────────────────────────────────
+// ─── Вкладка "Заметки" ──────────────────────────────────────────
 
-function FNSFinanceTab({ counterpartyId, inn }: { counterpartyId: number; inn: string }) {
+function NotesTab({ counterparty }: { counterparty: Counterparty }) {
   const queryClient = useQueryClient();
+  const [notes, setNotes] = useState(counterparty.notes || '');
+  const hasChanges = notes !== (counterparty.notes || '');
 
-  const { data: reports, isLoading } = useQuery({
-    queryKey: ['fns-reports-bo', counterpartyId],
-    queryFn: () => api.fnsGetReports({ counterparty: counterpartyId, report_type: 'bo' }),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () => api.fnsCreateReports(counterpartyId, ['bo']),
+  const saveMutation = useMutation({
+    mutationFn: (data: { notes: string }) =>
+      api.updateCounterparty(counterparty.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fns-reports-bo', counterpartyId] });
-      queryClient.invalidateQueries({ queryKey: ['fns-reports', counterpartyId] });
-      queryClient.invalidateQueries({ queryKey: ['fns-stats'] });
-      toast.success('Бухгалтерская отчетность загружена');
+      queryClient.invalidateQueries({ queryKey: ['counterparty', counterparty.id] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      toast.success('Заметки сохранены');
     },
     onError: (e: any) => toast.error(`Ошибка: ${e?.message}`),
   });
 
-  const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
-
-  const { data: reportDetail, isLoading: detailLoading } = useQuery({
-    queryKey: ['fns-report', selectedReportId],
-    queryFn: () => api.fnsGetReport(selectedReportId!),
-    enabled: !!selectedReportId,
-  });
-
-  const latestReport = reports?.[0];
+  const handleSave = () => {
+    saveMutation.mutate({ notes });
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Бухгалтерская отчетность</h3>
-          <Button
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending}
-            variant="outline"
-            size="sm"
-          >
-            {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-            Загрузить из ФНС
-          </Button>
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Загрузка...</div>
-        ) : !reports || reports.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            Бухгалтерская отчетность ещё не загружена. Нажмите «Загрузить из ФНС».
-            <br />
-            <span className="text-xs text-gray-400">Доступна только для юридических лиц (ООО, АО и т.д.)</span>
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {reports.map((report) => (
-              <div
-                key={report.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer"
-                onClick={() => setSelectedReportId(report.id)}
-                tabIndex={0}
-                role="button"
-                aria-label="Открыть бухгалтерскую отчетность"
-                onKeyDown={(e) => { if (e.key === 'Enter') setSelectedReportId(report.id); }}
-              >
-                <div className="flex items-center gap-3">
-                  <BarChart3 className="w-5 h-5 text-green-500" />
-                  <div>
-                    <div className="text-sm font-medium">Бухгалтерская отчетность</div>
-                    <div className="text-xs text-gray-500">{new Date(report.report_date).toLocaleString('ru-RU')}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+    <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <StickyNote className="w-5 h-5 text-amber-500" /> Заметки
+        </h3>
+        <Button
+          onClick={handleSave}
+          disabled={!hasChanges || saveMutation.isPending}
+          size="sm"
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          {saveMutation.isPending ? (
+            <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Сохранение...</>
+          ) : (
+            <><Save className="w-4 h-4 mr-1" /> Сохранить</>
+          )}
+        </Button>
       </div>
-
-      {/* Модальное окно */}
-      <Dialog open={!!selectedReportId} onOpenChange={(open) => { if (!open) setSelectedReportId(null); }}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Бухгалтерская отчетность</DialogTitle>
-            <DialogDescription>ИНН: {inn}</DialogDescription>
-          </DialogHeader>
-          {detailLoading ? (
-            <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
-          ) : reportDetail ? (
-            <ReportDetailView report={reportDetail} />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <Textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Добавьте заметки о контрагенте..."
+        rows={10}
+        className="resize-y"
+      />
+      {hasChanges && (
+        <p className="text-xs text-amber-600 mt-2">Есть несохраненные изменения</p>
+      )}
     </div>
   );
 }

@@ -2362,6 +2362,7 @@ export interface Counterparty {
   legal_form?: string;
   address?: string;
   contact_info?: string;
+  notes?: string;
   is_active?: boolean;
   created_at?: string;
 }
