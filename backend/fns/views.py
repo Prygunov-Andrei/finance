@@ -204,7 +204,7 @@ class FNSReportCreateView(APIView):
 
         return Response(
             response_data,
-            status=status.HTTP_201_CREATED if created_reports else status.HTTP_502_BAD_GATEWAY,
+            status=status.HTTP_201_CREATED if created_reports else status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
 
@@ -276,7 +276,7 @@ class FNSStatsView(APIView):
             logger.error(f"FNS stats error: {e}")
             return Response(
                 {'error': str(e), 'is_configured': True},
-                status=status.HTTP_502_BAD_GATEWAY,
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
 
@@ -320,7 +320,7 @@ class FNSQuickCheckView(APIView):
             logger.error(f"FNS quick-check error ({inn}): {e}")
             return Response(
                 {'error': str(e)},
-                status=status.HTTP_502_BAD_GATEWAY,
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
             logger.exception(f"FNS quick-check unexpected error ({inn}): {e}")

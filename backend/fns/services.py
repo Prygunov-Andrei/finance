@@ -121,7 +121,12 @@ class FNSClient:
             logger.error(f"FNS API timeout: {endpoint} params={params}")
             raise FNSClientError(f"Таймаут запроса к API-FNS ({endpoint})")
         except httpx.HTTPStatusError as e:
-            logger.error(f"FNS API HTTP error: {e.response.status_code} {endpoint}")
+            body = e.response.text[:500]
+            logger.error(f"FNS API HTTP {e.response.status_code} {endpoint}: {body}")
+            if e.response.status_code == 403:
+                raise FNSClientError(
+                    "API-FNS: доступ запрещён (IP-адрес не разрешён или ключ невалиден)"
+                )
             raise FNSClientError(f"Ошибка API-FNS: HTTP {e.response.status_code}")
         except httpx.RequestError as e:
             logger.error(f"FNS API request error: {e}")
