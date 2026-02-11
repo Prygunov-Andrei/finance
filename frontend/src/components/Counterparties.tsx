@@ -567,6 +567,7 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
           </TabsTrigger>
         </TabsList>
 
+        <div className="min-h-[520px]">
         {/* ═══ Вкладка 1: Реквизиты ═══ */}
         <TabsContent value="requisites" className="space-y-4 mt-0">
           {/* ИНН с автозаполнением */}
@@ -822,6 +823,7 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
             />
           </div>
         </TabsContent>
+        </div>
       </Tabs>
 
       {/* Кнопка создания — всегда видна */}
