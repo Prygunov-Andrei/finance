@@ -20,6 +20,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     """CRUD для сотрудников + вложенные действия."""
 
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None  # Отключаем пагинацию — сотрудников обычно немного
 
     def get_queryset(self):
         qs = Employee.objects.prefetch_related(
@@ -146,6 +147,7 @@ class OrgChartView(viewsets.ViewSet):
     """Данные для визуализации оргструктуры."""
 
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def list(self, request):
         employees = Employee.objects.filter(is_active=True).prefetch_related(
@@ -203,6 +205,7 @@ class PositionRecordViewSet(viewsets.ModelViewSet):
 
     serializer_class = PositionRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return PositionRecord.objects.select_related(
@@ -215,6 +218,7 @@ class SalaryHistoryViewSet(viewsets.ModelViewSet):
 
     serializer_class = SalaryHistorySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return SalaryHistory.objects.select_related('employee').order_by('-effective_date')

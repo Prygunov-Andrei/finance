@@ -2307,7 +2307,13 @@ class ApiClient {
     if (params?.legal_entity) qp.append('legal_entity', params.legal_entity.toString());
     if (params?.is_active !== undefined) qp.append('is_active', params.is_active.toString());
     const qs = qp.toString();
-    return this.request<Employee[]>(`/personnel/employees/${qs ? `?${qs}` : ''}`);
+    const response = await this.request<PaginatedResponse<Employee> | Employee[]>(
+      `/personnel/employees/${qs ? `?${qs}` : ''}`
+    );
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    return response as Employee[];
   }
 
   async getEmployee(id: number): Promise<EmployeeDetail> {
