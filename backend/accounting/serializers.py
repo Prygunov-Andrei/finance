@@ -58,7 +58,7 @@ class CounterpartySerializer(serializers.ModelSerializer):
         model = Counterparty
         fields = [
             'id', 'name', 'short_name', 'type', 'vendor_subtype', 'vendor_subtype_display', 
-            'legal_form', 'inn', 'kpp', 'ogrn', 'contact_info', 'is_active', 'created_at'
+            'legal_form', 'inn', 'kpp', 'ogrn', 'address', 'contact_info', 'is_active', 'created_at'
         ]
         read_only_fields = ['id', 'vendor_subtype_display', 'created_at']
     

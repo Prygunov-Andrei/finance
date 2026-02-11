@@ -313,6 +313,11 @@ class Counterparty(TimestampedModel):
         blank=True,
         verbose_name='ОГРН / ОГРНИП'
     )
+    address = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='Юридический адрес',
+    )
     contact_info = models.TextField(
         blank=True,
         verbose_name='Контактная информация',

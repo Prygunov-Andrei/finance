@@ -311,6 +311,50 @@ class ApiClient {
     });
   }
 
+  // ─── API-FNS ────────────────────────────────────────────────────
+
+  async fnsSuggest(query: string): Promise<FNSSuggestResponse> {
+    return this.request<FNSSuggestResponse>(`/fns/suggest/?q=${encodeURIComponent(query)}`);
+  }
+
+  async fnsCreateReports(counterpartyId: number, reportTypes: string[]): Promise<FNSReportCreateResponse> {
+    return this.request<FNSReportCreateResponse>('/fns/reports/', {
+      method: 'POST',
+      body: JSON.stringify({
+        counterparty_id: counterpartyId,
+        report_types: reportTypes,
+      }),
+    });
+  }
+
+  async fnsGetReports(params?: { counterparty?: number; report_type?: string }): Promise<FNSReportListItem[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.counterparty) queryParams.append('counterparty', String(params.counterparty));
+    if (params?.report_type) queryParams.append('report_type', params.report_type);
+    const queryString = queryParams.toString();
+    const endpoint = `/fns/reports/list/${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<PaginatedResponse<FNSReportListItem> | FNSReportListItem[]>(endpoint);
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    return response as FNSReportListItem[];
+  }
+
+  async fnsGetReport(id: number): Promise<FNSReport> {
+    return this.request<FNSReport>(`/fns/reports/${id}/`);
+  }
+
+  async fnsGetStats(): Promise<FNSStats> {
+    return this.request<FNSStats>('/fns/stats/');
+  }
+
+  async fnsQuickCheck(inn: string): Promise<FNSQuickCheckResponse> {
+    return this.request<FNSQuickCheckResponse>('/fns/quick-check/', {
+      method: 'POST',
+      body: JSON.stringify({ inn }),
+    });
+  }
+
   // Construction Objects
   async getConstructionObjects(filters?: { status?: string; search?: string }) {
     const queryParams = new URLSearchParams();
@@ -2312,6 +2356,7 @@ export interface Counterparty {
   vendor_subtype?: 'supplier' | 'executor' | 'both' | null;
   vendor_subtype_display?: string;
   legal_form?: string;
+  address?: string;
   contact_info?: string;
   is_active?: boolean;
   created_at?: string;
@@ -2348,6 +2393,7 @@ export interface CreateCounterpartyData {
   type: 'customer' | 'vendor' | 'both';
   vendor_subtype?: 'supplier' | 'executor' | 'both' | null;
   legal_form: string;
+  address?: string;
   contact_info?: string;
 }
 
@@ -3614,6 +3660,92 @@ export interface InviteToken {
   bot_link: string;
   is_valid: boolean;
   created_at: string;
+}
+
+// ─── API-FNS Types ──────────────────────────────────────────────
+
+export interface FNSSuggestResult {
+  inn: string;
+  name: string;
+  short_name: string;
+  kpp: string;
+  ogrn: string;
+  address: string;
+  legal_form: string;
+  status: string;
+  registration_date: string;
+  is_local: boolean;
+  local_id: number | null;
+}
+
+export interface FNSSuggestResponse {
+  source: 'local' | 'fns' | 'mixed';
+  results: FNSSuggestResult[];
+  total: number;
+  error?: string;
+}
+
+export interface FNSReport {
+  id: number;
+  counterparty: number;
+  counterparty_name: string;
+  report_type: 'check' | 'egr' | 'bo';
+  report_type_display: string;
+  inn: string;
+  report_date: string;
+  data: Record<string, unknown>;
+  summary: Record<string, unknown> | null;
+  requested_by: number | null;
+  requested_by_username: string | null;
+  created_at: string;
+}
+
+export interface FNSReportListItem {
+  id: number;
+  counterparty: number;
+  counterparty_name: string;
+  report_type: 'check' | 'egr' | 'bo';
+  report_type_display: string;
+  inn: string;
+  report_date: string;
+  summary: Record<string, unknown> | null;
+  requested_by_username: string | null;
+  created_at: string;
+}
+
+export interface FNSReportCreateResponse {
+  reports: FNSReport[];
+  created_count: number;
+  errors?: Array<{ report_type: string; error: string }>;
+}
+
+export interface FNSStatsMethod {
+  name: string;
+  display_name: string;
+  limit: number;
+  used: number;
+  remaining: number;
+}
+
+export interface FNSStats {
+  is_configured: boolean;
+  status: string;
+  start_date: string;
+  end_date: string;
+  methods: FNSStatsMethod[];
+  error?: string;
+}
+
+export interface FNSQuickCheckResponse {
+  inn: string;
+  summary: {
+    positive: string[];
+    negative: string[];
+    positive_count: number;
+    negative_count: number;
+    risk_level: 'low' | 'medium' | 'high' | 'unknown';
+  };
+  raw_data: Record<string, unknown>;
 }
 
 export const api = new ApiClient();

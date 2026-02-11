@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, Counterparty, CreateCounterpartyData } from '../lib/api';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
+import { api, Counterparty, CreateCounterpartyData, FNSSuggestResult, FNSQuickCheckResponse } from '../lib/api';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
@@ -9,7 +10,7 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Plus, Loader2, Users, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Users, MoreVertical, Pencil, Trash2, Search, Database, Globe, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCounterparties } from '../hooks';
 
@@ -21,10 +22,9 @@ export function Counterparties() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCounterparty, setEditingCounterparty] = useState<Counterparty | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: counterpartiesData, isLoading, error } = useCounterparties();
-
-  // Извлекаем массив из ответа API (может быть массив или объект с results)
   const counterparties = counterpartiesData || [];
 
   const createMutation = useMutation({
@@ -49,8 +49,7 @@ export function Counterparties() {
       toast.success('Контрагент успешно обновлен');
     },
     onError: (error: any) => {
-      const errorMessage = error?.message || 'Неизвестная ошибка';
-      toast.error(`Ошибка обновления контрагента: ${errorMessage}`);
+      toast.error(`Ошибка обновления контрагента: ${error?.message || 'Неизвестная ошибка'}`);
     },
   });
 
@@ -61,8 +60,7 @@ export function Counterparties() {
       toast.success('Контрагент успешно удален');
     },
     onError: (error: any) => {
-      const errorMessage = error?.message || 'Неизвестная ошибка';
-      toast.error(`Ошибка удаления контрагента: ${errorMessage}`);
+      toast.error(`Ошибка удаления контрагента: ${error?.message || 'Неизвестная ошибка'}`);
     },
   });
 
@@ -75,6 +73,10 @@ export function Counterparties() {
     if (confirm(`Вы уверены, что хотите удалить контрагента "${counterparty.name}"?`)) {
       deleteMutation.mutate(counterparty.id);
     }
+  };
+
+  const handleRowClick = (counterparty: Counterparty) => {
+    navigate(`/counterparties/${counterparty.id}`);
   };
 
   const filteredCounterparties = counterparties?.filter((cp) => {
@@ -134,10 +136,10 @@ export function Counterparties() {
                 Добавить контрагента
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Новый контрагент</DialogTitle>
-                <DialogDescription>Введите информацию о новом контрагенте</DialogDescription>
+                <DialogDescription>Введите ИНН или название — данные заполнятся автоматически</DialogDescription>
               </DialogHeader>
               <CreateCounterpartyForm 
                 onSubmit={(data) => createMutation.mutate(data)}
@@ -172,10 +174,7 @@ export function Counterparties() {
             <p className="text-gray-500 mb-4">
               {filter === 'all' ? 'Нет контрагентов' : 'Нет контрагентов в этой категории'}
             </p>
-            <Button 
-              onClick={() => setIsDialogOpen(true)}
-              variant="outline"
-            >
+            <Button onClick={() => setIsDialogOpen(true)} variant="outline">
               <Plus className="w-4 h-4 mr-2" />
               Добавить первого контрагента
             </Button>
@@ -215,7 +214,15 @@ export function Counterparties() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredCounterparties.map((counterparty: Counterparty) => (
-                    <tr key={counterparty.id} className="hover:bg-gray-50 transition-colors cursor-pointer">
+                    <tr
+                      key={counterparty.id}
+                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => handleRowClick(counterparty)}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Открыть карточку ${counterparty.name}`}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleRowClick(counterparty); }}
+                    >
                       <td className="px-4 py-2.5">
                         <div className="text-sm text-gray-900">{counterparty.name}</div>
                         {counterparty.short_name && (
@@ -265,7 +272,7 @@ export function Counterparties() {
                           {counterparty.contact_info || '—'}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -297,7 +304,7 @@ export function Counterparties() {
 
         {/* Диалог редактирования */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Редактировать контрагента</DialogTitle>
               <DialogDescription>Измените информацию о контрагенте</DialogDescription>
@@ -316,6 +323,172 @@ export function Counterparties() {
   );
 }
 
+// ─── Хук для debounced поиска ФНС ──────────────────────────────
+
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+};
+
+// ─── Компонент подсказок ФНС ────────────────────────────────────
+
+interface FNSSuggestDropdownProps {
+  query: string;
+  onSelect: (result: FNSSuggestResult) => void;
+  isVisible: boolean;
+  onClose: () => void;
+}
+
+function FNSSuggestDropdown({ query, onSelect, isVisible, onClose }: FNSSuggestDropdownProps) {
+  const debouncedQuery = useDebounce(query, 400);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['fns-suggest', debouncedQuery],
+    queryFn: () => api.fnsSuggest(debouncedQuery),
+    enabled: isVisible && debouncedQuery.length >= 3,
+    staleTime: 60_000,
+  });
+
+  // Закрытие при клике вне
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    if (isVisible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isVisible, onClose]);
+
+  if (!isVisible || debouncedQuery.length < 3) return null;
+
+  return (
+    <div
+      ref={dropdownRef}
+      className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+    >
+      {isLoading ? (
+        <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Поиск...
+        </div>
+      ) : data?.results && data.results.length > 0 ? (
+        <>
+          <div className="px-3 py-1.5 text-xs text-gray-400 border-b bg-gray-50 flex items-center gap-1">
+            {data.source === 'local' ? (
+              <><Database className="w-3 h-3" /> Из нашей базы</>
+            ) : (
+              <><Globe className="w-3 h-3" /> Из ФНС</>
+            )}
+            <span className="ml-auto">{data.total} результат(ов)</span>
+          </div>
+          {data.results.map((result, idx) => (
+            <button
+              key={`${result.inn}-${idx}`}
+              type="button"
+              className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors border-b last:border-b-0"
+              onClick={() => {
+                onSelect(result);
+                onClose();
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">{result.name}</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <span className="font-mono">ИНН: {result.inn}</span>
+                    {result.kpp && <span className="font-mono">КПП: {result.kpp}</span>}
+                  </div>
+                  {result.address && (
+                    <div className="text-xs text-gray-400 truncate">{result.address}</div>
+                  )}
+                </div>
+                {result.is_local && (
+                  <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">
+                    В базе
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+        </>
+      ) : debouncedQuery.length >= 3 ? (
+        <div className="px-3 py-2 text-sm text-gray-500">Ничего не найдено</div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Компонент быстрой проверки ФНС ────────────────────────────
+
+interface QuickCheckResultProps {
+  data: FNSQuickCheckResponse | null;
+  isLoading: boolean;
+}
+
+function QuickCheckResult({ data, isLoading }: QuickCheckResultProps) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Проверка в ФНС...
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { summary } = data;
+  const RiskIcon = summary.risk_level === 'low' ? ShieldCheck 
+    : summary.risk_level === 'medium' ? ShieldAlert 
+    : summary.risk_level === 'high' ? ShieldX 
+    : AlertTriangle;
+
+  const riskColor = summary.risk_level === 'low' ? 'text-green-600 bg-green-50 border-green-200'
+    : summary.risk_level === 'medium' ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
+    : summary.risk_level === 'high' ? 'text-red-600 bg-red-50 border-red-200'
+    : 'text-gray-600 bg-gray-50 border-gray-200';
+
+  const riskLabel = summary.risk_level === 'low' ? 'Низкий риск'
+    : summary.risk_level === 'medium' ? 'Средний риск'
+    : summary.risk_level === 'high' ? 'Высокий риск'
+    : 'Нет данных';
+
+  return (
+    <div className={`p-3 rounded-lg border ${riskColor}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <RiskIcon className="w-4 h-4" />
+        <span className="text-sm font-medium">{riskLabel}</span>
+        <span className="text-xs ml-auto">
+          +{summary.positive_count} / -{summary.negative_count}
+        </span>
+      </div>
+      {summary.negative.length > 0 && (
+        <div className="space-y-0.5">
+          {summary.negative.slice(0, 3).map((item, i) => (
+            <div key={i} className="text-xs">- {item}</div>
+          ))}
+          {summary.negative.length > 3 && (
+            <div className="text-xs opacity-70">...и ещё {summary.negative.length - 3}</div>
+          )}
+        </div>
+      )}
+      {summary.positive.length > 0 && summary.negative.length === 0 && (
+        <div className="text-xs">Негативных факторов не обнаружено</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Форма создания контрагента ─────────────────────────────────
+
 interface CreateCounterpartyFormProps {
   onSubmit: (data: CreateCounterpartyData) => void;
   isLoading: boolean;
@@ -331,34 +504,72 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
     type: 'customer',
     vendor_subtype: null,
     legal_form: 'ooo',
+    address: '',
     contact_info: '',
   });
 
+  const [showInnSuggestions, setShowInnSuggestions] = useState(false);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [quickCheck, setQuickCheck] = useState<FNSQuickCheckResponse | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const innFieldRef = useRef<HTMLDivElement>(null);
+  const nameFieldRef = useRef<HTMLDivElement>(null);
+
+  const handleSuggestSelect = useCallback((result: FNSSuggestResult) => {
+    if (result.is_local) {
+      toast.info(`Контрагент "${result.name}" уже есть в базе`);
+    }
+    setFormData((prev) => ({
+      ...prev,
+      name: result.name || prev.name,
+      short_name: result.short_name || prev.short_name || '',
+      inn: result.inn || prev.inn,
+      kpp: result.kpp || prev.kpp || '',
+      ogrn: result.ogrn || prev.ogrn || '',
+      legal_form: result.legal_form || prev.legal_form,
+      address: result.address || prev.address || '',
+    }));
+    setShowInnSuggestions(false);
+    setShowNameSuggestions(false);
+  }, []);
+
+  const handleQuickCheck = async () => {
+    const inn = formData.inn.trim();
+    if (!inn || !inn.match(/^\d{10,12}$/)) {
+      toast.error('Укажите корректный ИНН (10 или 12 цифр)');
+      return;
+    }
+    setIsChecking(true);
+    setQuickCheck(null);
+    try {
+      const result = await api.fnsQuickCheck(inn);
+      setQuickCheck(result);
+    } catch (e: any) {
+      toast.error(`Ошибка проверки: ${e?.message || 'Неизвестная ошибка'}`);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Валидация
     if (!formData.name.trim() || !formData.inn.trim() || !formData.legal_form) {
       toast.error('Заполните обязательные поля');
       return;
     }
-
-    // Проверка корректности vendor_subtype
     if (formData.vendor_subtype && formData.type === 'customer') {
       toast.error('Подтип можно указывать только для контрагентов типа "Исполнитель-Поставщик"');
       return;
     }
-
-    // Подготовка данных для отправки
     const dataToSubmit: CreateCounterpartyData = {
       ...formData,
       short_name: formData.short_name?.trim() || undefined,
       kpp: formData.kpp?.trim() || undefined,
       ogrn: formData.ogrn?.trim() || undefined,
+      address: formData.address?.trim() || undefined,
       contact_info: formData.contact_info?.trim() || undefined,
       vendor_subtype: (formData.type === 'vendor' || formData.type === 'both') ? formData.vendor_subtype : undefined,
     };
-
     onSubmit(dataToSubmit);
   };
 
@@ -366,25 +577,89 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-      <div>
-        <Label htmlFor="name">
+      {/* ИНН с автозаполнением */}
+      <div ref={innFieldRef} className="relative">
+        <Label htmlFor="create-inn">
+          ИНН <span className="text-red-500">*</span>
+        </Label>
+        <div className="flex gap-2 mt-1.5">
+          <Input
+            id="create-inn"
+            value={formData.inn}
+            onChange={(e) => {
+              setFormData({ ...formData, inn: e.target.value });
+              if (e.target.value.length >= 3) {
+                setShowInnSuggestions(true);
+              }
+              setQuickCheck(null);
+            }}
+            onFocus={() => {
+              if (formData.inn.length >= 3) setShowInnSuggestions(true);
+            }}
+            placeholder="Введите ИНН для автозаполнения"
+            disabled={isLoading}
+            required
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleQuickCheck}
+            disabled={isLoading || isChecking || !formData.inn.trim()}
+            className="shrink-0 text-xs"
+            title="Проверить контрагента в ФНС"
+          >
+            {isChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+            <span className="ml-1">Проверить</span>
+          </Button>
+        </div>
+        <FNSSuggestDropdown
+          query={formData.inn}
+          onSelect={handleSuggestSelect}
+          isVisible={showInnSuggestions}
+          onClose={() => setShowInnSuggestions(false)}
+        />
+      </div>
+
+      {/* Результат быстрой проверки */}
+      <QuickCheckResult data={quickCheck} isLoading={isChecking} />
+
+      {/* Название с автозаполнением */}
+      <div ref={nameFieldRef} className="relative">
+        <Label htmlFor="create-name">
           Название <span className="text-red-500">*</span>
         </Label>
         <Input
-          id="name"
+          id="create-name"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="ООО Ромашка"
+          onChange={(e) => {
+            setFormData({ ...formData, name: e.target.value });
+            if (e.target.value.length >= 3 && !e.target.value.match(/^\d+$/)) {
+              setShowNameSuggestions(true);
+            }
+          }}
+          onFocus={() => {
+            if (formData.name.length >= 3 && !formData.name.match(/^\d+$/)) {
+              setShowNameSuggestions(true);
+            }
+          }}
+          placeholder="Введите название для поиска"
           disabled={isLoading}
           className="mt-1.5"
           required
         />
+        <FNSSuggestDropdown
+          query={formData.name}
+          onSelect={handleSuggestSelect}
+          isVisible={showNameSuggestions}
+          onClose={() => setShowNameSuggestions(false)}
+        />
       </div>
 
       <div>
-        <Label htmlFor="short_name">Краткое название</Label>
+        <Label htmlFor="create-short_name">Краткое название</Label>
         <Input
-          id="short_name"
+          id="create-short_name"
           value={formData.short_name}
           onChange={(e) => setFormData({ ...formData, short_name: e.target.value })}
           placeholder="Ромашка"
@@ -394,7 +669,7 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
       </div>
 
       <div>
-        <Label htmlFor="legal_form">
+        <Label htmlFor="create-legal_form">
           Правовая форма <span className="text-red-500">*</span>
         </Label>
         <Select
@@ -414,47 +689,45 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
         </Select>
       </div>
 
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="create-kpp">КПП</Label>
+          <Input
+            id="create-kpp"
+            value={formData.kpp}
+            onChange={(e) => setFormData({ ...formData, kpp: e.target.value })}
+            placeholder="123456789"
+            disabled={isLoading}
+            className="mt-1.5"
+          />
+        </div>
+        <div>
+          <Label htmlFor="create-ogrn">ОГРН</Label>
+          <Input
+            id="create-ogrn"
+            value={formData.ogrn}
+            onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })}
+            placeholder="1234567890123"
+            disabled={isLoading}
+            className="mt-1.5"
+          />
+        </div>
+      </div>
+
       <div>
-        <Label htmlFor="inn">
-          ИНН <span className="text-red-500">*</span>
-        </Label>
+        <Label htmlFor="create-address">Юридический адрес</Label>
         <Input
-          id="inn"
-          value={formData.inn}
-          onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
-          placeholder="1234567890"
+          id="create-address"
+          value={formData.address}
+          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          placeholder="Заполнится автоматически из ФНС"
           disabled={isLoading}
           className="mt-1.5"
-          required
         />
       </div>
 
       <div>
-        <Label htmlFor="kpp">КПП</Label>
-        <Input
-          id="kpp"
-          value={formData.kpp}
-          onChange={(e) => setFormData({ ...formData, kpp: e.target.value })}
-          placeholder="123456789"
-          disabled={isLoading}
-          className="mt-1.5"
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="ogrn">ОГРН</Label>
-        <Input
-          id="ogrn"
-          value={formData.ogrn}
-          onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })}
-          placeholder="1234567890123"
-          disabled={isLoading}
-          className="mt-1.5"
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="type">
+        <Label htmlFor="create-type">
           Тип <span className="text-red-500">*</span>
         </Label>
         <Select
@@ -463,7 +736,6 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
             setFormData({ 
               ...formData, 
               type: value,
-              // Сбросить vendor_subtype если выбрали "Заказчик"
               vendor_subtype: value === 'customer' ? null : formData.vendor_subtype
             });
           }}
@@ -482,14 +754,11 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
 
       {showVendorSubtype && (
         <div>
-          <Label htmlFor="vendor_subtype">Подтип</Label>
+          <Label htmlFor="create-vendor_subtype">Подтип</Label>
           <Select
             value={formData.vendor_subtype || 'null'}
             onValueChange={(value: any) => {
-              setFormData({ 
-                ...formData, 
-                vendor_subtype: value === 'null' ? null : value 
-              });
+              setFormData({ ...formData, vendor_subtype: value === 'null' ? null : value });
             }}
             disabled={isLoading}
           >
@@ -507,15 +776,15 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
       )}
 
       <div>
-        <Label htmlFor="contact_info">Контакты</Label>
+        <Label htmlFor="create-contact_info">Контакты</Label>
         <Textarea
-          id="contact_info"
+          id="create-contact_info"
           value={formData.contact_info}
           onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
-          placeholder="Email, телефон, адрес..."
+          placeholder="Email, телефон..."
           disabled={isLoading}
           className="mt-1.5"
-          rows={3}
+          rows={2}
         />
       </div>
 
@@ -535,6 +804,8 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
   );
 }
 
+// ─── Форма редактирования контрагента ───────────────────────────
+
 interface EditCounterpartyFormProps {
   counterparty: Counterparty;
   onSubmit: (data: Partial<CreateCounterpartyData>) => void;
@@ -551,34 +822,29 @@ function EditCounterpartyForm({ counterparty, onSubmit, isLoading }: EditCounter
     type: counterparty.type,
     vendor_subtype: counterparty.vendor_subtype,
     legal_form: counterparty.legal_form,
+    address: counterparty.address || '',
     contact_info: counterparty.contact_info,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Валидация
     if (!formData.name?.trim() || !formData.inn?.trim() || !formData.legal_form) {
       toast.error('Заполните обязательные поля');
       return;
     }
-
-    // Проверка корректности vendor_subtype
     if (formData.vendor_subtype && formData.type === 'customer') {
       toast.error('Подтип можно указывать только для контрагентов типа "Исполнитель-Поставщик"');
       return;
     }
-
-    // Подготовка данных для отправки
     const dataToSubmit: Partial<CreateCounterpartyData> = {
       ...formData,
       short_name: formData.short_name?.trim() || undefined,
       kpp: formData.kpp?.trim() || undefined,
       ogrn: formData.ogrn?.trim() || undefined,
+      address: formData.address?.trim() || undefined,
       contact_info: formData.contact_info?.trim() || undefined,
       vendor_subtype: (formData.type === 'vendor' || formData.type === 'both') ? formData.vendor_subtype : undefined,
     };
-
     onSubmit(dataToSubmit);
   };
 
@@ -587,44 +853,17 @@ function EditCounterpartyForm({ counterparty, onSubmit, isLoading }: EditCounter
   return (
     <form onSubmit={handleSubmit} className="space-y-4 mt-4">
       <div>
-        <Label htmlFor="name">
-          Название <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="ООО Ромашка"
-          disabled={isLoading}
-          className="mt-1.5"
-          required
-        />
+        <Label htmlFor="edit-name">Название <span className="text-red-500">*</span></Label>
+        <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} disabled={isLoading} className="mt-1.5" required />
       </div>
-
       <div>
-        <Label htmlFor="short_name">Краткое название</Label>
-        <Input
-          id="short_name"
-          value={formData.short_name}
-          onChange={(e) => setFormData({ ...formData, short_name: e.target.value })}
-          placeholder="Ромашка"
-          disabled={isLoading}
-          className="mt-1.5"
-        />
+        <Label htmlFor="edit-short_name">Краткое название</Label>
+        <Input id="edit-short_name" value={formData.short_name} onChange={(e) => setFormData({ ...formData, short_name: e.target.value })} disabled={isLoading} className="mt-1.5" />
       </div>
-
       <div>
-        <Label htmlFor="legal_form">
-          Правовая форма <span className="text-red-500">*</span>
-        </Label>
-        <Select
-          value={formData.legal_form}
-          onValueChange={(value: any) => setFormData({ ...formData, legal_form: value })}
-          disabled={isLoading}
-        >
-          <SelectTrigger className="mt-1.5">
-            <SelectValue />
-          </SelectTrigger>
+        <Label htmlFor="edit-legal_form">Правовая форма <span className="text-red-500">*</span></Label>
+        <Select value={formData.legal_form} onValueChange={(value: any) => setFormData({ ...formData, legal_form: value })} disabled={isLoading}>
+          <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ooo">ООО</SelectItem>
             <SelectItem value="ip">ИП</SelectItem>
@@ -633,65 +872,28 @@ function EditCounterpartyForm({ counterparty, onSubmit, isLoading }: EditCounter
           </SelectContent>
         </Select>
       </div>
-
       <div>
-        <Label htmlFor="inn">
-          ИНН <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="inn"
-          value={formData.inn}
-          onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
-          placeholder="1234567890"
-          disabled={isLoading}
-          className="mt-1.5"
-          required
-        />
+        <Label htmlFor="edit-inn">ИНН <span className="text-red-500">*</span></Label>
+        <Input id="edit-inn" value={formData.inn} onChange={(e) => setFormData({ ...formData, inn: e.target.value })} disabled={isLoading} className="mt-1.5" required />
       </div>
-
-      <div>
-        <Label htmlFor="kpp">КПП</Label>
-        <Input
-          id="kpp"
-          value={formData.kpp}
-          onChange={(e) => setFormData({ ...formData, kpp: e.target.value })}
-          placeholder="123456789"
-          disabled={isLoading}
-          className="mt-1.5"
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="edit-kpp">КПП</Label>
+          <Input id="edit-kpp" value={formData.kpp} onChange={(e) => setFormData({ ...formData, kpp: e.target.value })} disabled={isLoading} className="mt-1.5" />
+        </div>
+        <div>
+          <Label htmlFor="edit-ogrn">ОГРН</Label>
+          <Input id="edit-ogrn" value={formData.ogrn} onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })} disabled={isLoading} className="mt-1.5" />
+        </div>
       </div>
-
       <div>
-        <Label htmlFor="ogrn">ОГРН</Label>
-        <Input
-          id="ogrn"
-          value={formData.ogrn}
-          onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })}
-          placeholder="1234567890123"
-          disabled={isLoading}
-          className="mt-1.5"
-        />
+        <Label htmlFor="edit-address">Юридический адрес</Label>
+        <Input id="edit-address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} disabled={isLoading} className="mt-1.5" />
       </div>
-
       <div>
-        <Label htmlFor="type">
-          Тип <span className="text-red-500">*</span>
-        </Label>
-        <Select
-          value={formData.type}
-          onValueChange={(value: any) => {
-            setFormData({ 
-              ...formData, 
-              type: value,
-              // Сбросить vendor_subtype если выбрали "Заказчик"
-              vendor_subtype: value === 'customer' ? null : formData.vendor_subtype
-            });
-          }}
-          disabled={isLoading}
-        >
-          <SelectTrigger className="mt-1.5">
-            <SelectValue />
-          </SelectTrigger>
+        <Label htmlFor="edit-type">Тип <span className="text-red-500">*</span></Label>
+        <Select value={formData.type} onValueChange={(value: any) => { setFormData({ ...formData, type: value, vendor_subtype: value === 'customer' ? null : formData.vendor_subtype }); }} disabled={isLoading}>
+          <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="customer">Заказчик</SelectItem>
             <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
@@ -699,23 +901,11 @@ function EditCounterpartyForm({ counterparty, onSubmit, isLoading }: EditCounter
           </SelectContent>
         </Select>
       </div>
-
       {showVendorSubtype && (
         <div>
-          <Label htmlFor="vendor_subtype">Подтип</Label>
-          <Select
-            value={formData.vendor_subtype || 'null'}
-            onValueChange={(value: any) => {
-              setFormData({ 
-                ...formData, 
-                vendor_subtype: value === 'null' ? null : value 
-              });
-            }}
-            disabled={isLoading}
-          >
-            <SelectTrigger className="mt-1.5">
-              <SelectValue />
-            </SelectTrigger>
+          <Label htmlFor="edit-vendor_subtype">Подтип</Label>
+          <Select value={formData.vendor_subtype || 'null'} onValueChange={(value: any) => { setFormData({ ...formData, vendor_subtype: value === 'null' ? null : value }); }} disabled={isLoading}>
+            <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="null">Не указано</SelectItem>
               <SelectItem value="supplier">Поставщик</SelectItem>
@@ -725,30 +915,13 @@ function EditCounterpartyForm({ counterparty, onSubmit, isLoading }: EditCounter
           </Select>
         </div>
       )}
-
       <div>
-        <Label htmlFor="contact_info">Контакты</Label>
-        <Textarea
-          id="contact_info"
-          value={formData.contact_info}
-          onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
-          placeholder="Email, телефон, адрес..."
-          disabled={isLoading}
-          className="mt-1.5"
-          rows={3}
-        />
+        <Label htmlFor="edit-contact_info">Контакты</Label>
+        <Textarea id="edit-contact_info" value={formData.contact_info} onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })} disabled={isLoading} className="mt-1.5" rows={2} />
       </div>
-
       <div className="flex gap-3 pt-4">
         <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
-          {isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Обновление...
-            </>
-          ) : (
-            'Обновить'
-          )}
+          {isLoading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Обновление...</>) : 'Обновить'}
         </Button>
       </div>
     </form>

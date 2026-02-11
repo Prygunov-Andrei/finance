@@ -7,6 +7,7 @@ import { Layout } from './components/Layout';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { Counterparties } from './components/Counterparties';
+import { CounterpartyDetail } from './components/CounterpartyDetail';
 import { ConstructionObjects } from './components/ConstructionObjects';
 import { ObjectDetail } from './components/ObjectDetail';
 import { ContractsList } from './components/contracts/ContractsList';
@@ -191,6 +192,13 @@ export default function App() {
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
                 <Counterparties />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/counterparties/:id" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <CounterpartyDetail />
               </Layout>
             </ProtectedRoute>
           } />

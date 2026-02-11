@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'estimates',
     'proposals',
     'worklog',
+    'fns',
 ]
 
 MIDDLEWARE = [
@@ -329,6 +330,11 @@ TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 # ElevenLabs Configuration (транскрибация голосовых — Scribe v2)
 # =============================================================================
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
+
+# =============================================================================
+# API-FNS Configuration (проверка контрагентов)
+# =============================================================================
+FNS_API_KEY = os.environ.get('FNS_API_KEY', '')
 
 # =============================================================================
 # Sentry Configuration (мониторинг ошибок)

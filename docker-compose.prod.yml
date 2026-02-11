@@ -117,6 +117,7 @@ services:
     environment:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY}
+      - PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN:-}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME}
@@ -131,6 +132,7 @@ services:
       - WORKLOG_S3_BUCKET_NAME=worklog-media
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - FNS_API_KEY=${FNS_API_KEY:-}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
     volumes:
@@ -189,6 +191,7 @@ services:
       - WORKLOG_S3_BUCKET_NAME=worklog-media
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - FNS_API_KEY=${FNS_API_KEY:-}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
     volumes:
@@ -258,6 +261,7 @@ services:
     build:
       context: ./bot
       dockerfile: Dockerfile
+    command: ["python", "main.py", "--webhook"]
     # PRODUCTION: Порты пробрасываются для nginx на хосте
     ports:
       - "127.0.0.1:8081:8081"
