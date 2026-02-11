@@ -489,6 +489,7 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
           ogrn: enriched.ogrn || prev.ogrn || '',
           legal_form: enriched.legal_form || prev.legal_form,
           address: enriched.address || prev.address || '',
+          contact_info: enriched.contact_info || prev.contact_info || '',
         }));
         toast.success('Реквизиты загружены из ЕГРЮЛ/ЕГРИП');
       } catch {

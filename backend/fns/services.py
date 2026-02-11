@@ -239,18 +239,119 @@ class FNSClient:
 
     # ─── Утилиты ─────────────────────────────────────────────────────
 
+    # Маппинг кодов ОКОПФ на правовые формы в нашей системе
+    OKOPF_MAP = {
+        '12300': 'ooo',   # Общества с ограниченной ответственностью
+        '12200': 'ooo',   # Акционерные общества (ближайший аналог)
+        '12247': 'ooo',   # Непубличные АО
+        '12267': 'ooo',   # Публичные АО
+        '50102': 'ip',    # Индивидуальные предприниматели
+        '50000': 'ip',    # Физлица, осуществляющие деятельность
+        '91200': 'fiz',   # Физические лица
+    }
+
+    @staticmethod
+    def _detect_legal_form(
+        item: dict,
+        inn: str,
+        full_name: str,
+        okopf_code: str = '',
+        okopf_name: str = '',
+    ) -> str:
+        """
+        Определяет правовую форму контрагента по данным ФНС.
+
+        Приоритет:
+        1. КодОКОПФ (если есть в маппинге)
+        2. Текст ОКОПФ (по ключевым словам)
+        3. Ключ ИП в item
+        4. Длина ИНН (12 = ИП/физлицо)
+        5. Полное наименование (по ключевым словам)
+        6. Fallback: 'ooo'
+        """
+        # 1. По коду ОКОПФ
+        if okopf_code and okopf_code in FNSClient.OKOPF_MAP:
+            return FNSClient.OKOPF_MAP[okopf_code]
+
+        # 2. По тексту ОКОПФ
+        if okopf_name:
+            okopf_lower = okopf_name.lower()
+            if 'индивидуальн' in okopf_lower:
+                return 'ip'
+            if 'ограниченной ответственностью' in okopf_lower:
+                return 'ooo'
+
+        # 3. Ключ ИП в item (EGR: {"ИП": {...}})
+        if 'ИП' in item:
+            return 'ip'
+
+        # 4. Длина ИНН
+        if len(inn) == 12:
+            return 'ip'
+
+        # 5. По полному наименованию
+        if full_name:
+            name_lower = full_name.lower()
+            if 'индивидуальный предприниматель' in name_lower:
+                return 'ip'
+
+        return 'ooo'
+
+    @staticmethod
+    def _extract_contacts(contacts_data) -> str:
+        """
+        Извлекает контактную информацию из данных ФНС.
+
+        API-FNS возвращает: {"Телефон": [...], "e-mail": [...], "Сайт": [...]}
+        Формирует строку вида: "Тел: +7..., +7... | Email: a@b.c | Сайт: site.ru"
+        """
+        if not isinstance(contacts_data, dict):
+            return ''
+
+        parts = []
+
+        phones = contacts_data.get('Телефон', [])
+        if isinstance(phones, list) and phones:
+            parts.append(f"Тел: {', '.join(phones)}")
+        elif isinstance(phones, str) and phones:
+            parts.append(f"Тел: {phones}")
+
+        emails = contacts_data.get('e-mail', [])
+        if isinstance(emails, list) and emails:
+            parts.append(f"Email: {', '.join(emails)}")
+        elif isinstance(emails, str) and emails:
+            parts.append(f"Email: {emails}")
+
+        sites = contacts_data.get('Сайт', [])
+        if isinstance(sites, list) and sites:
+            parts.append(f"Сайт: {', '.join(sites)}")
+        elif isinstance(sites, str) and sites:
+            parts.append(f"Сайт: {sites}")
+
+        return ' | '.join(parts)
+
     @staticmethod
     def _extract_address(value) -> str:
         """
         Извлекает адрес из значения, которое может быть строкой или dict.
 
-        API-FNS может вернуть адрес как:
-        - строку "АдресПолн": "123456, г. Москва, ул. Ленина, д. 1"
-        - dict "Адрес": {"Индекс": "123456", "Регион": "Москва", ...}
+        API-FNS возвращает адрес в разных форматах:
+        - строка: "123456, г. Москва, ул. Ленина, д. 1"
+        - dict с вложенным полным адресом:
+          {"АдресПолн": "обл. Московская, ...", "Индекс": "143003", "АдресДетали": {...}}
         """
         if isinstance(value, str):
             return value
         if isinstance(value, dict):
+            # Приоритет 1: готовая строка АдресПолн внутри dict
+            full_addr = value.get('АдресПолн', '')
+            if full_addr and isinstance(full_addr, str):
+                return full_addr
+            # Приоритет 2: АдресПолнФИАС (верхний регистр)
+            fias_addr = value.get('АдресПолнФИАС', '')
+            if fias_addr and isinstance(fias_addr, str):
+                return fias_addr
+            # Приоритет 3: собрать из строковых полей верхнего уровня
             parts = []
             for key in ('Индекс', 'Регион', 'Район', 'Город', 'НаселПункт',
                         'Улица', 'Дом', 'Корпус', 'Кварт'):
@@ -308,16 +409,15 @@ class FNSClient:
         # Уставный капитал
         capital = data.get('УставКап', '')
 
+        # Контактная информация
+        contact_info = FNSClient._extract_contacts(data.get('Контакты'))
+
         # Определяем правовую форму
-        legal_form = 'ooo'
-        if 'ИП' in item:
-            legal_form = 'ip'
-        elif len(inn) == 12:
-            legal_form = 'ip'
-        elif full_name:
-            name_lower = full_name.lower()
-            if 'индивидуальный предприниматель' in name_lower:
-                legal_form = 'ip'
+        legal_form = FNSClient._detect_legal_form(
+            item=item, inn=inn, full_name=full_name,
+            okopf_code=data.get('КодОКОПФ', ''),
+            okopf_name=data.get('ОКОПФ', ''),
+        )
 
         return {
             'inn': inn,
@@ -333,6 +433,7 @@ class FNSClient:
             'okved': okved,
             'okved_name': okved_name,
             'capital': str(capital) if capital else '',
+            'contact_info': contact_info,
         }
 
     @staticmethod
@@ -362,17 +463,12 @@ class FNSClient:
             status = data.get('Статус', '')
             reg_date = data.get('ДатаРег', '') or data.get('ДатаОГРН', '')
 
-            # Определяем правовую форму по ИНН и названию
-            legal_form = 'ooo'  # по умолчанию
-            if len(inn) == 12:
-                # 12-значный ИНН — ИП или физлицо
-                legal_form = 'ip'
-            elif full_name:
-                name_lower = full_name.lower()
-                if 'индивидуальный предприниматель' in name_lower:
-                    legal_form = 'ip'
-                elif 'общество с ограниченной ответственностью' in name_lower:
-                    legal_form = 'ooo'
+            # Определяем правовую форму
+            legal_form = FNSClient._detect_legal_form(
+                item=item, inn=inn, full_name=full_name,
+                okopf_code=data.get('КодОКОПФ', ''),
+                okopf_name=data.get('ОКОПФ', ''),
+            )
 
             # КПП (есть в autocomplete, может отсутствовать в search)
             kpp = data.get('КПП', '')

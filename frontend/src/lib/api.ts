@@ -3767,6 +3767,7 @@ export interface FNSEnrichResponse {
   okved: string;
   okved_name: string;
   capital: string;
+  contact_info: string;
   error?: string;
 }
 
