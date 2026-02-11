@@ -311,19 +311,25 @@ class FNSClient:
                 'risk_level': 'unknown',
             }
 
-        company_data = items[0] if items else {}
+        # API-FNS: items[0] = { "ЮЛ": {...} } или { "ИП": {...} } или { "items": [ { "ЮЛ": {...} } ] }
+        top = items[0]
+        if isinstance(top, dict) and 'items' in top:
+            inner_items = top.get('items', [])
+            top = inner_items[0] if inner_items else {}
+        # Извлекаем данные из ЮЛ или ИП
+        company_data = top.get('ЮЛ') or top.get('ИП') or top
         positive = []
         negative = []
 
         # Парсим позитивные факторы
-        pos_data = company_data.get('Позитив', {})
+        pos_data = company_data.get('Позитив', {}) if isinstance(company_data, dict) else {}
         if isinstance(pos_data, dict):
             for key, value in pos_data.items():
                 if value:
                     positive.append(f"{key}: {value}" if not isinstance(value, bool) else key)
 
         # Парсим негативные факторы
-        neg_data = company_data.get('Негатив', {})
+        neg_data = company_data.get('Негатив', {}) if isinstance(company_data, dict) else {}
         if isinstance(neg_data, dict):
             for key, value in neg_data.items():
                 if value:
@@ -362,7 +368,7 @@ class FNSClient:
         stat_data = items[0] if items else {}
 
         status = stat_data.get('Статус', 'UNKNOWN')
-        start_date = stat_data.get('ДатаНачworking', stat_data.get('ДатаНач', ''))
+        start_date = stat_data.get('ДатаНач', '')
         end_date = stat_data.get('ДатаКон', '')
 
         methods = []

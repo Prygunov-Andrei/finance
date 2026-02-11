@@ -322,3 +322,9 @@ class FNSQuickCheckView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+        except Exception as e:
+            logger.exception(f"FNS quick-check unexpected error ({inn}): {e}")
+            return Response(
+                {'error': f'Ошибка проверки: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
