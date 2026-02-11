@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     path('fns/suggest/', views.FNSSuggestView.as_view(), name='fns-suggest'),
+    path('fns/enrich/', views.FNSEnrichView.as_view(), name='fns-enrich'),
     path('fns/reports/', views.FNSReportCreateView.as_view(), name='fns-report-create'),
     path('fns/reports/list/', views.FNSReportListView.as_view(), name='fns-report-list'),
     path('fns/reports/<int:pk>/', views.FNSReportDetailView.as_view(), name='fns-report-detail'),

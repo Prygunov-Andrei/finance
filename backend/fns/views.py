@@ -118,6 +118,57 @@ class FNSSuggestView(APIView):
             })
 
 
+class FNSEnrichView(APIView):
+    """
+    GET /api/v1/fns/enrich/?inn=<inn>
+
+    Обогащение данных контрагента по ИНН через EGR (ЕГРЮЛ/ЕГРИП).
+    Возвращает полные реквизиты: КПП, адрес, директор, ОКВЭД и т.д.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        inn = request.query_params.get('inn', '').strip()
+        if not inn or not inn.isdigit() or len(inn) not in (10, 12):
+            return Response(
+                {'error': 'Укажите корректный ИНН (10 или 12 цифр)'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not settings.FNS_API_KEY:
+            return Response(
+                {'error': 'API-FNS не настроен'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            client = FNSClient()
+            raw_data = client.get_egr(inn)
+            requisites = FNSClient.parse_egr_requisites(raw_data)
+
+            if not requisites.get('inn'):
+                return Response(
+                    {'error': 'Компания не найдена в ЕГРЮЛ/ЕГРИП'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            return Response(requisites)
+
+        except FNSClientError as e:
+            logger.error(f"FNS enrich error ({inn}): {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except Exception as e:
+            logger.exception(f"FNS enrich unexpected error ({inn}): {e}")
+            return Response(
+                {'error': f'Ошибка обогащения: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class FNSReportCreateView(APIView):
     """
     POST /api/v1/fns/reports/

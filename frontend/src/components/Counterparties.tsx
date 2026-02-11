@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { api, Counterparty, CreateCounterpartyData, FNSSuggestResult, FNSQuickCheckResponse } from '../lib/api';
+import { api, Counterparty, CreateCounterpartyData, FNSSuggestResult, FNSQuickCheckResponse, FNSEnrichResponse } from '../lib/api';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
@@ -515,10 +515,13 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
   const innFieldRef = useRef<HTMLDivElement>(null);
   const nameFieldRef = useRef<HTMLDivElement>(null);
 
-  const handleSuggestSelect = useCallback((result: FNSSuggestResult) => {
+  const [isEnriching, setIsEnriching] = useState(false);
+
+  const handleSuggestSelect = useCallback(async (result: FNSSuggestResult) => {
     if (result.is_local) {
       toast.info(`Контрагент "${result.name}" уже есть в базе`);
     }
+    // Сначала заполняем данными из suggest
     setFormData((prev) => ({
       ...prev,
       name: result.name || prev.name,
@@ -531,6 +534,30 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
     }));
     setShowInnSuggestions(false);
     setShowNameSuggestions(false);
+
+    // Если есть ИНН и результат из ФНС — обогащаем через EGR для КПП, адреса и пр.
+    const inn = result.inn || '';
+    if (inn && inn.match(/^\d{10,12}$/) && !result.is_local) {
+      setIsEnriching(true);
+      try {
+        const enriched: FNSEnrichResponse = await api.fnsEnrich(inn);
+        setFormData((prev) => ({
+          ...prev,
+          name: enriched.name || prev.name,
+          short_name: enriched.short_name || prev.short_name || '',
+          inn: enriched.inn || prev.inn,
+          kpp: enriched.kpp || prev.kpp || '',
+          ogrn: enriched.ogrn || prev.ogrn || '',
+          legal_form: enriched.legal_form || prev.legal_form,
+          address: enriched.address || prev.address || '',
+        }));
+        toast.success('Реквизиты загружены из ЕГРЮЛ/ЕГРИП');
+      } catch {
+        // Тихо — данные из suggest уже заполнены
+      } finally {
+        setIsEnriching(false);
+      }
+    }
   }, []);
 
   const handleQuickCheck = async () => {
@@ -623,6 +650,14 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
 
       {/* Результат быстрой проверки */}
       <QuickCheckResult data={quickCheck} isLoading={isChecking} />
+
+      {/* Индикатор обогащения данных */}
+      {isEnriching && (
+        <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg text-sm text-blue-600">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Загрузка реквизитов из ЕГРЮЛ/ЕГРИП...
+        </div>
+      )}
 
       {/* Название с автозаполнением */}
       <div ref={nameFieldRef} className="relative">

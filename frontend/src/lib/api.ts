@@ -355,6 +355,10 @@ class ApiClient {
     });
   }
 
+  async fnsEnrich(inn: string): Promise<FNSEnrichResponse> {
+    return this.request<FNSEnrichResponse>(`/fns/enrich/?inn=${encodeURIComponent(inn)}`);
+  }
+
   // Construction Objects
   async getConstructionObjects(filters?: { status?: string; search?: string }) {
     const queryParams = new URLSearchParams();
@@ -3746,6 +3750,23 @@ export interface FNSQuickCheckResponse {
     risk_level: 'low' | 'medium' | 'high' | 'unknown';
   };
   raw_data: Record<string, unknown>;
+}
+
+export interface FNSEnrichResponse {
+  inn: string;
+  name: string;
+  short_name: string;
+  kpp: string;
+  ogrn: string;
+  address: string;
+  legal_form: string;
+  status: string;
+  registration_date: string;
+  director: string;
+  okved: string;
+  okved_name: string;
+  capital: string;
+  error?: string;
 }
 
 export const api = new ApiClient();

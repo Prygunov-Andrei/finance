@@ -240,6 +240,76 @@ class FNSClient:
     # ─── Утилиты ─────────────────────────────────────────────────────
 
     @staticmethod
+    def parse_egr_requisites(raw_data: dict) -> dict:
+        """
+        Извлекает реквизиты из EGR-ответа для предзаполнения формы.
+
+        Returns:
+            dict с ключами: inn, name, short_name, kpp, ogrn,
+            address, legal_form, director, okved, capital
+        """
+        items = raw_data.get('items', [])
+        if not items:
+            return {}
+
+        item = items[0]
+        # EGR: items[0] = { "ЮЛ": {...} } или { "ИП": {...} }
+        data = item.get('ЮЛ') or item.get('ИП') or item
+
+        inn = data.get('ИНН', '') or data.get('ИННФЛ', '')
+        ogrn = data.get('ОГРН', '') or data.get('ОГРНИП', '')
+        full_name = data.get('НаимПолнЮЛ', '') or data.get('ФИОПолн', '')
+        short_name = data.get('НаимСокрЮЛ', '')
+        kpp = data.get('КПП', '')
+        address = data.get('АдресПолн', '') or data.get('Адрес', '')
+        status = data.get('Статус', '')
+        reg_date = data.get('ДатаРег', '') or data.get('ДатаОГРН', '')
+
+        # Директор / руководитель
+        director = ''
+        if isinstance(data.get('Руководитель'), dict):
+            director = data['Руководитель'].get('ФИО', '')
+        elif isinstance(data.get('Руководитель'), list) and data['Руководитель']:
+            director = data['Руководитель'][0].get('ФИО', '')
+
+        # ОКВЭД
+        okved = ''
+        okved_name = ''
+        if isinstance(data.get('ОснВидДеят'), dict):
+            okved = data['ОснВидДеят'].get('Код', '')
+            okved_name = data['ОснВидДеят'].get('Текст', '')
+
+        # Уставный капитал
+        capital = data.get('УставКап', '')
+
+        # Определяем правовую форму
+        legal_form = 'ooo'
+        if 'ИП' in item:
+            legal_form = 'ip'
+        elif len(inn) == 12:
+            legal_form = 'ip'
+        elif full_name:
+            name_lower = full_name.lower()
+            if 'индивидуальный предприниматель' in name_lower:
+                legal_form = 'ip'
+
+        return {
+            'inn': inn,
+            'name': full_name or short_name,
+            'short_name': short_name,
+            'kpp': kpp,
+            'ogrn': ogrn,
+            'address': address,
+            'legal_form': legal_form,
+            'status': status,
+            'registration_date': reg_date,
+            'director': director,
+            'okved': okved,
+            'okved_name': okved_name,
+            'capital': str(capital) if capital else '',
+        }
+
+    @staticmethod
     def parse_search_results(raw_data: dict) -> list[dict]:
         """
         Парсит результаты поиска API-FNS в унифицированный формат.
@@ -255,14 +325,15 @@ class FNSClient:
         items = raw_data.get('items', [])
 
         for item in items:
-            # API-FNS возвращает данные в русскоязычных ключах
-            inn = item.get('ИНН', '')
-            ogrn = item.get('ОГРН', '')
-            full_name = item.get('НаимПолнЮЛ', '') or item.get('ФИОПолн', '')
-            short_name = item.get('НаимСокрЮЛ', '')
-            address = item.get('АдресПолн', '')
-            status = item.get('Статус', '')
-            reg_date = item.get('ДатаРег', '')
+            # API-FNS: items[i] = { "ЮЛ": {...} } или { "ИП": {...} }
+            data = item.get('ЮЛ') or item.get('ИП') or item.get('НР') or item
+            inn = data.get('ИНН', '') or data.get('ИННФЛ', '')
+            ogrn = data.get('ОГРН', '') or data.get('ОГРНИП', '')
+            full_name = data.get('НаимПолнЮЛ', '') or data.get('ФИОПолн', '')
+            short_name = data.get('НаимСокрЮЛ', '')
+            address = data.get('АдресПолн', '')
+            status = data.get('Статус', '')
+            reg_date = data.get('ДатаРег', '') or data.get('ДатаОГРН', '')
 
             # Определяем правовую форму по ИНН и названию
             legal_form = 'ooo'  # по умолчанию
@@ -276,8 +347,8 @@ class FNSClient:
                 elif 'общество с ограниченной ответственностью' in name_lower:
                     legal_form = 'ooo'
 
-            # КПП из egr данных (в search обычно нет)
-            kpp = item.get('КПП', '')
+            # КПП (есть в autocomplete, может отсутствовать в search)
+            kpp = data.get('КПП', '')
 
             results.append({
                 'inn': inn,
