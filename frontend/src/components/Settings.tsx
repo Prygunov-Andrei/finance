@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, LegalEntity, Account, CreateLegalEntityData, CreateAccountData, TaxSystem, ExpenseCategory, CreateExpenseCategoryData, FNSStats } from '../lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -12,47 +12,80 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { Textarea } from './ui/textarea';
-import { Building2, CreditCard, Loader2, Plus, MoreVertical, Pencil, Trash2, FolderTree, ListTree, ScrollText, Check, X, ChevronRight, ShieldCheck, RefreshCw, Users } from 'lucide-react';
+import { Building2, CreditCard, Loader2, Plus, MoreVertical, Pencil, Trash2, FolderTree, ListTree, ScrollText, Check, X, ChevronRight, ShieldCheck, RefreshCw, Users, Sparkles, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { TaxSystemsTab } from './TaxSystemsTab';
 import { PersonnelTab } from './PersonnelTab';
+import { LLMSettings } from './LLMSettings';
+import { BankConnectionsTab } from './BankConnectionsTab';
 import { useLegalEntities, useTaxSystems, useAccounts, useExpenseCategories } from '../hooks';
 import { formatAmount } from '../lib/utils';
 import { CONSTANTS } from '../constants';
 
+const SETTINGS_TABS = ['tax-systems', 'entities', 'personnel', 'accounts', 'categories', 'fns', 'llm', 'banking'] as const;
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+const DEFAULT_SETTINGS_TAB: SettingsTab = 'entities';
+
+const getSafeSettingsTab = (value: string | null): SettingsTab => {
+  if (value && SETTINGS_TABS.includes(value as SettingsTab)) {
+    return value as SettingsTab;
+  }
+  return DEFAULT_SETTINGS_TAB;
+};
+
 export function Settings() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = getSafeSettingsTab(searchParams.get('tab'));
+
+  const handleTabChange = (nextTab: string) => {
+    const safeTab = getSafeSettingsTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', safeTab);
+    setSearchParams(nextParams, { replace: true });
+  };
+
   return (
     <div className="p-8">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-semibold mb-6">Настройки</h1>
         
-        <Tabs defaultValue="entities" className="w-full">
-          <TabsList className="grid w-full max-w-5xl grid-cols-6 mb-6">
-            <TabsTrigger value="tax-systems" className="flex items-center gap-2">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <div className="mb-6 overflow-x-auto pb-1">
+            <TabsList className="flex w-max min-w-full flex-nowrap justify-start">
+            <TabsTrigger value="tax-systems" className="flex shrink-0 items-center gap-2">
               <ScrollText className="w-4 h-4" />
               Налоговые системы
             </TabsTrigger>
-            <TabsTrigger value="entities" className="flex items-center gap-2">
+            <TabsTrigger value="entities" className="flex shrink-0 items-center gap-2">
               <Building2 className="w-4 h-4" />
               Мои компании
             </TabsTrigger>
-            <TabsTrigger value="personnel" className="flex items-center gap-2">
+            <TabsTrigger value="personnel" className="flex shrink-0 items-center gap-2">
               <Users className="w-4 h-4" />
               Персонал
             </TabsTrigger>
-            <TabsTrigger value="accounts" className="flex items-center gap-2">
+            <TabsTrigger value="accounts" className="flex shrink-0 items-center gap-2">
               <CreditCard className="w-4 h-4" />
               Счета
             </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-2">
+            <TabsTrigger value="categories" className="flex shrink-0 items-center gap-2">
               <FolderTree className="w-4 h-4" />
               Категории расходов
             </TabsTrigger>
-            <TabsTrigger value="fns" className="flex items-center gap-2">
+            <TabsTrigger value="fns" className="flex shrink-0 items-center gap-2">
               <ShieldCheck className="w-4 h-4" />
               Интеграция ФНС
             </TabsTrigger>
-          </TabsList>
+            <TabsTrigger value="llm" className="flex shrink-0 items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              LLM-провайдеры
+            </TabsTrigger>
+            <TabsTrigger value="banking" className="flex shrink-0 items-center gap-2">
+              <Landmark className="w-4 h-4" />
+              Банковские подключения
+            </TabsTrigger>
+            </TabsList>
+          </div>
           
           <TabsContent value="tax-systems">
             <TaxSystemsTab />
@@ -76,6 +109,14 @@ export function Settings() {
 
           <TabsContent value="fns">
             <FNSIntegrationTab />
+          </TabsContent>
+
+          <TabsContent value="llm">
+            <LLMSettings />
+          </TabsContent>
+
+          <TabsContent value="banking">
+            <BankConnectionsTab />
           </TabsContent>
         </Tabs>
       </div>

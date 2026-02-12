@@ -25,6 +25,10 @@ boto3>=1.34.0
 imagehash>=4.3.0
 # ElevenLabs (транскрибация голосовых — Scribe v2)
 elevenlabs>=1.0.0
+# Banking encryption
+cryptography>=42.0.0
+# Webhook JWT verification
+PyJWT>=2.8.0
 # Monitoring
 sentry-sdk[django,celery]>=1.40.0
 # Testing

@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     'worklog',
     'fns',
     'personnel',
+    'banking',
 ]
 
 MIDDLEWARE = [
@@ -336,6 +337,11 @@ ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
 # API-FNS Configuration (проверка контрагентов)
 # =============================================================================
 FNS_API_KEY = os.environ.get('FNS_API_KEY', '')
+
+# =============================================================================
+# Banking Encryption Key (шифрование банковских секретов)
+# =============================================================================
+BANK_ENCRYPTION_KEY = os.environ.get('BANK_ENCRYPTION_KEY', '')
 
 # =============================================================================
 # Sentry Configuration (мониторинг ошибок)

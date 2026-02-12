@@ -2396,6 +2396,189 @@ class ApiClient {
       { method: 'POST' }
     );
   }
+
+  // =========================================================================
+  // Banking — Банковские подключения
+  // =========================================================================
+
+  async getBankConnections(): Promise<BankConnection[]> {
+    const res = await this.request<PaginatedResponse<BankConnection> | BankConnection[]>('/bank-connections/');
+    if (res && typeof res === 'object' && 'results' in res) return res.results;
+    return res as BankConnection[];
+  }
+
+  async createBankConnection(data: CreateBankConnectionData): Promise<BankConnection> {
+    return this.request<BankConnection>('/bank-connections/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBankConnection(id: number, data: Partial<CreateBankConnectionData>): Promise<BankConnection> {
+    return this.request<BankConnection>(`/bank-connections/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBankConnection(id: number): Promise<void> {
+    return this.request<void>(`/bank-connections/${id}/`, { method: 'DELETE' });
+  }
+
+  async testBankConnection(id: number): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>(`/bank-connections/${id}/test/`, {
+      method: 'POST',
+    });
+  }
+
+  async syncBankAccounts(connectionId: number): Promise<any> {
+    return this.request<any>(`/bank-connections/${connectionId}/sync-accounts/`, {
+      method: 'POST',
+    });
+  }
+
+  // =========================================================================
+  // Banking — Банковские счета (привязки)
+  // =========================================================================
+
+  async getBankAccounts(): Promise<BankAccount[]> {
+    const res = await this.request<PaginatedResponse<BankAccount> | BankAccount[]>('/bank-accounts/');
+    if (res && typeof res === 'object' && 'results' in res) return res.results;
+    return res as BankAccount[];
+  }
+
+  async createBankAccount(data: CreateBankAccountData): Promise<BankAccount> {
+    return this.request<BankAccount>('/bank-accounts/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBankAccount(id: number, data: Partial<CreateBankAccountData>): Promise<BankAccount> {
+    return this.request<BankAccount>(`/bank-accounts/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBankAccount(id: number): Promise<void> {
+    return this.request<void>(`/bank-accounts/${id}/`, { method: 'DELETE' });
+  }
+
+  async syncBankStatements(bankAccountId: number, dateFrom?: string, dateTo?: string): Promise<{ status: string; new_transactions: number }> {
+    return this.request<{ status: string; new_transactions: number }>(`/bank-accounts/${bankAccountId}/sync-statements/`, {
+      method: 'POST',
+      body: JSON.stringify({ date_from: dateFrom, date_to: dateTo }),
+    });
+  }
+
+  // =========================================================================
+  // Banking — Банковские транзакции
+  // =========================================================================
+
+  async getBankTransactions(params?: {
+    bank_account?: number;
+    transaction_type?: string;
+    reconciled?: boolean;
+    date?: string;
+    search?: string;
+    ordering?: string;
+    page?: number;
+  }): Promise<PaginatedResponse<BankTransaction>> {
+    const qs = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          qs.set(key, String(value));
+        }
+      });
+    }
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<PaginatedResponse<BankTransaction>>(`/bank-transactions/${query}`);
+  }
+
+  async reconcileBankTransaction(transactionId: number, paymentId: number): Promise<{ status: string }> {
+    return this.request<{ status: string }>(`/bank-transactions/${transactionId}/reconcile/`, {
+      method: 'POST',
+      body: JSON.stringify({ payment_id: paymentId }),
+    });
+  }
+
+  // =========================================================================
+  // Banking — Платёжные поручения
+  // =========================================================================
+
+  async getBankPaymentOrders(params?: {
+    status?: string;
+    bank_account?: number;
+    payment_date?: string;
+    search?: string;
+    ordering?: string;
+    page?: number;
+  }): Promise<PaginatedResponse<BankPaymentOrder>> {
+    const qs = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          qs.set(key, String(value));
+        }
+      });
+    }
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<PaginatedResponse<BankPaymentOrder>>(`/bank-payment-orders/${query}`);
+  }
+
+  async getBankPaymentOrder(id: number): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>(`/bank-payment-orders/${id}/`);
+  }
+
+  async createBankPaymentOrder(data: CreateBankPaymentOrderData): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>('/bank-payment-orders/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async submitBankPaymentOrder(id: number): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>(`/bank-payment-orders/${id}/submit/`, {
+      method: 'POST',
+    });
+  }
+
+  async approveBankPaymentOrder(id: number, data?: { payment_date?: string; comment?: string }): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>(`/bank-payment-orders/${id}/approve/`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    });
+  }
+
+  async rejectBankPaymentOrder(id: number, comment?: string): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>(`/bank-payment-orders/${id}/reject/`, {
+      method: 'POST',
+      body: JSON.stringify({ comment: comment || '' }),
+    });
+  }
+
+  async rescheduleBankPaymentOrder(id: number, paymentDate: string, comment: string): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>(`/bank-payment-orders/${id}/reschedule/`, {
+      method: 'POST',
+      body: JSON.stringify({ payment_date: paymentDate, comment }),
+    });
+  }
+
+  async executeBankPaymentOrder(id: number): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>(`/bank-payment-orders/${id}/execute/`, {
+      method: 'POST',
+    });
+  }
+
+  async checkBankPaymentOrderStatus(id: number): Promise<BankPaymentOrder> {
+    return this.request<BankPaymentOrder>(`/bank-payment-orders/${id}/status/`);
+  }
+
+  async getBankPaymentOrderEvents(id: number): Promise<BankPaymentOrderEvent[]> {
+    return this.request<BankPaymentOrderEvent[]>(`/bank-payment-orders/${id}/events/`);
+  }
 }
 
 // Types
@@ -3889,6 +4072,8 @@ export const ERP_SECTIONS = [
   { code: 'catalog', label: 'Каталог' },
   { code: 'communications', label: 'Переписка' },
   { code: 'settings', label: 'Настройки' },
+  { code: 'banking', label: 'Банковские операции' },
+  { code: 'banking_approve', label: 'Одобрение платежей' },
 ] as const;
 
 export type ERPPermissionLevel = 'none' | 'read' | 'edit';
@@ -4021,6 +4206,140 @@ export interface OrgChartEdge {
 export interface OrgChartData {
   nodes: OrgChartNode[];
   edges: OrgChartEdge[];
+}
+
+// =========================================================================
+// Banking Types
+// =========================================================================
+
+export interface BankConnection {
+  id: number;
+  name: string;
+  legal_entity: number;
+  legal_entity_name: string;
+  provider: 'tochka';
+  provider_display: string;
+  payment_mode: 'for_sign' | 'auto_sign';
+  payment_mode_display: string;
+  customer_code: string;
+  is_active: boolean;
+  last_sync_at: string | null;
+  created_at: string;
+}
+
+export interface CreateBankConnectionData {
+  name: string;
+  legal_entity: number;
+  provider?: string;
+  client_id: string;
+  client_secret: string;
+  customer_code: string;
+  payment_mode?: 'for_sign' | 'auto_sign';
+  is_active?: boolean;
+}
+
+export interface BankAccount {
+  id: number;
+  account: number;
+  account_name: string;
+  account_number: string;
+  bank_connection: number;
+  connection_name: string;
+  external_account_id: string;
+  last_statement_date: string | null;
+  sync_enabled: boolean;
+  created_at: string;
+}
+
+export interface CreateBankAccountData {
+  account: number;
+  bank_connection: number;
+  external_account_id: string;
+  sync_enabled?: boolean;
+}
+
+export interface BankTransaction {
+  id: number;
+  bank_account: number;
+  bank_account_name: string;
+  external_id: string;
+  transaction_type: 'incoming' | 'outgoing';
+  transaction_type_display: string;
+  amount: string;
+  date: string;
+  purpose: string;
+  counterparty_name: string;
+  counterparty_inn: string;
+  counterparty_kpp: string;
+  counterparty_account: string;
+  counterparty_bank_name: string;
+  counterparty_bik: string;
+  counterparty_corr_account: string;
+  document_number: string;
+  payment: number | null;
+  reconciled: boolean;
+  created_at: string;
+}
+
+export interface BankPaymentOrder {
+  id: number;
+  bank_account: number;
+  bank_account_name: string;
+  payment_registry: number | null;
+  recipient_name: string;
+  recipient_inn: string;
+  recipient_kpp?: string;
+  recipient_account?: string;
+  recipient_bank_name?: string;
+  recipient_bik?: string;
+  recipient_corr_account?: string;
+  amount: string;
+  purpose: string;
+  vat_info: string;
+  payment_date: string;
+  original_payment_date: string;
+  status: 'draft' | 'pending_approval' | 'approved' | 'sent_to_bank' | 'pending_sign' | 'executed' | 'rejected' | 'failed';
+  status_display: string;
+  created_by: number;
+  created_by_username: string;
+  approved_by: number | null;
+  approved_by_username: string;
+  approved_at: string | null;
+  sent_at: string | null;
+  executed_at: string | null;
+  error_message: string;
+  reschedule_count: number;
+  can_reschedule: boolean;
+  created_at: string;
+}
+
+export interface CreateBankPaymentOrderData {
+  bank_account: number;
+  payment_registry?: number;
+  recipient_name: string;
+  recipient_inn: string;
+  recipient_kpp?: string;
+  recipient_account: string;
+  recipient_bank_name: string;
+  recipient_bik: string;
+  recipient_corr_account?: string;
+  amount: string;
+  purpose: string;
+  vat_info?: string;
+  payment_date: string;
+}
+
+export interface BankPaymentOrderEvent {
+  id: number;
+  order: number;
+  event_type: 'created' | 'submitted' | 'approved' | 'rejected' | 'rescheduled' | 'sent_to_bank' | 'executed' | 'failed' | 'comment';
+  event_type_display: string;
+  user: number | null;
+  username: string;
+  old_value: Record<string, any> | null;
+  new_value: Record<string, any> | null;
+  comment: string;
+  created_at: string;
 }
 
 export const api = new ApiClient();

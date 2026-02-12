@@ -31,6 +31,8 @@ import { FrameworkContractDetail } from './components/FrameworkContractDetail';
 import { CreateFrameworkContractForm } from './components/contracts/CreateFrameworkContractForm';
 import { Payments } from './components/Payments';
 import { PaymentRegistry } from './components/PaymentRegistry';
+import { BankStatements } from './components/BankStatements';
+import { BankPaymentOrders } from './components/BankPaymentOrderForm';
 import { Settings } from './components/Settings';
 import { AccountDetail } from './components/AccountDetail';
 import { Communications } from './components/Communications';
@@ -46,7 +48,6 @@ import { CatalogCategories } from './components/catalog/CatalogCategories';
 import { CatalogProducts } from './components/catalog/CatalogProducts';
 import { ProductDetail } from './components/catalog/ProductDetail';
 import { CatalogModeration } from './components/catalog/CatalogModeration';
-import { LLMSettings } from './components/LLMSettings';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Создаем QueryClient
@@ -370,13 +371,6 @@ export default function App() {
               </Layout>
             </ProtectedRoute>
           } />
-          <Route path="/settings/llm" element={
-            <ProtectedRoute>
-              <Layout onLogout={handleLogout} user={user}>
-                <LLMSettings />
-              </Layout>
-            </ProtectedRoute>
-          } />
           <Route path="/communications" element={
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
@@ -423,6 +417,20 @@ export default function App() {
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
                 <PaymentRegistry />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/bank-statements" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <BankStatements />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/bank-payment-orders" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <BankPaymentOrders />
               </Layout>
             </ProtectedRoute>
           } />

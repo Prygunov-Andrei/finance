@@ -103,6 +103,7 @@ urlpatterns = [
     path('api/v1/', include('worklog.urls')),
     path('api/v1/', include('fns.urls')),
     path('api/v1/', include('personnel.urls')),
+    path('api/v1/', include('banking.urls')),
     path('api/v1/', api_root, name='api-root'),
 ]
 

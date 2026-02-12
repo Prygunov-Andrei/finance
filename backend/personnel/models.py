@@ -13,6 +13,8 @@ ERP_SECTIONS = [
     ('catalog', 'Каталог'),
     ('communications', 'Переписка'),
     ('settings', 'Настройки'),
+    ('banking', 'Банковские операции'),
+    ('banking_approve', 'Одобрение платежей'),
 ]
 
 PERMISSION_LEVELS = ('none', 'read', 'edit')

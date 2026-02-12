@@ -32,6 +32,10 @@ class ERPSectionPermission(BasePermission):
         '/api/v1/legal-entities/': 'settings',
         '/api/v1/accounts/': 'settings',
         '/api/v1/personnel/': 'settings',
+        '/api/v1/bank-connections/': 'banking',
+        '/api/v1/bank-accounts/': 'banking',
+        '/api/v1/bank-transactions/': 'banking',
+        '/api/v1/bank-payment-orders/': 'banking',
     }
 
     # Методы, требующие только чтение

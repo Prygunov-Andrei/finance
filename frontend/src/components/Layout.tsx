@@ -4,7 +4,7 @@ import {
   Home, Users, Building2, FileText, DollarSign, Settings, 
   LogOut, Menu, ChevronRight, List, Briefcase, Star,
   FolderOpen, ClipboardList, Wrench, CreditCard, Mail,
-  Package, Layers, CheckSquare, Sparkles
+  Package, Layers, CheckSquare, Landmark, Receipt
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { 
@@ -93,6 +93,8 @@ const menuItems: MenuItem[] = [
     children: [
       { id: 'payments-list', label: 'Платежи', icon: <DollarSign className="w-4 h-4" />, path: '/payments' },
       { id: 'payment-registry', label: 'Реестр платежей', icon: <CreditCard className="w-4 h-4" />, path: '/payment-registry' },
+      { id: 'bank-statements', label: 'Банковские выписки', icon: <Landmark className="w-4 h-4" />, path: '/bank-statements' },
+      { id: 'bank-payment-orders', label: 'Платёжные поручения', icon: <Receipt className="w-4 h-4" />, path: '/bank-payment-orders' },
     ]
   },
   { 
@@ -111,12 +113,7 @@ const menuItems: MenuItem[] = [
     id: 'settings', 
     label: 'Настройки', 
     icon: <Settings className="w-5 h-5" />, 
-    path: '/settings',
-    children: [
-      { id: 'settings-companies', label: 'Мои компании', icon: <Building2 className="w-4 h-4" />, path: '/settings' },
-      { id: 'settings-accounts', label: 'Счета', icon: <CreditCard className="w-4 h-4" />, path: '/settings' },
-      { id: 'settings-llm', label: 'LLM-провайдеры', icon: <Sparkles className="w-4 h-4" />, path: '/settings/llm' },
-    ]
+    path: '/settings'
   },
 ];
 
@@ -129,6 +126,8 @@ const pageTitles: Record<string, string> = {
   'contracts/acts': 'Акты',
   payments: 'Платежи',
   'payment-registry': 'Реестр платежей',
+  'bank-statements': 'Банковские выписки',
+  'bank-payment-orders': 'Платёжные поручения',
   'proposals/technical-proposals': 'ТКП',
   'proposals/mounting-proposals': 'МП',
   'proposals/front-of-work-items': 'Фронт работ',
@@ -271,6 +270,11 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
               <div key={item.id}>
                 <button
                   onClick={() => {
+                    if (item.id === 'settings') {
+                      navigate('/settings?tab=personnel');
+                      return;
+                    }
+
                     if (item.children) {
                       toggleMenu(item.id);
                     } else {
@@ -350,11 +354,6 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Мой аккаунт</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  <Settings className="w-4 h-4 mr-2" />
-                  Настройки
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="text-red-600">
                   <LogOut className="w-4 h-4 mr-2" />
                   Выйти
@@ -376,11 +375,6 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                 <DropdownMenuLabel>
                   {user?.username || 'Пользователь'}
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  <Settings className="w-4 h-4 mr-2" />
-                  Настройки
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="text-red-600">
                   <LogOut className="w-4 h-4 mr-2" />

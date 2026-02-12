@@ -96,6 +96,19 @@ class LegalEntity(TimestampedModel):
         default='Генеральный директор',
         verbose_name='Должность директора'
     )
+    legal_address = models.TextField(
+        blank=True,
+        verbose_name='Юридический адрес'
+    )
+    actual_address = models.TextField(
+        blank=True,
+        verbose_name='Фактический адрес'
+    )
+    phone = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Телефон'
+    )
     is_active = models.BooleanField(
         default=True,
         verbose_name='Активна'
@@ -154,6 +167,11 @@ class Account(TimestampedModel):
         max_length=9,
         blank=True,
         verbose_name='БИК банка'
+    )
+    corr_account = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Корреспондентский счёт банка'
     )
     currency = models.CharField(
         max_length=3,
@@ -330,6 +348,29 @@ class Counterparty(TimestampedModel):
         verbose_name='Заметки',
         help_text='Произвольные заметки по контрагенту'
     )
+
+    # --- Банковские реквизиты ---
+    bank_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Наименование банка'
+    )
+    bank_bik = models.CharField(
+        max_length=9,
+        blank=True,
+        verbose_name='БИК банка'
+    )
+    bank_corr_account = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Корреспондентский счёт банка'
+    )
+    bank_account = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Расчётный счёт'
+    )
+
     is_active = models.BooleanField(
         default=True,
         verbose_name='Активен'
