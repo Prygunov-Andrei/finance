@@ -19,6 +19,7 @@ DB_PASSWORD=$(generate_password)
 MINIO_USER="minio_$(generate_password | cut -c1-12)"
 MINIO_PASSWORD=$(generate_password)
 DJANGO_SECRET=$(generate_django_secret)
+BANK_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 
 # Запрос домена у пользователя
 read -p "Enter your domain name (or press Enter for IP-only setup): " DOMAIN_NAME
@@ -56,6 +57,7 @@ MINIO_ROOT_PASSWORD=${MINIO_PASSWORD}
 DEBUG=False
 SECRET_KEY=${DJANGO_SECRET}
 DJANGO_SETTINGS_MODULE=finans_assistant.settings
+BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY}
 
 # --- Telegram Bot ---
 TELEGRAM_BOT_TOKEN=8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU
