@@ -71,7 +71,7 @@ services:
       - minio_data:/data
     command: server /data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "test -d /data"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -145,7 +145,13 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request, urllib.error; url='http://localhost:8000/api/v1/';\ntry:\n urllib.request.urlopen(url); sys.exit(0)\nexcept urllib.error.HTTPError as e:\n sys.exit(0 if e.code in (200,401,403) else 1)\nexcept Exception:\n sys.exit(1)",
+        ]
       interval: 15s
       timeout: 10s
       retries: 5

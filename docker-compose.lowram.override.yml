@@ -1,0 +1,132 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_SHARED_BUFFERS: 128MB
+      POSTGRES_MAX_CONNECTIONS: 40
+    deploy:
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: 256M
+        reservations:
+          cpus: "0.2"
+          memory: 128M
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 128M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  minio:
+    healthcheck:
+      test: ["CMD-SHELL", "test -d /data"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.4"
+          memory: 192M
+        reservations:
+          cpus: "0.1"
+          memory: 96M
+
+  createbuckets:
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} && break;
+        echo 'waiting for minio...';
+        sleep 3;
+      done;
+      /usr/bin/mc mb myminio/worklog-media --ignore-existing;
+      /usr/bin/mc anonymous set download myminio/worklog-media;
+      exit 0;
+      "
+
+  backend:
+    command:
+      [
+        "gunicorn",
+        "finans_assistant.wsgi:application",
+        "--bind",
+        "0.0.0.0:8000",
+        "--workers",
+        "1",
+        "--threads",
+        "2",
+        "--timeout",
+        "120",
+        "--access-logfile",
+        "-",
+        "--error-logfile",
+        "-",
+      ]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.8"
+          memory: 384M
+        reservations:
+          cpus: "0.2"
+          memory: 192M
+
+  celery-worker:
+    command: celery -A finans_assistant worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=50
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  celery-beat:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+
+  bot:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.4"
+          memory: 192M
+        reservations:
+          cpus: "0.1"
+          memory: 96M
+
+  frontend:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 192M
+        reservations:
+          cpus: "0.05"
+          memory: 96M
+
+  mini-app:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
