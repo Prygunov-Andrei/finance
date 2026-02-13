@@ -5,6 +5,7 @@
 """
 
 import logging
+import os
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
@@ -93,17 +94,60 @@ class TochkaAPIClient:
         Returns:
             access_token строка.
         """
-        # В продакшене Точка не принимает client_credentials токены для OpenBanking/Payments.
-        # Должен быть пользовательский токен (authorization_code или password flow).
+        # В продакшене Точка требует пользовательский токен:
+        # authorization_code или password flow.
         if not self.connection.access_token:
             if self.connection.refresh_token:
                 self.refresh_access_token()
             else:
-                raise TochkaAPIError(
-                    'Нет access_token/refresh_token для подключения. '
-                    'Выполните OAuth authorization_code flow для BankConnection.'
-                )
+                username = os.environ.get('TOCHKA_USERNAME', '').strip()
+                password = os.environ.get('TOCHKA_PASSWORD', '').strip()
+                if username and password:
+                    self.authenticate_password(username=username, password=password, scope=scope)
+                else:
+                    raise TochkaAPIError(
+                        'Нет access_token/refresh_token для подключения. '
+                        'Выполните OAuth authorization_code flow или задайте TOCHKA_USERNAME/TOCHKA_PASSWORD.'
+                    )
         return self.connection.access_token
+
+    def authenticate_password(self, username: str, password: str, scope: str = DEFAULT_SCOPE) -> str:
+        """
+        Получить access_token через password flow (требует пользователя Точки).
+        """
+        data = {
+            'grant_type': 'password',
+            'username': username,
+            'password': password,
+            'scope': scope,
+            'client_id': self.connection.client_id,
+            'client_secret': self.connection.client_secret,
+        }
+
+        response = self._client.post(self._token_url, data=data)
+        if response.status_code != 200:
+            raise TochkaAPIError(
+                f'Ошибка password auth: {response.status_code} {response.text}',
+                status_code=response.status_code,
+                response_data=response.text,
+            )
+
+        result = response.json()
+        access_token = result.get('access_token', '')
+        expires_in = result.get('expires_in', 86400)
+        refresh_token = result.get('refresh_token', '')
+
+        if not access_token:
+            raise TochkaAPIError(f'Пустой access_token в ответе: {result}')
+
+        self.connection.access_token = access_token
+        if refresh_token:
+            self.connection.refresh_token = refresh_token
+        self.connection.token_expires_at = timezone.now() + timedelta(seconds=expires_in)
+        self.connection.save(update_fields=['access_token', 'refresh_token', 'token_expires_at'])
+
+        logger.info('Tochka: password auth OK для %s', self.connection.name)
+        return access_token
 
     def exchange_authorization_code(self, code: str, redirect_uri: str, scope: str = DEFAULT_SCOPE) -> str:
         """
@@ -336,7 +380,14 @@ class TochkaAPIClient:
         Args:
             payment_data: Данные платёжного поручения.
         """
-        return self._request('POST', '/payment/v1.0/for-sign', json_data=payment_data)
+        # Support: production payments base: /uapi/payments/v2.0/
+        try:
+            return self._request('POST', '/payments/v2.0/for-sign', json_data=payment_data)
+        except TochkaAPIError as exc:
+            if getattr(exc, 'status_code', 0) == 404:
+                # Fallback to legacy path from older swagger
+                return self._request('POST', '/payment/v1.0/for-sign', json_data=payment_data)
+            raise
 
     def create_payment(self, payment_data: dict) -> dict:
         """
@@ -347,11 +398,21 @@ class TochkaAPIClient:
         Args:
             payment_data: Данные платёжного поручения.
         """
-        return self._request('POST', '/payment/v1.0/order', json_data=payment_data)
+        try:
+            return self._request('POST', '/payments/v2.0/order', json_data=payment_data)
+        except TochkaAPIError as exc:
+            if getattr(exc, 'status_code', 0) == 404:
+                return self._request('POST', '/payment/v1.0/order', json_data=payment_data)
+            raise
 
     def get_payment_for_sign_list(self) -> dict:
         """Получить список платежей, ожидающих подписи."""
-        return self._request('GET', '/payment/v1.0/for-sign')
+        try:
+            return self._request('GET', '/payments/v2.0/for-sign')
+        except TochkaAPIError as exc:
+            if getattr(exc, 'status_code', 0) == 404:
+                return self._request('GET', '/payment/v1.0/for-sign')
+            raise
 
     def get_payment_status(self, request_id: str) -> dict:
         """
@@ -360,7 +421,12 @@ class TochkaAPIClient:
         Args:
             request_id: ID запроса (requestId из ответа create_payment*).
         """
-        return self._request('GET', f'/payment/v1.0/status/{request_id}')
+        try:
+            return self._request('GET', f'/payments/v2.0/status/{request_id}')
+        except TochkaAPIError as exc:
+            if getattr(exc, 'status_code', 0) == 404:
+                return self._request('GET', f'/payment/v1.0/status/{request_id}')
+            raise
 
     # =========================================================================
     # Вебхуки

@@ -118,6 +118,8 @@ services:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY}
       - BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY:-}
+      - TOCHKA_USERNAME=${TOCHKA_USERNAME:-}
+      - TOCHKA_PASSWORD=${TOCHKA_PASSWORD:-}
       - PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN:-}
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -185,6 +187,8 @@ services:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY}
       - BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY:-}
+      - TOCHKA_USERNAME=${TOCHKA_USERNAME:-}
+      - TOCHKA_PASSWORD=${TOCHKA_PASSWORD:-}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME}
@@ -237,6 +241,8 @@ services:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY}
       - BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY:-}
+      - TOCHKA_USERNAME=${TOCHKA_USERNAME:-}
+      - TOCHKA_PASSWORD=${TOCHKA_PASSWORD:-}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME}
