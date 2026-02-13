@@ -43,6 +43,19 @@ class TochkaAPIClient:
     # Количество попыток при ошибках сети
     MAX_RETRIES = 3
 
+    # Default scopes per Tochka OpenAPI swagger.json
+    # (space-separated, as required by OAuth2 token endpoint)
+    DEFAULT_SCOPE = ' '.join([
+        'ReadAccountsBasic',
+        'ReadAccountsDetail',
+        'ReadBalances',
+        'ReadStatements',
+        'ReadCustomerData',
+        'CreatePaymentForSign',
+        'CreatePaymentOrder',
+        'ManageWebhookData',
+    ])
+
     def __init__(self, bank_connection, sandbox: bool = False):
         """
         Args:
@@ -69,7 +82,7 @@ class TochkaAPIClient:
     # Аутентификация
     # =========================================================================
 
-    def authenticate(self, scope: str = 'accounts balances payments') -> str:
+    def authenticate(self, scope: str = DEFAULT_SCOPE) -> str:
         """
         Получить access_token через client_credentials grant.
 
