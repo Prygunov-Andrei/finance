@@ -31,7 +31,9 @@ class TochkaAPIClient:
     Автоматически обновляет access_token при истечении.
     """
 
-    BASE_URL = 'https://enter.tochka.com/api/v2'
+    # NOTE: В актуальной OpenAPI спецификации base URL для production:
+    # https://enter.tochka.com/uapi/
+    BASE_URL = 'https://enter.tochka.com/uapi'
     SANDBOX_URL = 'https://enter.tochka.com/sandbox/v2'
     TOKEN_URL = 'https://enter.tochka.com/connect/token'
     SANDBOX_TOKEN_URL = 'https://enter.tochka.com/sandbox/connect/token'
