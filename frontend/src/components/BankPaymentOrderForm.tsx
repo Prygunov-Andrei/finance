@@ -61,12 +61,13 @@ const StatusBadge = ({ status }: { status: string }) => {
 export const BankPaymentOrders = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<BankPaymentOrder | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('');
+  // Radix SelectItem cannot have empty-string values, so we use a sentinel for "all".
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const queryClient = useQueryClient();
 
   const { data: ordersData, isLoading } = useQuery({
     queryKey: ['bank-payment-orders', filterStatus],
-    queryFn: () => api.getBankPaymentOrders({ status: filterStatus || undefined }),
+    queryFn: () => api.getBankPaymentOrders({ status: filterStatus !== 'all' ? filterStatus : undefined }),
   });
 
   const orders = ordersData?.results || [];
@@ -90,7 +91,7 @@ export const BankPaymentOrders = () => {
                 <SelectValue placeholder="Все статусы" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Все статусы</SelectItem>
+                <SelectItem value="all">Все статусы</SelectItem>
                 <SelectItem value="draft">Черновик</SelectItem>
                 <SelectItem value="pending_approval">На согласовании</SelectItem>
                 <SelectItem value="approved">Одобрено</SelectItem>

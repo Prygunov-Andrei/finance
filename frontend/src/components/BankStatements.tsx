@@ -21,10 +21,11 @@ import { toast } from 'sonner';
 import { formatAmount } from '../lib/utils';
 
 export const BankStatements = () => {
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  // Radix SelectItem cannot have empty-string values, so we use a sentinel for "all".
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string>('');
-  const [filterReconciled, setFilterReconciled] = useState<string>('');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterReconciled, setFilterReconciled] = useState<string>('all');
   const [reconcileDialogTx, setReconcileDialogTx] = useState<BankTransaction | null>(null);
   const [reconcilePaymentId, setReconcilePaymentId] = useState('');
   const queryClient = useQueryClient();
@@ -38,9 +39,9 @@ export const BankStatements = () => {
     queryKey: ['bank-transactions', selectedAccountId, searchQuery, filterType, filterReconciled],
     queryFn: () =>
       api.getBankTransactions({
-        bank_account: selectedAccountId ? parseInt(selectedAccountId) : undefined,
+        bank_account: selectedAccountId !== 'all' ? parseInt(selectedAccountId) : undefined,
         search: searchQuery || undefined,
-        transaction_type: filterType || undefined,
+        transaction_type: filterType !== 'all' ? filterType : undefined,
         reconciled: filterReconciled === 'true' ? true : filterReconciled === 'false' ? false : undefined,
       }),
     enabled: true,
@@ -74,7 +75,7 @@ export const BankStatements = () => {
   const transactions = transactionsData?.results || [];
 
   const handleSync = () => {
-    if (!selectedAccountId) {
+    if (selectedAccountId === 'all') {
       toast.error('Выберите банковский счёт');
       return;
     }
@@ -96,7 +97,7 @@ export const BankStatements = () => {
           <h1 className="text-3xl font-semibold">Банковские выписки</h1>
           <Button
             onClick={handleSync}
-            disabled={!selectedAccountId || syncMutation.isPending}
+            disabled={selectedAccountId === 'all' || syncMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
             {syncMutation.isPending ? (
@@ -116,7 +117,7 @@ export const BankStatements = () => {
                 <SelectValue placeholder="Все счета" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Все счета</SelectItem>
+                <SelectItem value="all">Все счета</SelectItem>
                 {bankAccounts?.map((acc: BankAccount) => (
                   <SelectItem key={acc.id} value={acc.id.toString()}>
                     {acc.account_name} ({acc.account_number})
@@ -132,7 +133,7 @@ export const BankStatements = () => {
                 <SelectValue placeholder="Все типы" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Все типы</SelectItem>
+                <SelectItem value="all">Все типы</SelectItem>
                 <SelectItem value="incoming">Входящие</SelectItem>
                 <SelectItem value="outgoing">Исходящие</SelectItem>
               </SelectContent>
@@ -145,7 +146,7 @@ export const BankStatements = () => {
                 <SelectValue placeholder="Все статусы" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Все</SelectItem>
+                <SelectItem value="all">Все</SelectItem>
                 <SelectItem value="true">Сверено</SelectItem>
                 <SelectItem value="false">Не сверено</SelectItem>
               </SelectContent>
