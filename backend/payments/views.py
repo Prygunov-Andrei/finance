@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from .models import Payment, PaymentRegistry, ExpenseCategory
+from personnel.permissions import ERPSectionPermission
 from .serializers import (
     PaymentSerializer,
     PaymentListSerializer,
@@ -67,7 +68,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         'account',
         'legal_entity'
     ).all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, ERPSectionPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['contract', 'payment_type', 'contract__object', 'category', 'category__parent', 'account', 'legal_entity', 'status']
     search_fields = [
@@ -143,7 +144,7 @@ class PaymentRegistryViewSet(viewsets.ModelViewSet):
         'approved_by',
         'act'
     ).all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, ERPSectionPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['contract', 'status', 'contract__object', 'account', 'category']
     search_fields = ['comment', 'initiator', 'contract__number', 'contract__object__name']
@@ -259,9 +260,9 @@ class ExpenseCategoryViewSet(viewsets.ModelViewSet):
     partial_update: Частично обновить категорию
     destroy: Удалить категорию
     """
+    permission_classes = [permissions.IsAuthenticated, ERPSectionPermission]
     queryset = ExpenseCategory.objects.select_related('parent').filter(is_active=True)
     serializer_class = ExpenseCategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['parent', 'is_active', 'requires_contract']
     search_fields = ['name', 'code', 'description']
