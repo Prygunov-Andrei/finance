@@ -19,7 +19,8 @@ class ERPSectionPermission(BasePermission):
     SECTION_MAP = {
         '/api/v1/objects/': 'objects',
         '/api/v1/payments/': 'payments',
-        '/api/v1/payment-registry/': 'payments',
+        # Payment registry is an approval workflow; we gate it separately from payment creation.
+        '/api/v1/payment-registry/': 'banking_approve',
         '/api/v1/expense-categories/': 'payments',
         '/api/v1/estimates/': 'projects',
         '/api/v1/proposals/': 'proposals',
