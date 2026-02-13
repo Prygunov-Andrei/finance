@@ -256,14 +256,16 @@ class TochkaAPIClient:
 
     def ensure_valid_token(self):
         """Проверить и при необходимости обновить access_token."""
-        if not self.connection.access_token:
-            self.authenticate()
+        env_jwt_token = os.environ.get('TOCHKA_JWT_TOKEN', '').strip()
+        # Если JWT-ключ задан в окружении — всегда предпочитаем его.
+        # Это избегает ситуации, когда в БД лежит старый/невалидный токен.
+        if env_jwt_token:
+            if self.connection.access_token != env_jwt_token:
+                self.authenticate()
             return
 
-        # Если access_token задан через TOCHKA_JWT_TOKEN (кабинет Точки) —
-        # его нельзя "обновить" через refresh_token, просто используем как есть.
-        env_jwt_token = os.environ.get('TOCHKA_JWT_TOKEN', '').strip()
-        if env_jwt_token and self.connection.access_token == env_jwt_token:
+        if not self.connection.access_token:
+            self.authenticate()
             return
 
         # Обновляем за 5 минут до истечения
