@@ -45,6 +45,25 @@ class AccountViewSet(viewsets.ModelViewSet):
         current_balance = account.get_current_balance()
         return Response({'balance': current_balance, 'currency': account.currency})
 
+    @action(detail=True, methods=['get'], url_path='balances')
+    def balances(self, request, pk=None):
+        """
+        История остатков (snapshots) по счету.
+
+        Query params:
+          - source: internal | bank_tochka | all (по умолчанию internal)
+        """
+        account = self.get_object()
+        source = (request.query_params.get('source') or 'internal').strip()
+
+        qs = AccountBalance.objects.filter(account=account)
+        if source and source != 'all':
+            qs = qs.filter(source=source)
+
+        qs = qs.order_by('-balance_date', '-id')
+        serializer = AccountBalanceSerializer(qs, many=True)
+        return Response(serializer.data)
+
 class AccountBalanceViewSet(viewsets.ModelViewSet):
     """Управление историческими остатками"""
     queryset = AccountBalance.objects.select_related('account').all()

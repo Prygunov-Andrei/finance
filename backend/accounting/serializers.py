@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from decimal import Decimal
+
 from .models import TaxSystem, LegalEntity, Account, AccountBalance, Counterparty
 
 class TaxSystemSerializer(serializers.ModelSerializer):
@@ -26,6 +28,10 @@ class LegalEntitySerializer(serializers.ModelSerializer):
 class AccountSerializer(serializers.ModelSerializer):
     legal_entity_name = serializers.CharField(source='legal_entity.short_name', read_only=True, allow_null=True)
     current_balance = serializers.SerializerMethodField()
+    bank_account_id = serializers.SerializerMethodField()
+    bank_balance_latest = serializers.SerializerMethodField()
+    bank_balance_date = serializers.SerializerMethodField()
+    bank_delta = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
@@ -33,7 +39,10 @@ class AccountSerializer(serializers.ModelSerializer):
             'id', 'legal_entity', 'legal_entity_name', 'name', 'number', 
             'account_type', 'bank_name', 'bik', 'currency', 
             'initial_balance', 'balance_date', 'location', 'description', 
-            'is_active', 'current_balance', 'created_at', 'updated_at'
+            'is_active',
+            'current_balance',
+            'bank_account_id', 'bank_balance_latest', 'bank_balance_date', 'bank_delta',
+            'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'current_balance', 'created_at', 'updated_at']
     
@@ -44,11 +53,44 @@ class AccountSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+    def get_bank_account_id(self, obj):
+        bank_account = getattr(obj, 'bank_account', None)
+        return getattr(bank_account, 'id', None)
+
+    def _get_latest_bank_snapshot(self, obj):
+        # source появится после миграции; пока код должен работать и без него
+        try:
+            qs = obj.balances.filter(source=AccountBalance.Source.BANK_TOCHKA)
+        except Exception:
+            return None
+        return qs.order_by('-balance_date', '-id').first()
+
+    def get_bank_balance_latest(self, obj):
+        snap = self._get_latest_bank_snapshot(obj)
+        return getattr(snap, 'balance', None)
+
+    def get_bank_balance_date(self, obj):
+        snap = self._get_latest_bank_snapshot(obj)
+        return getattr(snap, 'balance_date', None)
+
+    def get_bank_delta(self, obj):
+        snap = self._get_latest_bank_snapshot(obj)
+        if not snap:
+            return None
+        try:
+            internal = obj.get_current_balance()
+        except Exception:
+            return None
+        try:
+            return (Decimal(str(snap.balance)) - Decimal(str(internal)))
+        except Exception:
+            return None
+
 
 class AccountBalanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = AccountBalance
-        fields = ['id', 'account', 'balance_date', 'balance']
+        fields = ['id', 'account', 'balance_date', 'source', 'balance']
 
 
 class CounterpartySerializer(serializers.ModelSerializer):

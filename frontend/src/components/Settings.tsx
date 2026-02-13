@@ -406,6 +406,21 @@ function AccountsTab() {
     },
   });
 
+  const fetchBankBalanceMutation = useMutation({
+    mutationFn: (bankAccountId: number) => api.fetchBankBalance(bankAccountId),
+    onSuccess: (data) => {
+      if (data?.status !== 'ok') {
+        toast.error(data?.message || 'Не удалось получить остаток из банка');
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success('Остаток из банка обновлён');
+    },
+    onError: (error: any) => {
+      toast.error(`Ошибка: ${error.message || 'Не удалось получить остаток из банка'}`);
+    },
+  });
+
   const getAccountTypeLabel = (type?: string) => {
     switch (type) {
       case 'bank_account': return 'Расчётный счёт';
@@ -529,7 +544,13 @@ function AccountsTab() {
                     Валюта
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Баланс
+                    Внутр.
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Банк
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Δ
                   </th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Активен
@@ -575,6 +596,19 @@ function AccountsTab() {
                         {formatAmount(account.current_balance || account.initial_balance || account.balance)}
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="text-sm font-bold text-gray-900">
+                        {account.bank_balance_latest ? formatAmount(account.bank_balance_latest) : '—'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {account.bank_balance_date ? account.bank_balance_date : ''}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="text-sm font-bold text-gray-900">
+                        {account.bank_delta ? formatAmount(account.bank_delta) : '—'}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       {account.is_active !== false ? (
                         <Check className="w-5 h-5 text-green-600 mx-auto" />
@@ -590,6 +624,18 @@ function AccountsTab() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!account.bank_account_id) {
+                                toast.error('Счёт не привязан к банку (нет BankAccount)');
+                                return;
+                              }
+                              fetchBankBalanceMutation.mutate(account.bank_account_id);
+                            }}
+                          >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Получить остаток из банка
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setEditingAccount(account)}>
                             <Pencil className="w-4 h-4 mr-2" />
                             Редактировать

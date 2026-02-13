@@ -3,6 +3,7 @@ REST API views для банковского модуля.
 """
 
 import logging
+from decimal import Decimal
 
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
@@ -158,6 +159,94 @@ class BankAccountViewSet(viewsets.ModelViewSet):
                 {'status': 'error', 'message': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    @action(detail=True, methods=['post'], url_path='fetch-balance')
+    def fetch_balance(self, request, pk=None):
+        """
+        Принудительно получить остаток из банка (Точка) и сохранить snapshot.
+        """
+        bank_account = self.get_object()
+        connection = bank_account.bank_connection
+
+        with TochkaAPIClient(connection) as client:
+            payload = client.get_account_balance(bank_account.external_account_id)
+
+        bank_balance = self._extract_tochka_balance_amount(payload)
+        if bank_balance is None:
+            return Response(
+                {'status': 'error', 'message': 'Не удалось извлечь баланс из ответа Точки'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Пишем snapshot на текущую дату (upsert)
+        from accounting.models import AccountBalance
+
+        balance_date = timezone.localdate()
+        snapshot, _ = AccountBalance.objects.update_or_create(
+            account=bank_account.account,
+            balance_date=balance_date,
+            source=AccountBalance.Source.BANK_TOCHKA,
+            defaults={'balance': bank_balance},
+        )
+
+        internal_balance = bank_account.account.get_current_balance()
+        delta = Decimal(str(bank_balance)) - Decimal(str(internal_balance))
+
+        return Response({
+            'status': 'ok',
+            'balance_date': snapshot.balance_date,
+            'internal_balance': internal_balance,
+            'bank_balance': bank_balance,
+            'delta': delta,
+        })
+
+    @staticmethod
+    def _extract_tochka_balance_amount(payload: dict) -> Decimal | None:
+        """
+        В ответе Точки по /balances обычно приходит список Balance.
+        Мы пытаемся взять доступный остаток (если есть), иначе любой числовой баланс.
+        """
+        data = payload.get('Data', {}) if isinstance(payload, dict) else {}
+        balances = data.get('Balance', []) if isinstance(data, dict) else []
+
+        if not isinstance(balances, list) or not balances:
+            return None
+
+        def extract_amount(item: dict) -> Decimal | None:
+            if not isinstance(item, dict):
+                return None
+            amount = item.get('Amount') or item.get('amount') or {}
+            if isinstance(amount, dict):
+                val = amount.get('Amount') or amount.get('amount')
+            else:
+                val = amount
+            if val is None:
+                return None
+            try:
+                return Decimal(str(val))
+            except Exception:
+                return None
+
+        preferred_types = {
+            'available',
+            'interimAvailable',
+            'closingAvailable',
+            'expected',
+        }
+        for item in balances:
+            btype = item.get('Type') if isinstance(item, dict) else None
+            btype = btype or (item.get('type') if isinstance(item, dict) else None)
+            if btype in preferred_types:
+                amt = extract_amount(item)
+                if amt is not None:
+                    return amt
+
+        for item in balances:
+            amt = extract_amount(item)
+            if amt is not None:
+                return amt
+
+        return None
 
 
 # =============================================================================

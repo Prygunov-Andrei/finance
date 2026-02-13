@@ -271,11 +271,27 @@ class ApiClient {
   }
 
   async getAccountBalances(id: number) {
-    const response = await this.request<PaginatedResponse<AccountBalance> | AccountBalance[]>(`/accounts/${id}/balance/`);
-    if (response && typeof response === 'object' && 'results' in response) {
-      return response.results;
-    }
+    // История остатков (по умолчанию internal)
+    const response = await this.request<AccountBalance[] | PaginatedResponse<AccountBalance>>(`/accounts/${id}/balances/?source=internal`);
+    if (response && typeof response === 'object' && 'results' in response) return response.results;
     return response as AccountBalance[];
+  }
+
+  async getAccountBalancesHistory(id: number, source: 'internal' | 'bank_tochka' | 'all') {
+    const response = await this.request<AccountBalance[] | PaginatedResponse<AccountBalance>>(`/accounts/${id}/balances/?source=${encodeURIComponent(source)}`);
+    if (response && typeof response === 'object' && 'results' in response) return response.results;
+    return response as AccountBalance[];
+  }
+
+  async fetchBankBalance(bankAccountId: number) {
+    return this.request<{
+      status: 'ok' | 'error';
+      balance_date?: string;
+      internal_balance?: string;
+      bank_balance?: string;
+      delta?: string;
+      message?: string;
+    }>(`/bank-accounts/${bankAccountId}/fetch-balance/`, { method: 'POST', body: JSON.stringify({}) });
   }
 
   // Counterparties
@@ -2622,6 +2638,10 @@ export interface Account {
   current_balance?: string;
   initial_balance?: string;
   balance_date?: string;
+  bank_account_id?: number | null;
+  bank_balance_latest?: string | null;
+  bank_balance_date?: string | null;
+  bank_delta?: string | null;
   location?: string;
   description?: string;
   is_active?: boolean;
@@ -2633,6 +2653,7 @@ export interface AccountBalance {
   id: number;
   account: number;
   balance_date: string;
+  source?: 'internal' | 'bank_tochka';
   balance: string;
 }
 

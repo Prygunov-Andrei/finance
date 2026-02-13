@@ -242,6 +242,10 @@ class Account(TimestampedModel):
 
 class AccountBalance(models.Model):
     """Остаток на счёте на конкретную дату (Snapshot)"""
+
+    class Source(models.TextChoices):
+        INTERNAL = 'internal', 'Внутренний (ERP)'
+        BANK_TOCHKA = 'bank_tochka', 'Банк (Точка)'
     
     account = models.ForeignKey(
         Account,
@@ -252,6 +256,12 @@ class AccountBalance(models.Model):
     balance_date = models.DateField(
         verbose_name='Дата'
     )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.INTERNAL,
+        verbose_name='Источник',
+    )
     balance = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -261,7 +271,7 @@ class AccountBalance(models.Model):
     class Meta:
         verbose_name = 'Остаток на счёте'
         verbose_name_plural = 'Остатки на счетах'
-        unique_together = ('account', 'balance_date')
+        unique_together = ('account', 'balance_date', 'source')
         ordering = ['-balance_date']
 
     def __str__(self):

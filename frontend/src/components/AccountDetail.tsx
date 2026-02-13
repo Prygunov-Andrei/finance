@@ -10,6 +10,7 @@ import { CONSTANTS } from '../constants';
 export function AccountDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const balancesSource = (new URLSearchParams(window.location.search).get('balance_source') as 'internal' | 'bank_tochka' | 'all') || 'internal';
 
   const { data: account, isLoading: accountLoading, error: accountError } = useQuery({
     queryKey: ['account', id],
@@ -19,8 +20,8 @@ export function AccountDetail() {
   });
 
   const { data: balances, isLoading: balancesLoading } = useQuery({
-    queryKey: ['account-balances', id],
-    queryFn: () => api.getAccountBalances(parseInt(id!)),
+    queryKey: ['account-balances', id, balancesSource],
+    queryFn: () => api.getAccountBalancesHistory(parseInt(id!), balancesSource),
     enabled: !!id,
     staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
   });
@@ -91,6 +92,14 @@ export function AccountDetail() {
               <div className="text-sm text-gray-500 mb-1">Текущий баланс</div>
               <div className="text-3xl font-bold text-gray-900">
                 {formatBalance(account.current_balance || account.initial_balance)} {account.currency}
+              </div>
+              <div className="mt-2 text-sm text-gray-500">
+                Банк: {formatBalance(account.bank_balance_latest || undefined)} {account.currency}
+                {account.bank_delta ? (
+                  <span className="ml-2">
+                    Δ {formatBalance(account.bank_delta)} {account.currency}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -166,6 +175,26 @@ export function AccountDetail() {
           </TabsList>
 
           <TabsContent value="balances" className="mt-6">
+            <div className="mb-4 flex gap-2">
+              <Button
+                variant={balancesSource === 'internal' ? 'default' : 'outline'}
+                onClick={() => navigate(`?balance_source=internal`, { replace: true })}
+              >
+                Внутренний
+              </Button>
+              <Button
+                variant={balancesSource === 'bank_tochka' ? 'default' : 'outline'}
+                onClick={() => navigate(`?balance_source=bank_tochka`, { replace: true })}
+              >
+                Банк (Точка)
+              </Button>
+              <Button
+                variant={balancesSource === 'all' ? 'default' : 'outline'}
+                onClick={() => navigate(`?balance_source=all`, { replace: true })}
+              >
+                Все
+              </Button>
+            </div>
             {balancesLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
