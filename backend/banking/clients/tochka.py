@@ -260,6 +260,12 @@ class TochkaAPIClient:
             self.authenticate()
             return
 
+        # Если access_token задан через TOCHKA_JWT_TOKEN (кабинет Точки) —
+        # его нельзя "обновить" через refresh_token, просто используем как есть.
+        env_jwt_token = os.environ.get('TOCHKA_JWT_TOKEN', '').strip()
+        if env_jwt_token and self.connection.access_token == env_jwt_token:
+            return
+
         # Обновляем за 5 минут до истечения
         if self.connection.token_expires_at:
             if timezone.now() >= self.connection.token_expires_at - timedelta(minutes=5):
