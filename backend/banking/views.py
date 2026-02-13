@@ -4,7 +4,11 @@ REST API views для банковского модуля.
 
 import logging
 
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
+from django.urls import reverse
+from django.utils import timezone
+from django.core import signing
+from urllib.parse import urlencode
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -37,6 +41,8 @@ from personnel.permissions import ERPSectionPermission
 
 logger = logging.getLogger(__name__)
 
+_TOCHKA_OAUTH_STATE_SALT = 'banking.tochka.oauth.state'
+
 
 # =============================================================================
 # BankConnection
@@ -60,13 +66,46 @@ class BankConnectionViewSet(viewsets.ModelViewSet):
         connection = self.get_object()
         try:
             with TochkaAPIClient(connection) as client:
-                client.authenticate()
-            return Response({'status': 'ok', 'message': 'Подключение успешно'})
+                # Пробуем сделать реальный запрос, чтобы гарантировать валидность токена.
+                client.get_customers_list()
+            return Response({'status': 'ok', 'message': 'Подключение активно (токен валиден)'})
         except TochkaAPIError as exc:
             return Response(
                 {'status': 'error', 'message': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    @action(detail=True, methods=['get'], url_path='oauth/start')
+    def oauth_start(self, request, pk=None):
+        """
+        Старт OAuth authorization_code flow.
+
+        Redirect'им пользователя в Точку на страницу согласия.
+        """
+        connection = self.get_object()
+        if connection.provider != BankConnection.Provider.TOCHKA:
+            return Response({'error': 'OAuth start поддержан только для Tochka'}, status=status.HTTP_400_BAD_REQUEST)
+
+        callback_url = request.build_absolute_uri(reverse('tochka-oauth-callback'))
+        state = signing.dumps(
+            {
+                'connection_id': connection.id,
+                'ts': int(timezone.now().timestamp()),
+            },
+            salt=_TOCHKA_OAUTH_STATE_SALT,
+        )
+
+        params = {
+            'response_type': 'code',
+            'client_id': connection.client_id,
+            'redirect_uri': callback_url,
+            # scopes должны совпадать с теми, что вы настроили в приложении Точки
+            'scope': TochkaAPIClient.DEFAULT_SCOPE,
+            'state': state,
+        }
+
+        authorize_url = f'https://enter.tochka.com/connect/authorize?{urlencode(params)}'
+        return HttpResponseRedirect(authorize_url)
 
     @action(detail=True, methods=['post'], url_path='sync-accounts')
     def sync_accounts(self, request, pk=None):
@@ -320,3 +359,48 @@ def tochka_webhook(request):
         logger.error('Ошибка обработки webhook: %s', exc, exc_info=True)
         # Возвращаем 200 чтобы банк не ретраил
         return HttpResponse(status=200)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def tochka_oauth_callback(request):
+    """
+    OAuth callback endpoint (authorization_code).
+
+    Точка редиректит сюда с `code` и `state`. Мы меняем code на access_token/refresh_token
+    и сохраняем их в BankConnection (в зашифрованных полях).
+    """
+    code = request.query_params.get('code', '')
+    state = request.query_params.get('state', '')
+    error = request.query_params.get('error', '')
+
+    if error:
+        return HttpResponse(f'OAuth error: {error}', status=400)
+
+    if not code or not state:
+        return HttpResponse('Missing code/state', status=400)
+
+    try:
+        payload = signing.loads(state, salt=_TOCHKA_OAUTH_STATE_SALT, max_age=15 * 60)
+        connection_id = int(payload.get('connection_id'))
+    except Exception:
+        return HttpResponse('Invalid state', status=400)
+
+    try:
+        connection = BankConnection.objects.get(pk=connection_id, provider=BankConnection.Provider.TOCHKA)
+    except BankConnection.DoesNotExist:
+        return HttpResponse('BankConnection not found', status=404)
+
+    callback_url = request.build_absolute_uri(reverse('tochka-oauth-callback'))
+
+    try:
+        with TochkaAPIClient(connection) as client:
+            client.exchange_authorization_code(code=code, redirect_uri=callback_url)
+    except TochkaAPIError as exc:
+        return HttpResponse(f'OAuth token exchange failed: {exc}', status=400)
+
+    # Возвращаем простую страницу (без секретов)
+    return HttpResponse(
+        'OK. OAuth подключение Точки выполнено. Можно вернуться в ERP и нажать \"Тест подключения\".',
+        status=200,
+    )

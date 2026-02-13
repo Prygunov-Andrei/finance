@@ -6,6 +6,7 @@ from banking.views import (
     BankTransactionViewSet,
     BankPaymentOrderViewSet,
     tochka_webhook,
+    tochka_oauth_callback,
 )
 
 router = DefaultRouter()
@@ -17,4 +18,5 @@ router.register(r'bank-payment-orders', BankPaymentOrderViewSet, basename='bank-
 urlpatterns = [
     path('', include(router.urls)),
     path('banking/webhook/tochka/', tochka_webhook, name='tochka-webhook'),
+    path('banking/oauth/tochka/callback/', tochka_oauth_callback, name='tochka-oauth-callback'),
 ]

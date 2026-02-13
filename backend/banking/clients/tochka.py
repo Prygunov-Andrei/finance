@@ -84,45 +84,63 @@ class TochkaAPIClient:
 
     def authenticate(self, scope: str = DEFAULT_SCOPE) -> str:
         """
-        Получить access_token через client_credentials grant.
+        Убедиться, что есть валидный access_token.
 
         Args:
-            scope: Запрашиваемые права доступа.
+            scope: Scope используется только если потребуется заново получать токен
+                   (в нашем случае — через refresh_token).
 
         Returns:
             access_token строка.
         """
+        # В продакшене Точка не принимает client_credentials токены для OpenBanking/Payments.
+        # Должен быть пользовательский токен (authorization_code или password flow).
+        if not self.connection.access_token:
+            if self.connection.refresh_token:
+                self.refresh_access_token()
+            else:
+                raise TochkaAPIError(
+                    'Нет access_token/refresh_token для подключения. '
+                    'Выполните OAuth authorization_code flow для BankConnection.'
+                )
+        return self.connection.access_token
+
+    def exchange_authorization_code(self, code: str, redirect_uri: str, scope: str = DEFAULT_SCOPE) -> str:
+        """
+        Обменять authorization_code на access_token/refresh_token.
+        """
         data = {
-            'grant_type': 'client_credentials',
-            'scope': scope,
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': redirect_uri,
             'client_id': self.connection.client_id,
             'client_secret': self.connection.client_secret,
+            'scope': scope,
         }
 
         response = self._client.post(self._token_url, data=data)
-
         if response.status_code != 200:
             raise TochkaAPIError(
-                f'Ошибка аутентификации: {response.status_code} {response.text}',
+                f'Ошибка обмена кода: {response.status_code} {response.text}',
                 status_code=response.status_code,
                 response_data=response.text,
             )
 
         result = response.json()
         access_token = result.get('access_token', '')
-        expires_in = result.get('expires_in', 86400)  # default 24h
+        expires_in = result.get('expires_in', 86400)
         refresh_token = result.get('refresh_token', '')
 
-        # Сохраняем токены в BankConnection
+        if not access_token:
+            raise TochkaAPIError(f'Пустой access_token в ответе: {result}')
+
         self.connection.access_token = access_token
         if refresh_token:
             self.connection.refresh_token = refresh_token
         self.connection.token_expires_at = timezone.now() + timedelta(seconds=expires_in)
-        self.connection.save(update_fields=[
-            'access_token', 'refresh_token', 'token_expires_at',
-        ])
+        self.connection.save(update_fields=['access_token', 'refresh_token', 'token_expires_at'])
 
-        logger.info('Tochka: аутентификация успешна для %s', self.connection.name)
+        logger.info('Tochka: OAuth code exchange OK для %s', self.connection.name)
         return access_token
 
     def refresh_access_token(self) -> str:
@@ -133,21 +151,24 @@ class TochkaAPIClient:
             Новый access_token.
         """
         if not self.connection.refresh_token:
-            logger.warning('Tochka: refresh_token отсутствует, выполняем полную аутентификацию')
-            return self.authenticate()
+            raise TochkaAPIError('refresh_token отсутствует — нужно заново выполнить OAuth подключение')
 
         data = {
             'grant_type': 'refresh_token',
             'refresh_token': self.connection.refresh_token,
             'client_id': self.connection.client_id,
             'client_secret': self.connection.client_secret,
+            'scope': self.DEFAULT_SCOPE,
         }
 
         response = self._client.post(self._token_url, data=data)
 
         if response.status_code != 200:
-            logger.warning('Tochka: refresh_token невалиден, выполняем полную аутентификацию')
-            return self.authenticate()
+            raise TochkaAPIError(
+                f'Ошибка refresh_token: {response.status_code} {response.text}',
+                status_code=response.status_code,
+                response_data=response.text,
+            )
 
         result = response.json()
         access_token = result.get('access_token', '')
