@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
 import httpx
+import jwt
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,29 @@ class TochkaAPIClient:
         Returns:
             access_token строка.
         """
+        # Точка также умеет выдавать "JWT-ключ" в кабинете (готовый Bearer JWT).
+        # Это отдельный механизм от /connect/token. Если переменная задана —
+        # используем её как access_token и (если пусто) заполняем customer_code из claims.
+        env_jwt_token = os.environ.get('TOCHKA_JWT_TOKEN', '').strip()
+        if env_jwt_token:
+            if self.connection.access_token != env_jwt_token:
+                self.connection.access_token = env_jwt_token
+                self.connection.token_expires_at = None
+
+                # Не доверяем токену как "истине", но customer_code из него удобно подтянуть
+                # (без валидации подписи — подпись проверяется на стороне банка).
+                if not self.connection.customer_code:
+                    try:
+                        payload = jwt.decode(env_jwt_token, options={'verify_signature': False})
+                        customer_code = str(payload.get('customer_code', '')).strip()
+                        if customer_code:
+                            self.connection.customer_code = customer_code
+                    except Exception:
+                        pass
+
+                self.connection.save(update_fields=['access_token', 'token_expires_at', 'customer_code'])
+            return self.connection.access_token
+
         # В продакшене Точка требует пользовательский токен:
         # authorization_code или password flow.
         if not self.connection.access_token:
@@ -107,7 +131,7 @@ class TochkaAPIClient:
                 else:
                     raise TochkaAPIError(
                         'Нет access_token/refresh_token для подключения. '
-                        'Выполните OAuth authorization_code flow или задайте TOCHKA_USERNAME/TOCHKA_PASSWORD.'
+                        'Выполните OAuth authorization_code flow или задайте TOCHKA_JWT_TOKEN / TOCHKA_USERNAME/TOCHKA_PASSWORD.'
                     )
         return self.connection.access_token
 
