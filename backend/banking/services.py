@@ -166,8 +166,20 @@ def reconcile_transaction(
     Returns:
         True если привязка успешна.
     """
-    from payments.models import Payment
+    from payments.models import Payment, Invoice
 
+    # Попытка привязать к Invoice (новая система)
+    try:
+        inv = Invoice.objects.get(pk=payment_id)
+        transaction.invoice = inv
+        transaction.reconciled = True
+        transaction.save(update_fields=['invoice', 'reconciled'])
+        logger.info('Транзакция %s привязана к счёту (Invoice) %d', transaction.external_id, payment_id)
+        return True
+    except Invoice.DoesNotExist:
+        pass
+
+    # Fallback: старая система Payment (LEGACY)
     try:
         payment = Payment.objects.get(pk=payment_id)
     except Payment.DoesNotExist:
@@ -178,7 +190,7 @@ def reconcile_transaction(
     transaction.reconciled = True
     transaction.save(update_fields=['payment', 'reconciled'])
 
-    logger.info('Транзакция %s привязана к платежу %d', transaction.external_id, payment_id)
+    logger.info('Транзакция %s привязана к платежу %d (LEGACY)', transaction.external_id, payment_id)
     return True
 
 
@@ -241,6 +253,7 @@ def create_payment_order(
     vat_info: str = '',
     payment_date: Optional[date] = None,
     payment_registry_id: Optional[int] = None,
+    invoice_id: Optional[int] = None,
 ) -> BankPaymentOrder:
     """
     Создать платёжное поручение.
@@ -248,7 +261,7 @@ def create_payment_order(
     Returns:
         Созданный BankPaymentOrder.
     """
-    from payments.models import PaymentRegistry
+    from payments.models import PaymentRegistry, Invoice
 
     if payment_date is None:
         payment_date = date.today()
@@ -275,6 +288,10 @@ def create_payment_order(
         status=BankPaymentOrder.Status.DRAFT,
         created_by=user,
     )
+
+    # Привязка Invoice к BankPaymentOrder (через Invoice.bank_payment_order)
+    if invoice_id:
+        Invoice.objects.filter(pk=invoice_id).update(bank_payment_order=order)
 
     BankPaymentOrderEvent.objects.create(
         order=order,

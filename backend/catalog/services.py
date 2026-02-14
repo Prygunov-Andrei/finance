@@ -1,3 +1,5 @@
+import json
+import logging
 from typing import List, Dict, Optional
 from functools import lru_cache
 from django.db.models import Q
@@ -5,10 +7,16 @@ from django.core.cache import cache
 from fuzzywuzzy import fuzz
 from .models import Product, ProductAlias
 
+logger = logging.getLogger(__name__)
+
 
 class ProductMatcher:
     """
     Сервис для поиска и сопоставления товаров.
+    
+    Двухуровневая стратегия:
+    1. Exact / Alias / Fuzzy (>= 0.95) — автоматическое совпадение
+    2. LLM-сравнение (0.60-0.95) — семантическая проверка для top-5 кандидатов
     
     Оптимизации:
     - Предварительная фильтрация по первым словам для сокращения выборки
@@ -16,7 +24,10 @@ class ProductMatcher:
     - Batch-обработка для find_duplicates
     """
     
-    EXACT_THRESHOLD = 0.9
+    EXACT_THRESHOLD = 0.95     # Точное совпадение (автоматически)
+    FUZZY_THRESHOLD = 0.80     # Нечёткое, но вероятное
+    LLM_THRESHOLD = 0.60       # Отправить в LLM для проверки
+    LLM_CONFIDENCE_THRESHOLD = 0.8  # Минимальная уверенность LLM для подтверждения
     ALIAS_THRESHOLD = 0.7
     CACHE_KEY = 'product_matcher_products'
     CACHE_TIMEOUT = 300  # 5 минут
@@ -69,10 +80,16 @@ class ProductMatcher:
         self,
         name: str,
         unit: str = 'шт',
-        payment=None
-    ) -> tuple[Product, bool]:
+        payment=None,
+        use_llm: bool = True,
+    ) -> tuple:
         """
         Ищет товар по названию или создаёт новый.
+        
+        Двухуровневая стратегия:
+        1. Exact → Alias → High Fuzzy (>= 0.95) → автоматическое совпадение
+        2. Medium Fuzzy (0.60-0.95) → LLM семантическое сравнение
+        3. Создать новый товар
         
         Returns:
             tuple: (Product, created: bool)
@@ -97,30 +114,88 @@ class ProductMatcher:
         if alias_match:
             return alias_match.product, False
         
-        # 3. Fuzzy поиск
-        similar = self.find_similar(normalized, threshold=self.EXACT_THRESHOLD, limit=1)
-        if similar:
-            product = Product.objects.get(pk=similar[0]['product_id'])
-            # Создаём алиас
+        # 3. Fuzzy поиск — высокая точность (>= 0.95)
+        high_similar = self.find_similar(normalized, threshold=self.EXACT_THRESHOLD, limit=1)
+        if high_similar:
+            product = Product.objects.get(pk=high_similar[0]['product_id'])
             ProductAlias.objects.create(
                 product=product,
                 alias_name=name,
-                source_payment=payment
+                source_payment=payment,
             )
-            # Инвалидируем кэш так как добавился новый алиас
             self.invalidate_cache()
             return product, False
         
-        # 4. Создаём новый
+        # 4. LLM-уровень — средняя точность (0.60-0.95)
+        if use_llm:
+            llm_match = self._try_llm_match(name, normalized, payment)
+            if llm_match:
+                return llm_match, False
+        
+        # 5. Создаём новый
         product = Product.objects.create(
             name=name,
             default_unit=unit,
             status=Product.Status.NEW,
-            created_from_payment=payment
+            created_from_payment=payment,
         )
-        # Инвалидируем кэш
         self.invalidate_cache()
         return product, True
+    
+    def _try_llm_match(
+        self, name: str, normalized: str, payment=None
+    ) -> Optional[Product]:
+        """
+        Попытка LLM-сопоставления для неоднозначных случаев.
+        
+        Отправляет top-5 fuzzy-кандидатов (0.60-0.95) в LLM
+        для семантического сравнения.
+        
+        Returns:
+            Product если LLM подтвердил совпадение, иначе None
+        """
+        # Находим кандидатов в диапазоне 0.60-0.95
+        candidates = self.find_similar(
+            normalized,
+            threshold=self.LLM_THRESHOLD,
+            limit=5,
+        )
+        
+        # Отсеиваем уже обработанные (score >= 0.95)
+        candidates = [c for c in candidates if c['score'] < self.EXACT_THRESHOLD]
+        
+        if not candidates:
+            return None
+        
+        try:
+            results = compare_products_with_llm(
+                product_name=name,
+                candidates=[c['product_name'] for c in candidates],
+            )
+            
+            for i, result in enumerate(results):
+                if (
+                    result.get('is_same', False)
+                    and result.get('confidence', 0) >= self.LLM_CONFIDENCE_THRESHOLD
+                    and i < len(candidates)
+                ):
+                    product = Product.objects.get(pk=candidates[i]['product_id'])
+                    ProductAlias.objects.create(
+                        product=product,
+                        alias_name=name,
+                        source_payment=payment,
+                    )
+                    self.invalidate_cache()
+                    logger.info(
+                        'LLM confirmed match: "%s" → "%s" (confidence=%.2f)',
+                        name, product.name, result['confidence'],
+                    )
+                    return product
+            
+        except Exception as exc:
+            logger.warning('LLM product comparison failed: %s', exc)
+        
+        return None
     
     def find_similar(
         self,
@@ -231,3 +306,136 @@ class ProductMatcher:
                 })
         
         return duplicates
+
+
+# =============================================================================
+# LLM-сравнение товаров — вспомогательная функция
+# =============================================================================
+
+def compare_products_with_llm(
+    product_name: str,
+    candidates: List[str],
+) -> List[Dict]:
+    """
+    Сравнивает товар с кандидатами через LLM.
+    
+    Отправляет маленький prompt с product_name и списком кандидатов,
+    получает JSON-ответ: [{is_same: bool, confidence: float}]
+    
+    Args:
+        product_name: Название товара из счёта
+        candidates: Список названий кандидатов из каталога (макс 5)
+        
+    Returns:
+        Список результатов: [{"is_same": bool, "confidence": float}, ...]
+    """
+    from llm_services.models import LLMProvider as LLMProviderModel
+    from llm_services.providers.openai_provider import OpenAIProvider
+    from llm_services.providers.gemini_provider import GeminiProvider
+    from llm_services.providers.grok_provider import GrokProvider
+
+    # Получить активного провайдера
+    provider_record = LLMProviderModel.objects.filter(is_active=True).first()
+    if not provider_record:
+        raise RuntimeError('Нет активного LLM-провайдера')
+
+    provider_map = {
+        'openai': OpenAIProvider,
+        'gemini': GeminiProvider,
+        'grok': GrokProvider,
+    }
+    provider_cls = provider_map.get(provider_record.provider_type)
+    if not provider_cls:
+        raise RuntimeError(f'Неизвестный провайдер: {provider_record.provider_type}')
+
+    # Формируем prompt
+    candidates_text = '\n'.join(
+        f'{i+1}. "{c}"' for i, c in enumerate(candidates)
+    )
+    prompt = f"""Сравни товар "{product_name}" с кандидатами из каталога.
+Определи, является ли товар тем же самым (возможно записан немного по-другому).
+
+Кандидаты:
+{candidates_text}
+
+Ответь строго в формате JSON — массив объектов:
+[
+  {{"candidate_index": 1, "is_same": true/false, "confidence": 0.0-1.0, "reason": "краткое пояснение"}}
+]
+
+Правила:
+- is_same=true только если это ТОЧНО один и тот же товар/услуга
+- confidence — уверенность от 0.0 до 1.0
+- Учитывай: единицы измерения, размеры, бренд, тип
+- "Болт М6х30" и "Болт М6х30 оцинк." — РАЗНЫЕ товары (разное покрытие)
+- "Болт 6мм" и "Болт 6 мм" — ОДИНАКОВЫЕ товары (пробел)
+- Ответь ТОЛЬКО JSON без markdown."""
+
+    # Вызов LLM через низкоуровневый API
+    try:
+        import openai
+        import httpx
+
+        if provider_record.provider_type == 'openai':
+            client = openai.OpenAI(api_key=provider_record.api_key)
+            response = client.chat.completions.create(
+                model=provider_record.model_name,
+                messages=[
+                    {'role': 'system', 'content': 'Ты эксперт по сопоставлению товаров. Отвечай только JSON.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                temperature=0.1,
+                max_tokens=500,
+            )
+            raw_text = response.choices[0].message.content.strip()
+
+        elif provider_record.provider_type == 'grok':
+            with httpx.Client(timeout=30) as client:
+                resp = client.post(
+                    'https://api.x.ai/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {provider_record.api_key}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={
+                        'model': provider_record.model_name,
+                        'messages': [
+                            {'role': 'system', 'content': 'Ты эксперт по сопоставлению товаров. Отвечай только JSON.'},
+                            {'role': 'user', 'content': prompt},
+                        ],
+                        'temperature': 0.1,
+                        'max_tokens': 500,
+                    },
+                )
+                resp.raise_for_status()
+                raw_text = resp.json()['choices'][0]['message']['content'].strip()
+
+        elif provider_record.provider_type == 'gemini':
+            import google.generativeai as genai
+            genai.configure(api_key=provider_record.api_key)
+            model = genai.GenerativeModel(provider_record.model_name)
+            response = model.generate_content(prompt)
+            raw_text = response.text.strip()
+
+        else:
+            raise RuntimeError(f'Unsupported provider: {provider_record.provider_type}')
+
+        # Парсим JSON
+        # Убираем markdown-обёртку если есть
+        if raw_text.startswith('```'):
+            raw_text = raw_text.strip('`').strip()
+            if raw_text.startswith('json'):
+                raw_text = raw_text[4:].strip()
+
+        results = json.loads(raw_text)
+        if not isinstance(results, list):
+            results = [results]
+
+        return results
+
+    except json.JSONDecodeError as exc:
+        logger.warning('LLM returned invalid JSON for product comparison: %s', exc)
+        return []
+    except Exception as exc:
+        logger.warning('LLM product comparison error: %s', exc)
+        return []

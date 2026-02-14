@@ -3,6 +3,14 @@
 
 Общие фикстуры, доступные во всех тестовых модулях backend.
 """
+import os
+
+# Установить ключ шифрования для banking модуля (до загрузки Django моделей)
+os.environ.setdefault(
+    'BANK_ENCRYPTION_KEY',
+    'Cba2op88Xj8PxFfPduejikxKMdYcY1VS76j45BdfrYw=',
+)
+
 import pytest
 from django.contrib.auth.models import User
 

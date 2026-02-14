@@ -139,6 +139,10 @@ services:
       - FNS_API_KEY=${FNS_API_KEY:-}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
+      # --- Supply / LLM ---
+      - BITRIX_WEBHOOK_TIMEOUT=${BITRIX_WEBHOOK_TIMEOUT:-30}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
       - backend_media:/app/media
       - backend_logs:/app/logs
@@ -208,7 +212,12 @@ services:
       - FNS_API_KEY=${FNS_API_KEY:-}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
+      # --- Supply / LLM ---
+      - BITRIX_WEBHOOK_TIMEOUT=${BITRIX_WEBHOOK_TIMEOUT:-30}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
+      - backend_media:/app/media
       - backend_logs:/app/logs
     depends_on:
       postgres:

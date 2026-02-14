@@ -9,12 +9,31 @@
 - Все сущности системы (модели данных)
 - Система учёта (юридические лица, счета, налогообложение)
 - Связи между сущностями
-- Бизнес-логика (cash-flow, workflow платежей, расчёт остатков и НДС)
+- Бизнес-логика (workflow снабжения, Invoice lifecycle, cash-flow)
 - Архитектура системы
 - API и сериализаторы
 - Аутентификация и безопасность
-- База данных
-- Аналитика и отчёты
+
+### 🚚 Снабжение (Supply Module)
+
+| Документ | Описание |
+|----------|----------|
+| [supply/BITRIX_SETUP.md](./supply/BITRIX_SETUP.md) | Инструкция по подключению и настройке Bitrix24 |
+| [supply/WORKFLOW.md](./supply/WORKFLOW.md) | Workflow: от запроса до оплаты |
+
+### 🏦 Банковская интеграция (Banking)
+
+| Документ | Описание |
+|----------|----------|
+| [banking/statements.md](./banking/statements.md) | Синхронизация выписок |
+| [banking/tochka-client.md](./banking/tochka-client.md) | Клиент банка Точка |
+| [banking/permissions.md](./banking/permissions.md) | Права доступа |
+| [banking/admin-setup.md](./banking/admin-setup.md) | Настройка через админку |
+| [banking/security.md](./banking/security.md) | Безопасность |
+| [banking/user-guide-controller.md](./banking/user-guide-controller.md) | Руководство Директора-контролёра |
+| [banking/user-guide-operator.md](./banking/user-guide-operator.md) | Руководство Оператора |
+| [banking/api-reference.md](./banking/api-reference.md) | Справочник API |
+| [banking/architecture.md](./banking/architecture.md) | Архитектура модуля |
 
 ### 🧾 Парсинг счетов (Invoice Parsing)
 
@@ -60,17 +79,21 @@ finans_assistant/
 │   ├── accounting/   # Юрлица, счета, контрагенты
 │   ├── objects/      # Объекты строительства
 │   ├── contracts/    # Договоры, акты
-│   ├── payments/     # Платежи, реестры
+│   ├── payments/     # Счета на оплату (Invoice), доходы, периодические платежи
+│   ├── banking/      # Интеграция с банком Точка
+│   ├── catalog/      # Каталог товаров и услуг
+│   ├── supply/       # Снабжение (Bitrix24 интеграция)
+│   ├── personnel/    # Кадры, сотрудники
 │   ├── communications/  # Переписка
 │   ├── pricelists/   # Прайс-листы
 │   ├── estimates/    # Проекты, сметы
 │   ├── proposals/    # ТКП, МП
-│   ├── catalog/      # Каталог товаров
 │   ├── llm_services/ # Парсинг счетов через LLM
 │   └── worklog/      # Сервис фиксации работ
 ├── frontend/         # React + Vite приложение (ERP)
 ├── bot/              # Telegram бот (aiogram 3.x)
 ├── mini-app/         # Telegram Mini App (React + Vite)
+├── deploy/           # Скрипты деплоя
 └── docs/             # Документация проекта
 ```
 
@@ -85,12 +108,19 @@ cd backend && python manage.py runserver
 # Запуск фронтенда
 cd frontend && npm run dev
 
+# Запуск Celery worker
+cd backend && celery -A finans_assistant worker -l info
+
+# Запуск Celery beat
+cd backend && celery -A finans_assistant beat -l info
+
 # Миграции
 python manage.py makemigrations
 python manage.py migrate
 
 # Тесты
-python manage.py test
+pytest  # backend
+cd frontend && npm test  # frontend
 ```
 
 ---

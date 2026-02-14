@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'fns',
     'personnel',
     'banking',
+    'supply',
 ]
 
 MIDDLEWARE = [
@@ -314,6 +315,19 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 300  # 5 минут
+
+# Celery Beat — расписание периодических задач
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    'generate-recurring-invoices': {
+        'task': 'supply.tasks.generate_recurring_invoices',
+        'schedule': crontab(hour=6, minute=0),  # Каждый день в 06:00
+    },
+}
+
+# Bitrix24 Integration
+BITRIX_WEBHOOK_TIMEOUT = int(os.environ.get('BITRIX_WEBHOOK_TIMEOUT', '30'))
 
 # =============================================================================
 # MinIO / S3 Configuration (для медиа сервиса фиксации работ)

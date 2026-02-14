@@ -7,13 +7,25 @@ from django.conf import settings
 def payment_scan_path(instance, filename):
     return f'payments/{instance.payment_date.year}/{instance.payment_date.month}/{filename}'
 
-def invoice_scan_path(instance, filename):
-    return f'invoices/{instance.planned_date.year}/{instance.planned_date.month}/{filename}'
 
+def invoice_scan_path(instance, filename):
+    """LEGACY: используется в старых миграциях PaymentRegistry."""
+    return f'invoices/{filename}'
+
+
+def invoice_file_path(instance, filename):
+    year = instance.invoice_date.year if instance.invoice_date else 'unknown'
+    month = instance.invoice_date.month if instance.invoice_date else '00'
+    return f'invoices/{year}/{month}/{filename}'
+
+
+# =============================================================================
+# ExpenseCategory — категория расходов/доходов (без изменений)
+# =============================================================================
 
 class ExpenseCategory(TimestampedModel):
     """Категория расходов/доходов с поддержкой иерархии"""
-    
+
     name = models.CharField(
         max_length=255,
         verbose_name='Название категории'
@@ -52,7 +64,7 @@ class ExpenseCategory(TimestampedModel):
         verbose_name='Порядок сортировки',
         help_text='Чем меньше число, тем выше в списке'
     )
-    
+
     class Meta:
         verbose_name = 'Категория расходов/доходов'
         verbose_name_plural = 'Категории расходов/доходов'
@@ -61,30 +73,34 @@ class ExpenseCategory(TimestampedModel):
             models.Index(fields=['code']),
             models.Index(fields=['parent', 'is_active']),
         ]
-    
+
     def __str__(self) -> str:
         if self.parent:
             return f"{self.parent.name} → {self.name}"
         return self.name
-    
+
     def clean(self):
-        """Валидация модели"""
         if self.parent:
             parent = self.parent
             while parent:
                 if parent.id == self.id:
-                    raise ValidationError('Нельзя создать циклическую ссылку на родительскую категорию')
+                    raise ValidationError(
+                        'Нельзя создать циклическую ссылку на родительскую категорию'
+                    )
                 parent = parent.parent
-    
+
     def get_full_path(self) -> str:
-        """Возвращает полный путь категории (родитель → категория)"""
         if self.parent:
             return f"{self.parent.get_full_path()} → {self.name}"
         return self.name
 
 
+# =============================================================================
+# Payment — фактический платёж (LEGACY — будет удалён на Этапе 10)
+# =============================================================================
+
 class Payment(TimestampedModel):
-    """Фактический платёж (по договору или операционный)"""
+    """Фактический платёж (по договору или операционный) — LEGACY"""
 
     class PaymentType(models.TextChoices):
         EXPENSE = 'expense', 'Расход'
@@ -100,24 +116,24 @@ class Payment(TimestampedModel):
         on_delete=models.PROTECT,
         related_name='payments',
         verbose_name='Счёт компании',
-        null=True, # Nullable for migration compatibility
-        blank=True
+        null=True,
+        blank=True,
     )
     contract = models.ForeignKey(
         'contracts.Contract',
-        on_delete=models.SET_NULL, # При удалении договора платежи остаются
+        on_delete=models.SET_NULL,
         related_name='payments',
         verbose_name='Договор',
         null=True,
         blank=True,
-        help_text='Оставьте пустым для операционных расходов/доходов'
+        help_text='Оставьте пустым для операционных расходов/доходов',
     )
     category = models.ForeignKey(
         ExpenseCategory,
         on_delete=models.PROTECT,
         related_name='payments',
         verbose_name='Категория',
-        help_text='Категория платежа (например: Зарплата, Аренда)'
+        help_text='Категория платежа (например: Зарплата, Аренда)',
     )
     legal_entity = models.ForeignKey(
         'accounting.LegalEntity',
@@ -125,73 +141,59 @@ class Payment(TimestampedModel):
         related_name='payments',
         verbose_name='Юридическое лицо',
         null=True,
-        blank=True
+        blank=True,
     )
     payment_type = models.CharField(
         max_length=20,
         choices=PaymentType.choices,
-        verbose_name='Тип платежа'
+        verbose_name='Тип платежа',
     )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
-        verbose_name='Статус'
+        verbose_name='Статус',
     )
-    payment_date = models.DateField(
-        verbose_name='Дата платежа'
-    )
+    payment_date = models.DateField(verbose_name='Дата платежа')
     amount = models.DecimalField(
-        max_digits=14,
-        decimal_places=2,
-        verbose_name='Сумма'
+        max_digits=14, decimal_places=2, verbose_name='Сумма',
     )
-    # Для поддержки Legacy данных и простоты ввода
     amount_gross = models.DecimalField(
-        max_digits=14, decimal_places=2, null=True, blank=True, verbose_name='Сумма с НДС'
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name='Сумма с НДС',
     )
     amount_net = models.DecimalField(
-        max_digits=14, decimal_places=2, null=True, blank=True, verbose_name='Сумма без НДС'
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name='Сумма без НДС',
     )
     vat_amount = models.DecimalField(
-        max_digits=14, decimal_places=2, null=True, blank=True, verbose_name='Сумма НДС'
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name='Сумма НДС',
     )
-    
-    description = models.TextField(
-        blank=True,
-        verbose_name='Назначение платежа'
-    )
+    description = models.TextField(blank=True, verbose_name='Назначение платежа')
     scan_file = models.FileField(
         upload_to=payment_scan_path,
         verbose_name='Документ (счёт/акт)',
-        help_text='PDF для расходов, любой формат для доходов'
+        help_text='PDF для расходов, любой формат для доходов',
     )
-    
     import_batch_id = models.CharField(
-        max_length=100,
-        blank=True,
-        db_index=True,
-        verbose_name='Идентификатор импорта'
+        max_length=100, blank=True, db_index=True,
+        verbose_name='Идентификатор импорта',
     )
     payment_registry = models.OneToOneField(
         'PaymentRegistry',
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='payment_fact',
-        verbose_name='Связанная заявка'
+        verbose_name='Связанная заявка',
     )
     is_internal_transfer = models.BooleanField(
         default=False,
         verbose_name='Внутренний перевод',
-        help_text='Флаг внутреннего перевода между счетами'
     )
     internal_transfer_group = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        db_index=True,
+        max_length=100, blank=True, null=True, db_index=True,
         verbose_name='Группа внутреннего перевода',
-        help_text='Группа для связывания внутренних переводов (если платеж является частью внутреннего перевода)'
     )
 
     class Meta:
@@ -205,22 +207,16 @@ class Payment(TimestampedModel):
             models.Index(fields=['category', 'payment_date']),
             models.Index(fields=['status']),
         ]
-    
+
     def clean(self):
-        """Валидация платежа"""
         if self.category and self.category.requires_contract and not self.contract:
             raise ValidationError({
                 'contract': f'Категория "{self.category.name}" требует указания договора'
             })
-        
-        # Автозаполнение amount_gross/net если не задано, но есть amount
         if self.amount and not self.amount_gross:
             self.amount_gross = self.amount
-            
         if self.account and self.legal_entity and self.account.legal_entity != self.legal_entity:
-             raise ValidationError({'account': 'Счет должен принадлежать выбранному юрлицу'})
-        
-        # Валидация формата файла для расходных платежей
+            raise ValidationError({'account': 'Счет должен принадлежать выбранному юрлицу'})
         if self.scan_file and self.payment_type == self.PaymentType.EXPENSE:
             filename = self.scan_file.name.lower()
             if not filename.endswith('.pdf'):
@@ -230,10 +226,8 @@ class Payment(TimestampedModel):
 
     def save(self, *args, **kwargs):
         self.full_clean()
-        # Если не указано legal_entity, берем из счета
         if self.account and not self.legal_entity:
             self.legal_entity = self.account.legal_entity
-            
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
@@ -242,8 +236,12 @@ class Payment(TimestampedModel):
         return f"{payment_type_label} {self.amount} от {self.payment_date} ({entity})"
 
 
+# =============================================================================
+# PaymentRegistry — LEGACY (будет удалён на Этапе 10)
+# =============================================================================
+
 class PaymentRegistry(TimestampedModel):
-    """Реестр планируемых платежей (Заявки на оплату)"""
+    """Реестр планируемых платежей — LEGACY"""
 
     class Status(models.TextChoices):
         PLANNED = 'planned', 'Планируется'
@@ -256,21 +254,21 @@ class PaymentRegistry(TimestampedModel):
         on_delete=models.PROTECT,
         related_name='payment_requests',
         verbose_name='Счёт списания',
-        null=True, blank=True
+        null=True, blank=True,
     )
     category = models.ForeignKey(
         ExpenseCategory,
         on_delete=models.PROTECT,
         related_name='payment_requests',
         verbose_name='Категория',
-        null=True, blank=True # Nullable for migration
+        null=True, blank=True,
     )
     contract = models.ForeignKey(
         'contracts.Contract',
         on_delete=models.CASCADE,
         related_name='planned_payments',
         verbose_name='Договор',
-        null=True, blank=True # Nullable for operational expenses
+        null=True, blank=True,
     )
     act = models.ForeignKey(
         'contracts.Act',
@@ -278,48 +276,35 @@ class PaymentRegistry(TimestampedModel):
         related_name='payment_requests',
         verbose_name='Основание (Акт)',
         null=True, blank=True,
-        help_text='Если заполнено - постоплата по акту. Иначе - аванс.'
     )
-    planned_date = models.DateField(
-        verbose_name='Плановая дата'
-    )
+    planned_date = models.DateField(verbose_name='Плановая дата')
     amount = models.DecimalField(
-        max_digits=14,
-        decimal_places=2,
-        verbose_name='Сумма'
+        max_digits=14, decimal_places=2, verbose_name='Сумма',
     )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PLANNED,
-        verbose_name='Статус'
+        verbose_name='Статус',
     )
     initiator = models.CharField(
-        max_length=255,
-        blank=True,
-        verbose_name='Инициатор платежа'
+        max_length=255, blank=True, verbose_name='Инициатор платежа',
     )
     approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='approved_payments',
-        verbose_name='Кем одобрено'
+        verbose_name='Кем одобрено',
     )
-    approved_at = models.DateTimeField(
-        null=True, blank=True,
-        verbose_name='Дата одобрения'
-    )
-    comment = models.TextField(
-        blank=True,
-        verbose_name='Комментарий'
-    )
+    approved_at = models.DateTimeField(null=True, blank=True, verbose_name='Дата одобрения')
+    comment = models.TextField(blank=True, verbose_name='Комментарий')
     invoice_file = models.FileField(
-        upload_to=invoice_scan_path,
+        upload_to='invoices/%Y/%m/',
         blank=True, null=True,
-        verbose_name='Скан счета на оплату'
+        verbose_name='Скан счета на оплату',
     )
-    
+
     class Meta:
         verbose_name = 'Заявка на платёж'
         verbose_name_plural = 'Реестр платежей'
@@ -334,64 +319,588 @@ class PaymentRegistry(TimestampedModel):
         return f"Заявка {self.amount} на {self.planned_date} ({self.get_status_display()})"
 
 
+# =============================================================================
+# PaymentItem — LEGACY (будет удалён на Этапе 10)
+# =============================================================================
+
 class PaymentItem(TimestampedModel):
-    """Позиция в платёжном документе (товар/услуга из счёта)"""
-    
+    """Позиция в платёжном документе — LEGACY"""
+
     payment = models.ForeignKey(
         'Payment',
         on_delete=models.CASCADE,
         related_name='items',
-        verbose_name='Платёж'
+        verbose_name='Платёж',
     )
     product = models.ForeignKey(
         'catalog.Product',
         on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        null=True, blank=True,
         related_name='payment_items',
-        verbose_name='Товар из каталога'
+        verbose_name='Товар из каталога',
     )
-    raw_name = models.CharField(
-        max_length=500,
-        verbose_name='Исходное название из счёта'
-    )
-    quantity = models.DecimalField(
-        max_digits=14,
-        decimal_places=3,
-        verbose_name='Количество'
-    )
-    unit = models.CharField(
-        max_length=20,
-        verbose_name='Единица измерения'
-    )
-    price_per_unit = models.DecimalField(
-        max_digits=14,
-        decimal_places=2,
-        verbose_name='Цена за единицу'
-    )
-    amount = models.DecimalField(
-        max_digits=14,
-        decimal_places=2,
-        verbose_name='Сумма'
-    )
+    raw_name = models.CharField(max_length=500, verbose_name='Исходное название из счёта')
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, verbose_name='Количество')
+    unit = models.CharField(max_length=20, verbose_name='Единица измерения')
+    price_per_unit = models.DecimalField(max_digits=14, decimal_places=2, verbose_name='Цена за единицу')
+    amount = models.DecimalField(max_digits=14, decimal_places=2, verbose_name='Сумма')
     vat_amount = models.DecimalField(
-        max_digits=14,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        verbose_name='НДС по позиции'
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name='НДС по позиции',
     )
-    
+
     class Meta:
         verbose_name = 'Позиция платежа'
         verbose_name_plural = 'Позиции платежей'
         ordering = ['id']
-    
+
     def __str__(self):
         return f"{self.raw_name} x{self.quantity}"
-    
+
     def save(self, *args, **kwargs):
-        # Автоматический расчёт суммы
         if not self.amount:
             self.amount = self.quantity * self.price_per_unit
         super().save(*args, **kwargs)
+
+
+# =============================================================================
+# Invoice — единый счёт на оплату (НОВОЕ — центральная сущность для расходов)
+# =============================================================================
+
+class Invoice(TimestampedModel):
+    """
+    Единый Счёт на оплату — центральная сущность для всех расходов.
+
+    Заменяет и объединяет функционал Payment + PaymentRegistry.
+    Проходит workflow: RECOGNITION → REVIEW → IN_REGISTRY → APPROVED → SENDING → PAID.
+    """
+
+    class Source(models.TextChoices):
+        BITRIX = 'bitrix', 'Из Битрикс24'
+        MANUAL = 'manual', 'Ручной ввод'
+        RECURRING = 'recurring', 'Периодический'
+
+    class Status(models.TextChoices):
+        RECOGNITION = 'recognition', 'Распознаётся'
+        REVIEW = 'review', 'На проверке'
+        IN_REGISTRY = 'in_registry', 'В реестре'
+        APPROVED = 'approved', 'Одобрен'
+        SENDING = 'sending', 'Отправляется в банк'
+        PAID = 'paid', 'Оплачен'
+        CANCELLED = 'cancelled', 'Отменён'
+
+    # --- Источник ---
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+        verbose_name='Источник',
+    )
+    supply_request = models.ForeignKey(
+        'supply.SupplyRequest',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Запрос на снабжение',
+    )
+    recurring_payment = models.ForeignKey(
+        'RecurringPayment',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Периодический платёж',
+    )
+
+    # --- Файл счёта ---
+    invoice_file = models.FileField(
+        upload_to=invoice_file_path,
+        blank=True, null=True,
+        verbose_name='PDF счёта',
+    )
+    invoice_number = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Номер счёта',
+    )
+    invoice_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='Дата счёта',
+    )
+    due_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='Срок оплаты',
+    )
+
+    # --- Контрагент ---
+    counterparty = models.ForeignKey(
+        'accounting.Counterparty',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Контрагент (поставщик)',
+    )
+
+    # --- Привязки ---
+    object = models.ForeignKey(
+        'objects.Object',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Объект',
+    )
+    contract = models.ForeignKey(
+        'contracts.Contract',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Договор',
+    )
+    category = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Категория',
+    )
+    account = models.ForeignKey(
+        'accounting.Account',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Счёт списания',
+    )
+    legal_entity = models.ForeignKey(
+        'accounting.LegalEntity',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Юридическое лицо',
+    )
+
+    # --- Суммы ---
+    amount_gross = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='Сумма с НДС',
+    )
+    amount_net = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='Сумма без НДС',
+    )
+    vat_amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='Сумма НДС',
+    )
+
+    # --- Статус ---
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RECOGNITION,
+        verbose_name='Статус',
+    )
+
+    # --- Участники ---
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_invoices',
+        verbose_name='Создано',
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reviewed_invoices',
+        verbose_name='Проверено (оператор)',
+    )
+    reviewed_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Дата проверки',
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='approved_invoices',
+        verbose_name='Одобрено (директор)',
+    )
+    approved_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Дата одобрения',
+    )
+    paid_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Дата оплаты',
+    )
+
+    # --- Платёжное поручение ---
+    bank_payment_order = models.OneToOneField(
+        'banking.BankPaymentOrder',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoice',
+        verbose_name='Платёжное поручение',
+    )
+
+    # --- Мета ---
+    description = models.TextField(
+        blank=True,
+        verbose_name='Описание / назначение платежа',
+    )
+    comment = models.TextField(
+        blank=True,
+        verbose_name='Комментарий директора',
+    )
+
+    # --- LLM ---
+    parsed_document = models.ForeignKey(
+        'llm_services.ParsedDocument',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Распознанный документ (LLM)',
+    )
+    recognition_confidence = models.FloatField(
+        null=True, blank=True,
+        verbose_name='Уверенность распознавания',
+    )
+
+    class Meta:
+        verbose_name = 'Счёт на оплату'
+        verbose_name_plural = 'Счета на оплату'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['source']),
+            models.Index(fields=['due_date']),
+            models.Index(fields=['status', 'due_date']),
+            models.Index(fields=['object', 'status']),
+            models.Index(fields=['counterparty', 'status']),
+        ]
+
+    def __str__(self) -> str:
+        number = self.invoice_number or f'#{self.pk}'
+        amount = self.amount_gross or '—'
+        return f'Счёт {number} на {amount} ({self.get_status_display()})'
+
+    @property
+    def is_overdue(self) -> bool:
+        """Просрочен ли срок оплаты?"""
+        from django.utils import timezone
+        if not self.due_date:
+            return False
+        if self.status in (self.Status.PAID, self.Status.CANCELLED):
+            return False
+        return self.due_date < timezone.now().date()
+
+
+# =============================================================================
+# InvoiceItem — позиция счёта (заменяет PaymentItem)
+# =============================================================================
+
+class InvoiceItem(TimestampedModel):
+    """Позиция счёта (товар/услуга из документа)."""
+
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='Счёт',
+    )
+    product = models.ForeignKey(
+        'catalog.Product',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoice_items',
+        verbose_name='Товар из каталога',
+    )
+    raw_name = models.CharField(
+        max_length=500,
+        verbose_name='Исходное название из счёта',
+    )
+    quantity = models.DecimalField(
+        max_digits=14, decimal_places=3,
+        verbose_name='Количество',
+    )
+    unit = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Единица измерения',
+    )
+    price_per_unit = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        verbose_name='Цена за единицу',
+    )
+    amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        verbose_name='Сумма',
+    )
+    vat_amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='НДС по позиции',
+    )
+
+    class Meta:
+        verbose_name = 'Позиция счёта'
+        verbose_name_plural = 'Позиции счетов'
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.raw_name} x{self.quantity}'
+
+    def save(self, *args, **kwargs):
+        if not self.amount and self.quantity and self.price_per_unit:
+            self.amount = self.quantity * self.price_per_unit
+        super().save(*args, **kwargs)
+
+
+# =============================================================================
+# InvoiceEvent — аудит-лог действий со счётом
+# =============================================================================
+
+class InvoiceEvent(TimestampedModel):
+    """Аудит-лог всех действий со счётом на оплату."""
+
+    class EventType(models.TextChoices):
+        CREATED = 'created', 'Создан'
+        RECOGNIZED = 'recognized', 'Распознан (LLM)'
+        REVIEWED = 'reviewed', 'Проверен оператором'
+        SENT_TO_REGISTRY = 'sent_to_registry', 'Отправлен в реестр'
+        APPROVED = 'approved', 'Одобрен'
+        REJECTED = 'rejected', 'Отклонён'
+        RESCHEDULED = 'rescheduled', 'Перенесена дата'
+        SENT_TO_BANK = 'sent_to_bank', 'Отправлен в банк'
+        PAID = 'paid', 'Оплачен'
+        CANCELLED = 'cancelled', 'Отменён'
+        COMMENT = 'comment', 'Комментарий'
+
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.CASCADE,
+        related_name='events',
+        verbose_name='Счёт',
+    )
+    event_type = models.CharField(
+        max_length=30,
+        choices=EventType.choices,
+        verbose_name='Тип события',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoice_events',
+        verbose_name='Пользователь',
+    )
+    old_value = models.JSONField(
+        null=True, blank=True,
+        verbose_name='Предыдущее значение',
+    )
+    new_value = models.JSONField(
+        null=True, blank=True,
+        verbose_name='Новое значение',
+    )
+    comment = models.TextField(
+        blank=True,
+        verbose_name='Комментарий',
+    )
+
+    class Meta:
+        verbose_name = 'Событие счёта'
+        verbose_name_plural = 'События счетов'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.get_event_type_display()} — Счёт #{self.invoice_id}'
+
+
+# =============================================================================
+# RecurringPayment — периодический платёж
+# =============================================================================
+
+class RecurringPayment(TimestampedModel):
+    """Периодический платёж (аренда, интернет, подписки и т.д.)."""
+
+    class Frequency(models.TextChoices):
+        MONTHLY = 'monthly', 'Ежемесячно'
+        QUARTERLY = 'quarterly', 'Ежеквартально'
+        YEARLY = 'yearly', 'Ежегодно'
+
+    name = models.CharField(
+        max_length=255,
+        verbose_name='Название',
+        help_text='Например: "Аренда офиса", "Интернет", "Лицензия 1С"',
+    )
+    counterparty = models.ForeignKey(
+        'accounting.Counterparty',
+        on_delete=models.PROTECT,
+        related_name='recurring_payments',
+        verbose_name='Контрагент',
+    )
+    category = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        related_name='recurring_payments',
+        verbose_name='Категория',
+    )
+    account = models.ForeignKey(
+        'accounting.Account',
+        on_delete=models.PROTECT,
+        related_name='recurring_payments',
+        verbose_name='Счёт списания',
+    )
+    contract = models.ForeignKey(
+        'contracts.Contract',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='recurring_payments',
+        verbose_name='Договор',
+    )
+    object = models.ForeignKey(
+        'objects.Object',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='recurring_payments',
+        verbose_name='Объект',
+    )
+    legal_entity = models.ForeignKey(
+        'accounting.LegalEntity',
+        on_delete=models.PROTECT,
+        related_name='recurring_payments',
+        verbose_name='Юридическое лицо',
+    )
+
+    # --- Суммы ---
+    amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        verbose_name='Базовая сумма',
+    )
+    amount_is_fixed = models.BooleanField(
+        default=True,
+        verbose_name='Фиксированная сумма',
+        help_text='Если нет — оператор вводит сумму для каждого счёта',
+    )
+
+    # --- Расписание ---
+    frequency = models.CharField(
+        max_length=20,
+        choices=Frequency.choices,
+        default=Frequency.MONTHLY,
+        verbose_name='Периодичность',
+    )
+    day_of_month = models.PositiveIntegerField(
+        default=1,
+        verbose_name='День месяца',
+        help_text='День месяца для генерации (1-28)',
+    )
+    start_date = models.DateField(
+        verbose_name='Дата начала',
+    )
+    end_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='Дата окончания',
+        help_text='Пусто — бессрочный',
+    )
+    next_generation_date = models.DateField(
+        verbose_name='Следующая дата генерации',
+    )
+
+    description = models.TextField(
+        blank=True,
+        verbose_name='Описание',
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='Активен',
+    )
+
+    class Meta:
+        verbose_name = 'Периодический платёж'
+        verbose_name_plural = 'Периодические платежи'
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['is_active', 'next_generation_date']),
+        ]
+
+    def __str__(self):
+        return f'{self.name} — {self.amount} ({self.get_frequency_display()})'
+
+    def clean(self):
+        if self.day_of_month and (self.day_of_month < 1 or self.day_of_month > 28):
+            raise ValidationError({
+                'day_of_month': 'Допустимые значения: 1-28',
+            })
+
+
+# =============================================================================
+# IncomeRecord — поступление (доход) — упрощённая модель
+# =============================================================================
+
+class IncomeRecord(TimestampedModel):
+    """Поступление (доход) — упрощённая модель без workflow согласования."""
+
+    account = models.ForeignKey(
+        'accounting.Account',
+        on_delete=models.PROTECT,
+        related_name='income_records',
+        verbose_name='Счёт зачисления',
+    )
+    contract = models.ForeignKey(
+        'contracts.Contract',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='income_records',
+        verbose_name='Договор',
+    )
+    category = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        related_name='income_records',
+        verbose_name='Категория',
+    )
+    legal_entity = models.ForeignKey(
+        'accounting.LegalEntity',
+        on_delete=models.PROTECT,
+        related_name='income_records',
+        verbose_name='Юридическое лицо',
+    )
+    counterparty = models.ForeignKey(
+        'accounting.Counterparty',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='income_records',
+        verbose_name='Контрагент',
+    )
+    amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        verbose_name='Сумма',
+    )
+    payment_date = models.DateField(
+        verbose_name='Дата поступления',
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name='Описание',
+    )
+    scan_file = models.FileField(
+        upload_to='income/%Y/%m/',
+        blank=True, null=True,
+        verbose_name='Скан документа',
+    )
+
+    class Meta:
+        verbose_name = 'Поступление (доход)'
+        verbose_name_plural = 'Поступления (доходы)'
+        ordering = ['-payment_date', '-created_at']
+        indexes = [
+            models.Index(fields=['payment_date']),
+            models.Index(fields=['account', 'payment_date']),
+        ]
+
+    def __str__(self):
+        return f'Поступление {self.amount} от {self.payment_date}'

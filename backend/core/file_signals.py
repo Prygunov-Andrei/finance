@@ -91,10 +91,12 @@ def register_all_file_cleanups():
     register_file_cleanup(Act, ['file'])
     register_file_cleanup(FrameworkContract, ['file'])
     
-    # payments
-    from payments.models import Payment, PaymentRegistry
+    # payments (LEGACY + new)
+    from payments.models import Payment, PaymentRegistry, Invoice, IncomeRecord
     register_file_cleanup(Payment, ['scan_file'])
     register_file_cleanup(PaymentRegistry, ['invoice_file'])
+    register_file_cleanup(Invoice, ['invoice_file'])
+    register_file_cleanup(IncomeRecord, ['scan_file'])
     
     # communications
     from communications.models import Correspondence

@@ -1,10 +1,11 @@
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import { ReactNode, useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { 
   Home, Users, Building2, FileText, DollarSign, Settings, 
   LogOut, Menu, ChevronRight, List, Briefcase, Star,
   FolderOpen, ClipboardList, Wrench, CreditCard, Mail,
-  Package, Layers, CheckSquare, Landmark, Receipt
+  Package, Layers, CheckSquare, Landmark, Receipt,
+  Truck, CalendarClock, TrendingUp, BarChart3, ShoppingCart, Link2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { 
@@ -98,6 +99,19 @@ const menuItems: MenuItem[] = [
     ]
   },
   { 
+    id: 'supply', 
+    label: 'Снабжение', 
+    icon: <Truck className="w-5 h-5" />, 
+    path: '/supply',
+    children: [
+      { id: 'invoices', label: 'Счета на оплату', icon: <Receipt className="w-4 h-4" />, path: '/supply/invoices' },
+      { id: 'supply-requests', label: 'Запросы из Битрикс', icon: <ShoppingCart className="w-4 h-4" />, path: '/supply/requests' },
+      { id: 'recurring-payments', label: 'Периодические платежи', icon: <CalendarClock className="w-4 h-4" />, path: '/supply/recurring' },
+      { id: 'income-records', label: 'Доходы', icon: <TrendingUp className="w-4 h-4" />, path: '/supply/income' },
+      { id: 'supply-dashboard', label: 'Дашборд', icon: <BarChart3 className="w-4 h-4" />, path: '/supply/dashboard' },
+    ]
+  },
+  { 
     id: 'catalog', 
     label: 'Каталог', 
     icon: <Package className="w-5 h-5" />, 
@@ -113,7 +127,11 @@ const menuItems: MenuItem[] = [
     id: 'settings', 
     label: 'Настройки', 
     icon: <Settings className="w-5 h-5" />, 
-    path: '/settings'
+    path: '/settings',
+    children: [
+      { id: 'settings-general', label: 'Общие настройки', icon: <Settings className="w-4 h-4" />, path: '/settings' },
+      { id: 'settings-bitrix', label: 'Битрикс24', icon: <Link2 className="w-4 h-4" />, path: '/settings/bitrix' },
+    ]
   },
 ];
 
@@ -143,6 +161,12 @@ const pageTitles: Record<string, string> = {
   'catalog/categories': 'Категории товаров',
   'catalog/products': 'Товары и услуги',
   'catalog/moderation': 'Модерация товаров',
+  'supply/invoices': 'Счета на оплату',
+  'supply/requests': 'Запросы из Битрикс',
+  'supply/recurring': 'Периодические платежи',
+  'supply/income': 'Доходы',
+  'supply/dashboard': 'Дашборд снабжения',
+  'settings/bitrix': 'Интеграция с Битрикс24',
   communications: 'Переписка',
   settings: 'Настройки',
   'settings/llm': 'Настройки LLM',
@@ -150,7 +174,7 @@ const pageTitles: Record<string, string> = {
 
 export function Layout({ children, onLogout, user }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['contracts', 'proposals', 'pricelists', 'estimates', 'catalog']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['contracts', 'proposals', 'pricelists', 'estimates', 'catalog', 'supply', 'settings']);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebarWidth');
     return saved ? parseInt(saved) : 256;
@@ -270,11 +294,6 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
               <div key={item.id}>
                 <button
                   onClick={() => {
-                    if (item.id === 'settings') {
-                      navigate('/settings?tab=personnel');
-                      return;
-                    }
-
                     if (item.children) {
                       toggleMenu(item.id);
                     } else {
@@ -431,7 +450,18 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
         <div className="flex-1 overflow-auto">
           {children}
         </div>
+
+        {/* Help Panel — показывается на страницах Снабжения */}
+        {location.pathname.startsWith('/supply') && (
+          <Suspense fallback={null}>
+            <HelpPanelLazy />
+          </Suspense>
+        )}
       </main>
     </div>
   );
 }
+
+const HelpPanelLazy = lazy(() =>
+  import('./supply/HelpPanel').then((mod) => ({ default: mod.HelpPanel }))
+);

@@ -88,6 +88,22 @@ cd /opt/finans_assistant/deploy
 - `/myapps` → @avgust_worklog_bot
 - Web App URL: `https://your-domain.com/miniapp/`
 
+### 6. Настроить модуль Снабжение (Bitrix24)
+
+```bash
+# 1. Добавить LLM API ключ в .env:
+nano /opt/finans_assistant/.env
+# Добавить: OPENAI_API_KEY=sk-... (или GEMINI_API_KEY=...)
+
+# 2. Перезапустить сервисы:
+cd /opt/finans_assistant
+docker compose -f docker-compose.prod.yml restart backend celery-worker
+
+# 3. Настроить интеграцию в ERP:
+#    → Настройки → Битрикс24 → Добавить интеграцию
+#    Подробная инструкция: docs/supply/BITRIX_SETUP.md
+```
+
 ## 🧪 Тестирование
 
 ```bash
@@ -138,6 +154,9 @@ docker compose -f docker-compose.prod.yml logs -f [service]
 | Bot не отвечает | Проверить webhook: `./deploy/setup_webhook.sh` |
 | Mini App не загружается | Проверить SSL и URL в BotFather |
 | Database errors | `docker compose -f docker-compose.prod.yml logs -f postgres` |
+| Celery tasks не выполняются | `docker compose -f docker-compose.prod.yml logs -f celery-worker` |
+| Bitrix webhook не приходит | Проверить HTTPS доступность URL и токен в Битрикс24 |
+| LLM не распознаёт счёт | Проверить OPENAI_API_KEY/GEMINI_API_KEY в .env |
 
 ## ⚠️ Важно
 
@@ -153,10 +172,12 @@ docker compose -f docker-compose.prod.yml logs -f [service]
 - PostgreSQL password
 - MinIO credentials
 - Django SECRET_KEY
+- BANK_ENCRYPTION_KEY
+- LLM API ключи (OPENAI_API_KEY / GEMINI_API_KEY)
 
 Вывод будет показан после выполнения `create_production_env.sh`.
 
 ---
 
 **Status**: ✅ Ready for Production
-**Last Updated**: 2026-02-07
+**Last Updated**: 2026-02-14

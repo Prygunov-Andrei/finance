@@ -4363,4 +4363,123 @@ export interface BankPaymentOrderEvent {
   created_at: string;
 }
 
+// =============================================================================
+// Supply Module — API methods (added to ApiClient)
+// =============================================================================
+
+// --- Notifications ---
+ApiClient.prototype.getNotifications = async function (this: ApiClient) {
+  return this.request<any[]>('/notifications/');
+};
+ApiClient.prototype.getUnreadNotificationCount = async function (this: ApiClient) {
+  return this.request<{ count: number }>('/notifications/unread_count/');
+};
+ApiClient.prototype.markNotificationRead = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/notifications/${id}/mark_read/`, { method: 'POST' });
+};
+ApiClient.prototype.markAllNotificationsRead = async function (this: ApiClient) {
+  return this.request<any>('/notifications/mark_all_read/', { method: 'POST' });
+};
+
+// --- Supply Requests ---
+ApiClient.prototype.getSupplyRequests = async function (this: ApiClient, params?: string) {
+  return this.request<PaginatedResponse<any>>(`/supply-requests/${params ? '?' + params : ''}`);
+};
+ApiClient.prototype.getSupplyRequest = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/supply-requests/${id}/`);
+};
+ApiClient.prototype.updateSupplyRequest = async function (this: ApiClient, id: number, data: any) {
+  return this.request<any>(`/supply-requests/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+};
+
+// --- Bitrix Integrations ---
+ApiClient.prototype.getBitrixIntegrations = async function (this: ApiClient) {
+  return this.request<any[]>('/bitrix-integrations/');
+};
+ApiClient.prototype.getBitrixIntegration = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/bitrix-integrations/${id}/`);
+};
+ApiClient.prototype.createBitrixIntegration = async function (this: ApiClient, data: any) {
+  return this.request<any>('/bitrix-integrations/', { method: 'POST', body: JSON.stringify(data) });
+};
+ApiClient.prototype.updateBitrixIntegration = async function (this: ApiClient, id: number, data: any) {
+  return this.request<any>(`/bitrix-integrations/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+};
+ApiClient.prototype.deleteBitrixIntegration = async function (this: ApiClient, id: number) {
+  return this.request<void>(`/bitrix-integrations/${id}/`, { method: 'DELETE' });
+};
+
+// --- Invoices ---
+ApiClient.prototype.getInvoices = async function (this: ApiClient, params?: string) {
+  return this.request<PaginatedResponse<any>>(`/invoices/${params ? '?' + params : ''}`);
+};
+ApiClient.prototype.getInvoice = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/invoices/${id}/`);
+};
+ApiClient.prototype.createInvoice = async function (this: ApiClient, formData: FormData) {
+  return this.request<any>('/invoices/', {
+    method: 'POST',
+    body: formData,
+    headers: {},  // Let browser set Content-Type for FormData
+  });
+};
+ApiClient.prototype.updateInvoice = async function (this: ApiClient, id: number, data: any) {
+  return this.request<any>(`/invoices/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+};
+ApiClient.prototype.submitInvoiceToRegistry = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/invoices/${id}/submit_to_registry/`, { method: 'POST' });
+};
+ApiClient.prototype.approveInvoice = async function (this: ApiClient, id: number, comment?: string) {
+  return this.request<any>(`/invoices/${id}/approve/`, {
+    method: 'POST',
+    body: JSON.stringify({ comment: comment || '' }),
+  });
+};
+ApiClient.prototype.rejectInvoice = async function (this: ApiClient, id: number, comment: string) {
+  return this.request<any>(`/invoices/${id}/reject/`, {
+    method: 'POST',
+    body: JSON.stringify({ comment }),
+  });
+};
+ApiClient.prototype.rescheduleInvoice = async function (this: ApiClient, id: number, newDate: string, comment: string) {
+  return this.request<any>(`/invoices/${id}/reschedule/`, {
+    method: 'POST',
+    body: JSON.stringify({ new_date: newDate, comment }),
+  });
+};
+ApiClient.prototype.getInvoiceDashboard = async function (this: ApiClient) {
+  return this.request<any>('/invoices/dashboard/');
+};
+
+// --- Recurring Payments ---
+ApiClient.prototype.getRecurringPayments = async function (this: ApiClient, params?: string) {
+  return this.request<PaginatedResponse<any>>(`/recurring-payments/${params ? '?' + params : ''}`);
+};
+ApiClient.prototype.getRecurringPayment = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/recurring-payments/${id}/`);
+};
+ApiClient.prototype.createRecurringPayment = async function (this: ApiClient, data: any) {
+  return this.request<any>('/recurring-payments/', { method: 'POST', body: JSON.stringify(data) });
+};
+ApiClient.prototype.updateRecurringPayment = async function (this: ApiClient, id: number, data: any) {
+  return this.request<any>(`/recurring-payments/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+};
+ApiClient.prototype.deleteRecurringPayment = async function (this: ApiClient, id: number) {
+  return this.request<void>(`/recurring-payments/${id}/`, { method: 'DELETE' });
+};
+
+// --- Income Records ---
+ApiClient.prototype.getIncomeRecords = async function (this: ApiClient, params?: string) {
+  return this.request<PaginatedResponse<any>>(`/income-records/${params ? '?' + params : ''}`);
+};
+ApiClient.prototype.createIncomeRecord = async function (this: ApiClient, data: any) {
+  return this.request<any>('/income-records/', { method: 'POST', body: JSON.stringify(data) });
+};
+ApiClient.prototype.updateIncomeRecord = async function (this: ApiClient, id: number, data: any) {
+  return this.request<any>(`/income-records/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+};
+ApiClient.prototype.deleteIncomeRecord = async function (this: ApiClient, id: number) {
+  return this.request<void>(`/income-records/${id}/`, { method: 'DELETE' });
+};
+
 export const api = new ApiClient();

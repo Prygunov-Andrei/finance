@@ -21,8 +21,11 @@ from contracts.views import (
     WorkScheduleItemViewSet, ActViewSet, ActPaymentAllocationViewSet,
     FrameworkContractViewSet
 )
-from payments.views import PaymentViewSet, PaymentRegistryViewSet, ExpenseCategoryViewSet
-from core.views import UserViewSet
+from payments.views import (
+    PaymentViewSet, PaymentRegistryViewSet, ExpenseCategoryViewSet,
+    InvoiceViewSet, RecurringPaymentViewSet, IncomeRecordViewSet,
+)
+from core.views import UserViewSet, NotificationViewSet
 
 # Создаём роутер для ViewSets
 router = DefaultRouter()
@@ -37,6 +40,10 @@ router.register(r'act-allocations', ActPaymentAllocationViewSet, basename='act-a
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'payment-registry', PaymentRegistryViewSet, basename='payment-registry')
 router.register(r'expense-categories', ExpenseCategoryViewSet, basename='expense-category')
+router.register(r'notifications', NotificationViewSet, basename='notification')
+router.register(r'invoices', InvoiceViewSet, basename='invoice')
+router.register(r'recurring-payments', RecurringPaymentViewSet, basename='recurring-payment')
+router.register(r'income-records', IncomeRecordViewSet, basename='income-record')
 
 @api_view(['GET'])
 def api_root(request):
@@ -104,6 +111,7 @@ urlpatterns = [
     path('api/v1/', include('fns.urls')),
     path('api/v1/', include('personnel.urls')),
     path('api/v1/', include('banking.urls')),
+    path('api/v1/', include('supply.urls')),
     path('api/v1/', api_root, name='api-root'),
 ]
 

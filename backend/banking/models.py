@@ -202,7 +202,15 @@ class BankTransaction(TimestampedModel):
         null=True,
         blank=True,
         related_name='bank_transactions',
-        verbose_name='Внутренний платёж',
+        verbose_name='Внутренний платёж (LEGACY)',
+    )
+    invoice = models.ForeignKey(
+        'payments.Invoice',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='matched_bank_transactions',
+        verbose_name='Счёт на оплату',
     )
     reconciled = models.BooleanField(
         default=False,
@@ -260,8 +268,10 @@ class BankPaymentOrder(TimestampedModel):
         null=True,
         blank=True,
         related_name='bank_payment_order',
-        verbose_name='Заявка из реестра',
+        verbose_name='Заявка из реестра (LEGACY)',
     )
+    # Связь с Invoice реализована через Invoice.bank_payment_order (OneToOneField)
+    # Для доступа: order.invoice_link (через related_name)
 
     # --- Реквизиты получателя ---
     recipient_name = models.CharField(max_length=255, verbose_name='Наименование получателя')

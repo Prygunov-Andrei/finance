@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions, serializers as drf_serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -11,6 +11,7 @@ from .serializers import (
     RegisterSerializer,
     ChangePasswordSerializer,
 )
+from .models import Notification
 
 
 @extend_schema_view(
@@ -184,3 +185,49 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({'message': 'Пароль успешно изменён'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+# =============================================================================
+# Notification — API уведомлений
+# =============================================================================
+
+class NotificationSerializer(drf_serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = [
+            'id', 'notification_type', 'title', 'message',
+            'data', 'is_read', 'created_at',
+        ]
+        read_only_fields = ['id', 'notification_type', 'title', 'message', 'data', 'created_at']
+
+
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API уведомлений пользователя.
+
+    GET /api/v1/notifications/ — список уведомлений
+    GET /api/v1/notifications/unread_count/ — количество непрочитанных
+    POST /api/v1/notifications/{id}/mark_read/ — отметить как прочитанное
+    POST /api/v1/notifications/mark_all_read/ — отметить все как прочитанные
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = NotificationSerializer
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def unread_count(self, request):
+        count = Notification.objects.filter(user=request.user, is_read=False).count()
+        return Response({'count': count})
+
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+        return Response(NotificationSerializer(notification).data)
+
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({'status': 'ok'})

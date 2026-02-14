@@ -15,6 +15,9 @@ ERP_SECTIONS = [
     ('settings', 'Настройки'),
     ('banking', 'Банковские операции'),
     ('banking_approve', 'Одобрение платежей'),
+    ('supply', 'Снабжение'),
+    ('supply_approve', 'Одобрение счетов'),
+    ('recurring_payments', 'Периодические платежи'),
 ]
 
 PERMISSION_LEVELS = ('none', 'read', 'edit')

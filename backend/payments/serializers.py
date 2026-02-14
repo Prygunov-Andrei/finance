@@ -3,9 +3,13 @@ import json
 from rest_framework import serializers
 
 from contracts.models import Contract, Act
-from accounting.models import Account, LegalEntity
+from accounting.models import Account, LegalEntity, Counterparty
 from core.serializer_mixins import DisplayFieldMixin
-from .models import Payment, PaymentRegistry, ExpenseCategory, PaymentItem
+from .models import (
+    Payment, PaymentRegistry, ExpenseCategory, PaymentItem,
+    Invoice, InvoiceItem, InvoiceEvent,
+    RecurringPayment, IncomeRecord,
+)
 from .services import PaymentService
 
 # Максимальное количество позиций в одном платеже
@@ -379,3 +383,178 @@ class PaymentRegistryListSerializer(DisplayFieldMixin, serializers.ModelSerializ
             'initiator',
         ]
         read_only_fields = ['id', 'contract_number', 'category_name', 'account_name', 'status_display']
+
+
+# =============================================================================
+# Invoice — новые сериализаторы
+# =============================================================================
+
+class InvoiceItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True, default=None)
+
+    class Meta:
+        model = InvoiceItem
+        fields = [
+            'id', 'raw_name', 'product', 'product_name',
+            'quantity', 'unit', 'price_per_unit', 'amount', 'vat_amount',
+        ]
+        read_only_fields = ['id', 'product_name']
+
+
+class InvoiceEventSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True, default=None)
+
+    class Meta:
+        model = InvoiceEvent
+        fields = [
+            'id', 'event_type', 'user', 'user_name',
+            'old_value', 'new_value', 'comment', 'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class InvoiceListSerializer(serializers.ModelSerializer):
+    """Сокращённый сериализатор для списка счетов."""
+    counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True, default=None)
+    object_name = serializers.CharField(source='object.name', read_only=True, default=None)
+    category_name = serializers.CharField(source='category.name', read_only=True, default=None)
+    account_name = serializers.CharField(source='account.name', read_only=True, default=None)
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Invoice
+        fields = [
+            'id', 'source', 'source_display', 'status', 'status_display',
+            'invoice_number', 'invoice_date', 'due_date',
+            'counterparty', 'counterparty_name',
+            'object', 'object_name',
+            'category_name', 'account_name',
+            'amount_gross', 'amount_net', 'vat_amount',
+            'is_overdue', 'created_at',
+        ]
+
+
+class InvoiceDetailSerializer(serializers.ModelSerializer):
+    """Полный сериализатор для деталей счёта."""
+    counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True, default=None)
+    object_name = serializers.CharField(source='object.name', read_only=True, default=None)
+    contract_number = serializers.CharField(source='contract.number', read_only=True, default=None)
+    category_name = serializers.CharField(source='category.name', read_only=True, default=None)
+    account_name = serializers.CharField(source='account.name', read_only=True, default=None)
+    legal_entity_name = serializers.CharField(source='legal_entity.short_name', read_only=True, default=None)
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
+    reviewed_by_name = serializers.CharField(source='reviewed_by.get_full_name', read_only=True, default=None)
+    approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True, default=None)
+    is_overdue = serializers.BooleanField(read_only=True)
+    items = InvoiceItemSerializer(many=True, read_only=True)
+    events = InvoiceEventSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Invoice
+        fields = [
+            'id', 'source', 'source_display', 'status', 'status_display',
+            'invoice_file', 'invoice_number', 'invoice_date', 'due_date',
+            'counterparty', 'counterparty_name',
+            'object', 'object_name',
+            'contract', 'contract_number',
+            'category', 'category_name',
+            'account', 'account_name',
+            'legal_entity', 'legal_entity_name',
+            'amount_gross', 'amount_net', 'vat_amount',
+            'supply_request', 'recurring_payment',
+            'bank_payment_order',
+            'description', 'comment',
+            'recognition_confidence',
+            'created_by', 'created_by_name',
+            'reviewed_by', 'reviewed_by_name', 'reviewed_at',
+            'approved_by', 'approved_by_name', 'approved_at',
+            'paid_at',
+            'is_overdue',
+            'items', 'events',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'source_display', 'status_display',
+            'counterparty_name', 'object_name', 'contract_number',
+            'category_name', 'account_name', 'legal_entity_name',
+            'created_by_name', 'reviewed_by_name', 'approved_by_name',
+            'reviewed_at', 'approved_at', 'paid_at',
+            'recognition_confidence',
+            'items', 'events',
+            'created_at', 'updated_at',
+        ]
+
+
+class InvoiceCreateSerializer(serializers.ModelSerializer):
+    """Сериализатор для создания счёта вручную."""
+
+    class Meta:
+        model = Invoice
+        fields = [
+            'id',
+            'invoice_file', 'invoice_number', 'invoice_date', 'due_date',
+            'counterparty', 'object', 'contract', 'category',
+            'account', 'legal_entity',
+            'amount_gross', 'amount_net', 'vat_amount',
+            'description',
+        ]
+        read_only_fields = ['id']
+
+
+class InvoiceActionSerializer(serializers.Serializer):
+    """Сериализатор для actions (approve, reject, reschedule)."""
+    comment = serializers.CharField(required=False, allow_blank=True)
+    new_date = serializers.DateField(required=False)
+
+
+# =============================================================================
+# RecurringPayment — сериализаторы
+# =============================================================================
+
+class RecurringPaymentSerializer(serializers.ModelSerializer):
+    counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True, default=None)
+    category_name = serializers.CharField(source='category.name', read_only=True, default=None)
+    account_name = serializers.CharField(source='account.name', read_only=True, default=None)
+    frequency_display = serializers.CharField(source='get_frequency_display', read_only=True)
+
+    class Meta:
+        model = RecurringPayment
+        fields = [
+            'id', 'name',
+            'counterparty', 'counterparty_name',
+            'category', 'category_name',
+            'account', 'account_name',
+            'contract', 'object', 'legal_entity',
+            'amount', 'amount_is_fixed',
+            'frequency', 'frequency_display',
+            'day_of_month',
+            'start_date', 'end_date', 'next_generation_date',
+            'description', 'is_active',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'counterparty_name', 'category_name', 'account_name', 'frequency_display', 'created_at', 'updated_at']
+
+
+# =============================================================================
+# IncomeRecord — сериализаторы
+# =============================================================================
+
+class IncomeRecordSerializer(serializers.ModelSerializer):
+    account_name = serializers.CharField(source='account.name', read_only=True, default=None)
+    category_name = serializers.CharField(source='category.name', read_only=True, default=None)
+    counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True, default=None)
+
+    class Meta:
+        model = IncomeRecord
+        fields = [
+            'id', 'account', 'account_name',
+            'contract', 'category', 'category_name',
+            'legal_entity', 'counterparty', 'counterparty_name',
+            'amount', 'payment_date', 'description', 'scan_file',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'account_name', 'category_name', 'counterparty_name', 'created_at', 'updated_at']

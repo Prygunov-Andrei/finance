@@ -1,12 +1,20 @@
+import logging
+from datetime import date
+from decimal import Decimal
+
 from rest_framework import viewsets, filters, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Count
+from django.db.models import Count, Sum, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from .models import Payment, PaymentRegistry, ExpenseCategory
+from .models import (
+    Payment, PaymentRegistry, ExpenseCategory,
+    Invoice, InvoiceItem, InvoiceEvent,
+    RecurringPayment, IncomeRecord,
+)
 from personnel.permissions import ERPSectionPermission
 from .serializers import (
     PaymentSerializer,
@@ -14,7 +22,16 @@ from .serializers import (
     PaymentRegistrySerializer,
     PaymentRegistryListSerializer,
     ExpenseCategorySerializer,
+    InvoiceListSerializer,
+    InvoiceDetailSerializer,
+    InvoiceCreateSerializer,
+    InvoiceActionSerializer,
+    RecurringPaymentSerializer,
+    IncomeRecordSerializer,
 )
+from .services import InvoiceService
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -275,3 +292,235 @@ class ExpenseCategoryViewSet(viewsets.ModelViewSet):
         if not self.request.user.is_staff:
             queryset = queryset.filter(is_active=True)
         return queryset
+
+
+# =============================================================================
+# Invoice — новые ViewSets
+# =============================================================================
+
+class InvoiceViewSet(viewsets.ModelViewSet):
+    """
+    CRUD для счетов на оплату (Invoice).
+
+    Включает actions для workflow:
+    - submit_to_registry: оператор подтвердил
+    - approve: директор одобрил
+    - reject: директор отклонил
+    - reschedule: директор перенёс дату
+    - dashboard: сводная аналитика
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'source', 'object', 'counterparty', 'category', 'account']
+    search_fields = ['invoice_number', 'counterparty__name', 'description']
+    ordering_fields = ['created_at', 'due_date', 'amount_gross', 'invoice_date']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        return (
+            Invoice.objects
+            .select_related(
+                'counterparty', 'object', 'contract', 'category',
+                'account', 'legal_entity', 'supply_request',
+                'recurring_payment', 'bank_payment_order',
+                'created_by', 'reviewed_by', 'approved_by',
+                'parsed_document',
+            )
+            .prefetch_related('items', 'items__product', 'events')
+            .order_by('-created_at')
+        )
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return InvoiceListSerializer
+        if self.action == 'create':
+            return InvoiceCreateSerializer
+        return InvoiceDetailSerializer
+
+    def perform_create(self, serializer):
+        """Создание счёта вручную."""
+        invoice = InvoiceService.create_manual(
+            validated_data=serializer.validated_data,
+            user=self.request.user,
+        )
+        # Если есть файл — запустить распознавание
+        if invoice.invoice_file:
+            from supply.tasks import recognize_invoice
+            recognize_invoice.delay(invoice.id)
+        serializer.instance = invoice
+
+    @action(detail=True, methods=['post'])
+    def submit_to_registry(self, request, pk=None):
+        """Оператор подтвердил: REVIEW → IN_REGISTRY."""
+        try:
+            InvoiceService.submit_to_registry(int(pk), request.user)
+            invoice = self.get_object()
+            return Response(InvoiceDetailSerializer(invoice).data)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Директор одобрил: IN_REGISTRY → APPROVED."""
+        serializer = InvoiceActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            InvoiceService.approve(
+                int(pk), request.user,
+                comment=serializer.validated_data.get('comment', ''),
+            )
+            invoice = self.get_object()
+            return Response(InvoiceDetailSerializer(invoice).data)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Директор отклонил: IN_REGISTRY → CANCELLED."""
+        serializer = InvoiceActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment = serializer.validated_data.get('comment', '')
+        if not comment:
+            return Response(
+                {'error': 'Необходимо указать причину отклонения'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            InvoiceService.reject(int(pk), request.user, comment=comment)
+            invoice = self.get_object()
+            return Response(InvoiceDetailSerializer(invoice).data)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def reschedule(self, request, pk=None):
+        """Директор перенёс дату."""
+        serializer = InvoiceActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_date = serializer.validated_data.get('new_date')
+        comment = serializer.validated_data.get('comment', '')
+        if not new_date:
+            return Response(
+                {'error': 'Необходимо указать новую дату'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not comment:
+            return Response(
+                {'error': 'Необходимо указать причину переноса'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            InvoiceService.reschedule(int(pk), request.user, new_date, comment)
+            invoice = self.get_object()
+            return Response(InvoiceDetailSerializer(invoice).data)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'])
+    def dashboard(self, request):
+        """Сводная аналитика для директора."""
+        from accounting.models import Account, AccountBalance
+
+        today = date.today()
+
+        # Остатки на счетах
+        accounts = Account.objects.filter(is_active=True)
+        account_balances = []
+        for acc in accounts:
+            # Попытка получить банковский баланс
+            latest_bank_balance = (
+                AccountBalance.objects
+                .filter(account=acc, source=AccountBalance.Source.BANK_TOCHKA)
+                .order_by('-balance_date')
+                .first()
+            )
+            account_balances.append({
+                'id': acc.id,
+                'name': acc.name,
+                'number': acc.number,
+                'currency': acc.currency,
+                'internal_balance': str(acc.get_current_balance()),
+                'bank_balance': str(latest_bank_balance.balance) if latest_bank_balance else None,
+                'bank_balance_date': str(latest_bank_balance.balance_date) if latest_bank_balance else None,
+            })
+
+        # Сводка по реестру
+        registry_qs = Invoice.objects.filter(status=Invoice.Status.IN_REGISTRY)
+        overdue_qs = registry_qs.filter(due_date__lt=today)
+        today_qs = registry_qs.filter(due_date=today)
+
+        from datetime import timedelta
+        week_end = today + timedelta(days=7)
+        month_end = today + timedelta(days=30)
+        week_qs = registry_qs.filter(due_date__lte=week_end)
+        month_qs = registry_qs.filter(due_date__lte=month_end)
+
+        def sum_amount(qs):
+            return qs.aggregate(total=Sum('amount_gross'))['total'] or Decimal('0')
+
+        registry_summary = {
+            'total_amount': str(sum_amount(registry_qs)),
+            'total_count': registry_qs.count(),
+            'overdue_amount': str(sum_amount(overdue_qs)),
+            'overdue_count': overdue_qs.count(),
+            'today_amount': str(sum_amount(today_qs)),
+            'today_count': today_qs.count(),
+            'this_week_amount': str(sum_amount(week_qs)),
+            'this_week_count': week_qs.count(),
+            'this_month_amount': str(sum_amount(month_qs)),
+            'this_month_count': month_qs.count(),
+        }
+
+        # Группировка по объектам
+        by_object = list(
+            registry_qs
+            .values('object__id', 'object__name')
+            .annotate(total=Sum('amount_gross'), count=Count('id'))
+            .order_by('-total')
+        )
+
+        # Группировка по категориям
+        by_category = list(
+            registry_qs
+            .values('category__id', 'category__name')
+            .annotate(total=Sum('amount_gross'), count=Count('id'))
+            .order_by('-total')
+        )
+
+        return Response({
+            'account_balances': account_balances,
+            'registry_summary': registry_summary,
+            'by_object': by_object,
+            'by_category': by_category,
+        })
+
+
+class RecurringPaymentViewSet(viewsets.ModelViewSet):
+    """CRUD для периодических платежей."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = RecurringPaymentSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active', 'frequency', 'counterparty']
+    search_fields = ['name', 'counterparty__name', 'description']
+    ordering = ['name']
+
+    def get_queryset(self):
+        return RecurringPayment.objects.select_related(
+            'counterparty', 'category', 'account', 'contract',
+            'object', 'legal_entity',
+        )
+
+
+class IncomeRecordViewSet(viewsets.ModelViewSet):
+    """CRUD для поступлений (доходы)."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = IncomeRecordSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['account', 'category', 'counterparty']
+    search_fields = ['description', 'counterparty__name']
+    ordering = ['-payment_date', '-created_at']
+
+    def get_queryset(self):
+        return IncomeRecord.objects.select_related(
+            'account', 'contract', 'category', 'legal_entity', 'counterparty',
+        )

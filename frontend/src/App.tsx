@@ -48,6 +48,13 @@ import { CatalogCategories } from './components/catalog/CatalogCategories';
 import { CatalogProducts } from './components/catalog/CatalogProducts';
 import { ProductDetail } from './components/catalog/ProductDetail';
 import { CatalogModeration } from './components/catalog/CatalogModeration';
+import { InvoicesPage } from './components/supply/InvoicesPage';
+import { InvoiceDetailPage } from './components/supply/InvoiceDetailPage';
+import { SupplyRequestsPage } from './components/supply/SupplyRequestsPage';
+import { RecurringPaymentsPage } from './components/supply/RecurringPaymentsPage';
+import { IncomeRecordsPage } from './components/supply/IncomeRecordsPage';
+import { SupplyDashboardPage } from './components/supply/SupplyDashboardPage';
+import { BitrixSettingsPage } from './components/supply/BitrixSettingsPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Создаем QueryClient
@@ -487,6 +494,57 @@ export default function App() {
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
                 <WorkerGradeSkillsComponent />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Supply Module */}
+          <Route path="/supply/invoices" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <InvoicesPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/supply/invoices/:id" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <InvoiceDetailPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/supply/requests" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <SupplyRequestsPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/supply/recurring" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <RecurringPaymentsPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/supply/income" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <IncomeRecordsPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/supply/dashboard" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <SupplyDashboardPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/settings/bitrix" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <BitrixSettingsPage />
               </Layout>
             </ProtectedRoute>
           } />

@@ -215,29 +215,51 @@ class Account(TimestampedModel):
 
     def get_current_balance(self) -> Decimal:
         """
-        Рассчитывает текущий баланс:
-        Начальный остаток + Сумма приходов (PAID) - Сумма расходов (PAID)
+        Рассчитывает текущий баланс на основе новых моделей Invoice и IncomeRecord:
+        Начальный остаток + Сумма доходов (IncomeRecord) - Сумма расходов (Invoice.paid)
+
+        Fallback: если новые модели ещё не используются, использует старые Payment.
         """
+        from payments.models import Invoice, IncomeRecord
+
         balance = self.initial_balance
-        
-        # Фильтр для платежей: только проведенные, относящиеся к этому счету
-        # Если есть balance_date, учитываем только платежи ПОСЛЕ этой даты
-        payments_filter = Q(status='paid')
-        
+
+        # --- Новая система: Invoice (расходы) + IncomeRecord (доходы) ---
+        invoice_filter = Q(status='paid')
+        income_filter = Q()
+
         if self.balance_date:
-            payments_filter &= Q(payment_date__gte=self.balance_date)
-            
-        income = self.payments.filter(
-            payments_filter,
+            invoice_filter &= Q(paid_at__date__gte=self.balance_date)
+            income_filter &= Q(payment_date__gte=self.balance_date)
+
+        # Доходы из IncomeRecord
+        income = IncomeRecord.objects.filter(
+            income_filter,
+            account=self,
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+        # Расходы из Invoice (оплаченные)
+        expense = Invoice.objects.filter(
+            invoice_filter,
+            account=self,
+        ).aggregate(total=Sum('amount_gross'))['total'] or Decimal('0')
+
+        # --- Fallback: старая система Payment (для обратной совместимости) ---
+        old_payments_filter = Q(status='paid')
+        if self.balance_date:
+            old_payments_filter &= Q(payment_date__gte=self.balance_date)
+
+        old_income = self.payments.filter(
+            old_payments_filter,
             payment_type='income'
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
-        
-        expense = self.payments.filter(
-            payments_filter,
+
+        old_expense = self.payments.filter(
+            old_payments_filter,
             payment_type='expense'
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
-        
-        return balance + income - expense
+
+        return balance + income + old_income - expense - old_expense
 
 
 class AccountBalance(models.Model):

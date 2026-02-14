@@ -99,6 +99,7 @@ DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 MINIO_USER="minio_$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-12)"
 MINIO_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 DJANGO_SECRET=$(python3 -c "import secrets; print(''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*(-_=+)') for i in range(50)))" 2>/dev/null || openssl rand -base64 50)
+BANK_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
 
 # Определение домена (пока работаем по IP)
 DOMAIN="72.56.83.95"
@@ -124,6 +125,12 @@ MINIO_ROOT_PASSWORD=${MINIO_PASSWORD}
 # --- Django ---
 DEBUG=False
 SECRET_KEY=${DJANGO_SECRET}
+BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY}
+
+# --- Supply / LLM (заполните после деплоя) ---
+BITRIX_WEBHOOK_TIMEOUT=30
+OPENAI_API_KEY=
+GEMINI_API_KEY=
 
 # --- Telegram Bot ---
 TELEGRAM_BOT_TOKEN=8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU
@@ -195,7 +202,12 @@ echo ""
 echo "4. Setup Telegram webhook (after domain is ready):"
 echo "   ./deploy/setup_webhook.sh"
 echo ""
-echo "5. Test deployment:"
+echo "5. Configure Bitrix24 integration (if using Supply module):"
+echo "   - Add LLM API key to .env: OPENAI_API_KEY=sk-... or GEMINI_API_KEY=..."
+echo "   - Restart: docker compose -f docker-compose.prod.yml restart backend celery-worker"
+echo "   - Follow: docs/supply/BITRIX_SETUP.md"
+echo ""
+echo "6. Test deployment:"
 echo "   curl http://localhost:8000/api/v1/"
 echo "   curl http://localhost:3000/"
 echo ""

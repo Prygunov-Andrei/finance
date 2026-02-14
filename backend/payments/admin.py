@@ -1,6 +1,10 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Payment, PaymentRegistry, ExpenseCategory
+from .models import (
+    Payment, PaymentRegistry, ExpenseCategory,
+    Invoice, InvoiceItem, InvoiceEvent,
+    RecurringPayment, IncomeRecord,
+)
 
 
 @admin.register(ExpenseCategory)
@@ -153,3 +157,66 @@ class PaymentRegistryAdmin(admin.ModelAdmin):
     ordering = ('planned_date',)
     readonly_fields = ('created_at', 'updated_at')
     date_hierarchy = 'planned_date'
+
+
+# =============================================================================
+# Новые модели
+# =============================================================================
+
+class InvoiceItemInline(admin.TabularInline):
+    model = InvoiceItem
+    extra = 0
+    raw_id_fields = ('product',)
+
+
+class InvoiceEventInline(admin.TabularInline):
+    model = InvoiceEvent
+    extra = 0
+    readonly_fields = ('event_type', 'user', 'old_value', 'new_value', 'comment', 'created_at')
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    list_display = (
+        'invoice_number', 'counterparty', 'amount_gross',
+        'status', 'source', 'due_date', 'object', 'created_at',
+    )
+    list_filter = ('status', 'source', 'object')
+    search_fields = (
+        'invoice_number', 'counterparty__name', 'description',
+    )
+    raw_id_fields = (
+        'counterparty', 'object', 'contract', 'category',
+        'account', 'legal_entity', 'supply_request',
+        'recurring_payment', 'bank_payment_order', 'parsed_document',
+        'created_by', 'reviewed_by', 'approved_by',
+    )
+    readonly_fields = ('created_at', 'updated_at')
+    inlines = [InvoiceItemInline, InvoiceEventInline]
+    date_hierarchy = 'created_at'
+
+
+@admin.register(RecurringPayment)
+class RecurringPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'counterparty', 'amount', 'frequency',
+        'next_generation_date', 'is_active',
+    )
+    list_filter = ('is_active', 'frequency')
+    search_fields = ('name', 'counterparty__name')
+    raw_id_fields = (
+        'counterparty', 'category', 'account', 'contract',
+        'object', 'legal_entity',
+    )
+
+
+@admin.register(IncomeRecord)
+class IncomeRecordAdmin(admin.ModelAdmin):
+    list_display = ('amount', 'payment_date', 'account', 'category', 'counterparty')
+    list_filter = ('account', 'category')
+    search_fields = ('description', 'counterparty__name')
+    raw_id_fields = ('account', 'contract', 'category', 'legal_entity', 'counterparty')
+    date_hierarchy = 'payment_date'
