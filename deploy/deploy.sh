@@ -54,7 +54,8 @@ docker compose -f docker-compose.prod.yml ps
 
 echo -e "${GREEN}[9/10] Testing backend health...${NC}"
 sleep 5
-curl -f http://localhost:8000/api/v1/ || echo -e "${YELLOW}Warning: Backend health check failed${NC}"
+# /api/v1/ на production может требовать JWT и отдавать 401 — это не признак падения.
+curl -f http://localhost:8000/api/schema/ >/dev/null 2>&1 || echo -e "${YELLOW}Warning: Backend health check failed${NC}"
 
 echo -e "${GREEN}[9.1/10] Testing kanban health...${NC}"
 curl -f http://localhost:8010/kanban-api/health/ || echo -e "${YELLOW}Warning: Kanban health check failed${NC}"
