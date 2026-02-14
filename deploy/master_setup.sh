@@ -22,7 +22,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${YELLOW}Current server information:${NC}"
-echo "  IP: 72.56.83.95"
+echo "  IP: 217.151.231.96"
 echo "  OS: $(lsb_release -d | cut -f2)"
 echo "  User: $(whoami)"
 echo ""
@@ -118,7 +118,7 @@ echo ""
 echo -e "${YELLOW}=== NEXT STEPS ===${NC}"
 echo ""
 echo "1. Configure DNS:"
-echo "   - Point your domain to 72.56.83.95"
+echo "   - Point your domain to 217.151.231.96"
 echo "   - Or use Cloudflare DNS proxy"
 echo ""
 echo "2. Setup SSL Certificate:"

@@ -34,7 +34,7 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '72.56.83.95',  # Production server IP
+    '217.151.231.96',  # Production server IP
     '.ngrok-free.app',
     'finance.ngrok.app',  # Development ngrok domain
     '.ngrok.io',

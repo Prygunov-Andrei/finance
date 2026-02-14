@@ -1,14 +1,14 @@
 ═══════════════════════════════════════════════════════════════════════════════
   MANUAL DEPLOYMENT STEPS - Finans Assistant Production
-  Server: 72.56.83.95
+  Server: 217.151.231.96
 ═══════════════════════════════════════════════════════════════════════════════
 
 ВАРИАНТ 1: АВТОМАТИЧЕСКИЙ ДЕПЛОЙ (РЕКОМЕНДУЕТСЯ)
 ─────────────────────────────────────────────────────────────────────────────
 
 1. Подключитесь к серверу:
-   ssh root@72.56.83.95
-   Пароль: hN9DVVo_pu6d_X
+   ssh root@217.151.231.96
+   Пароль: nmuy@HPC-8L7TJ
 
 2. Выполните одну команду:
    curl -sSL https://raw.githubusercontent.com/Prygunov-Andrei/finance/main/deploy/one_command_deploy.sh | bash
@@ -24,7 +24,7 @@
    systemctl enable nginx
 
 6. Проверьте работу:
-   curl http://72.56.83.95/api/v1/
+   curl http://217.151.231.96/api/v1/
    
 7. Настройте Telegram webhook:
    cd /opt/finans_assistant
@@ -34,7 +34,7 @@
    - Команда: /myapps
    - Бот: @avgust_worklog_bot
    - Edit Web App
-   - URL: http://72.56.83.95/miniapp/
+   - URL: http://217.151.231.96/miniapp/
 
 ГОТОВО! Приложение развернуто.
 
@@ -45,8 +45,8 @@
 
 ШАГ 1: ПОДКЛЮЧЕНИЕ К СЕРВЕРУ
 ─────────────────────────────────────────────────────────────────────────────
-ssh root@72.56.83.95
-Пароль: hN9DVVo_pu6d_X
+ssh root@217.151.231.96
+Пароль: nmuy@HPC-8L7TJ
 
 ─────────────────────────────────────────────────────────────────────────────
 ШАГ 2: ОБНОВЛЕНИЕ СИСТЕМЫ
@@ -117,7 +117,7 @@ ls -la
 cd /opt/finans_assistant
 ./deploy/create_production_env.sh
 
-# Скрипт запросит домен, введите: 72.56.83.95
+# Скрипт запросит домен, введите: 217.151.231.96
 # СОХРАНИТЕ выведенные credentials в надежное место!
 
 # Проверка
@@ -202,8 +202,8 @@ curl -I http://localhost:3000/
 curl -I http://localhost:3001/
 
 # Проверка через nginx (внешний доступ)
-curl http://72.56.83.95/api/v1/
-curl -I http://72.56.83.95/
+curl http://217.151.231.96/api/v1/
+curl -I http://217.151.231.96/
 
 # Все должны вернуть 200 OK
 
@@ -226,7 +226,7 @@ curl "https://api.telegram.org/bot8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU
 3. Отправьте команду: /myapps
 4. Выберите бота: @avgust_worklog_bot
 5. Нажмите "Edit Web App"
-6. Введите URL: http://72.56.83.95/miniapp/
+6. Введите URL: http://217.151.231.96/miniapp/
 7. Сохраните
 
 ─────────────────────────────────────────────────────────────────────────────
@@ -254,11 +254,11 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs --tail=50
 
 # 3. Проверка ERP Frontend в браузере
-Откройте: http://72.56.83.95/
+Откройте: http://217.151.231.96/
 Войдите с: admin / ваш_пароль
 
 # 4. Проверка Django Admin
-Откройте: http://72.56.83.95/admin/
+Откройте: http://217.151.231.96/admin/
 
 # 5. Проверка Telegram Bot
 Откройте @avgust_worklog_bot в Telegram
@@ -266,7 +266,7 @@ docker compose -f docker-compose.prod.yml logs --tail=50
 
 # 6. Проверка Mini App
 В боте нажмите кнопку меню или откройте:
-http://72.56.83.95/miniapp/
+http://217.151.231.96/miniapp/
 
 ═══════════════════════════════════════════════════════════════════════════════
 ПОЛЕЗНЫЕ КОМАНДЫ ДЛЯ УПРАВЛЕНИЯ
@@ -347,10 +347,10 @@ tail -f /var/log/nginx/error.log
 ✅ ДЕПЛОЙ ЗАВЕРШЕН!
 
 Сервисы доступны по адресам:
-- ERP Frontend: http://72.56.83.95/
-- Django Admin: http://72.56.83.95/admin/
-- API: http://72.56.83.95/api/v1/
-- Mini App: http://72.56.83.95/miniapp/
+- ERP Frontend: http://217.151.231.96/
+- Django Admin: http://217.151.231.96/admin/
+- API: http://217.151.231.96/api/v1/
+- Mini App: http://217.151.231.96/miniapp/
 - Telegram Bot: @avgust_worklog_bot
 
 Следующие шаги (опционально):

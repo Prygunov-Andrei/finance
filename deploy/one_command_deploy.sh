@@ -5,7 +5,7 @@
 # Этот скрипт нужно выполнить НА production сервере
 # 
 # Использование:
-#   1. SSH на сервер: ssh root@72.56.83.95
+#   1. SSH на сервер: ssh root@217.151.231.96
 #   2. Скопировать этот скрипт или выполнить команду ниже:
 #
 # curl -sSL https://raw.githubusercontent.com/Prygunov-Andrei/finance/main/deploy/one_command_deploy.sh | bash
@@ -102,7 +102,7 @@ DJANGO_SECRET=$(python3 -c "import secrets; print(''.join(secrets.choice('abcdef
 BANK_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
 
 # Определение домена (пока работаем по IP)
-DOMAIN="72.56.83.95"
+DOMAIN="217.151.231.96"
 WEBHOOK_URL="http://${DOMAIN}/bot/webhook"
 MINIAPP_URL="http://${DOMAIN}/miniapp/"
 PUBLIC_URL="http://${DOMAIN}"
@@ -195,7 +195,7 @@ echo "   systemctl start nginx"
 echo "   systemctl enable nginx"
 echo ""
 echo "3. Configure domain (optional):"
-echo "   - Setup DNS A-record: your-domain.com -> 72.56.83.95"
+echo "   - Setup DNS A-record: your-domain.com -> 217.151.231.96"
 echo "   - Install SSL: apt install certbot python3-certbot-nginx"
 echo "   - Run: certbot --nginx -d your-domain.com"
 echo ""

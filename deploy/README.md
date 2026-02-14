@@ -4,12 +4,12 @@
 
 ## Быстрый старт
 
-**Сервер:** `72.56.83.95` (SSH: `root@72.56.83.95`)
+**Сервер:** `217.151.231.96` (SSH: `root@217.151.231.96`)
 
 ### Автоматическая установка (рекомендуется)
 
 ```bash
-ssh root@72.56.83.95
+ssh root@217.151.231.96
 cd /opt
 git clone https://github.com/Prygunov-Andrei/finance.git finans_assistant
 cd finans_assistant/deploy
@@ -93,7 +93,7 @@ crontab -e
 ```
 Type: A
 Name: @
-IPv4 address: 72.56.83.95
+IPv4 address: 217.151.231.96
 Proxy status: ☁️ Proxied (оранжевое облако)
 TTL: Auto
 ```
@@ -102,7 +102,7 @@ TTL: Auto
 ```
 Type: A
 Name: www
-IPv4 address: 72.56.83.95
+IPv4 address: 217.151.231.96
 Proxy status: ☁️ Proxied
 ```
 

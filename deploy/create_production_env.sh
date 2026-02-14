@@ -25,10 +25,10 @@ BANK_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(
 read -p "Enter your domain name (or press Enter for IP-only setup): " DOMAIN_NAME
 
 if [ -z "$DOMAIN_NAME" ]; then
-    DOMAIN_NAME="72.56.83.95"
-    WEBHOOK_URL="http://72.56.83.95/bot/webhook"
-    MINIAPP_URL="http://72.56.83.95/miniapp/"
-    PUBLIC_URL="http://72.56.83.95"
+    DOMAIN_NAME="217.151.231.96"
+    WEBHOOK_URL="http://217.151.231.96/bot/webhook"
+    MINIAPP_URL="http://217.151.231.96/miniapp/"
+    PUBLIC_URL="http://217.151.231.96"
     echo "Using IP-only setup (no HTTPS)"
 else
     WEBHOOK_URL="https://${DOMAIN_NAME}/bot/webhook"
