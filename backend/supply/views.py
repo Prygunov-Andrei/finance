@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.db.models import Count
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -33,6 +34,11 @@ class BitrixWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        if not getattr(settings, 'BITRIX_WEBHOOK_ENABLED', True):
+            # Cutover: не импортируем новые кейсы из Bitrix, но отвечаем 200,
+            # чтобы Bitrix не делал ретраи и не копил ошибки.
+            return Response({'status': 'disabled'})
+
         data = request.data
         app_token = data.get('auth[application_token]') or data.get('application_token', '')
 

@@ -66,10 +66,18 @@ class ProductMatcher:
     def invalidate_cache(self):
         """Инвалидирует кэш товаров (вызывать после создания/изменения товаров)"""
         self._products_cache = None
-        # Удаляем известные ключи кэша (delete_pattern только для Redis)
-        for status in [Product.Status.NEW, Product.Status.VERIFIED]:
-            cache.delete(f"{self.CACHE_KEY}_{status}")
-        cache.delete(f"{self.CACHE_KEY}_NEW-VERIFIED")
+        # Удаляем известные ключи кэша (delete_pattern есть не везде).
+        # Ключи формируются как f"{CACHE_KEY}_{'-'.join(statuses)}", где statuses — values enum.
+        status_new = Product.Status.NEW
+        status_verified = Product.Status.VERIFIED
+        known_status_sets = [
+            [status_new],
+            [status_verified],
+            [status_new, status_verified],
+            [status_verified, status_new],
+        ]
+        for statuses in known_status_sets:
+            cache.delete(f"{self.CACHE_KEY}_{'-'.join(statuses)}")
     
     def _extract_first_word(self, normalized: str) -> str:
         """Извлекает первое слово для предварительной фильтрации"""
@@ -114,8 +122,9 @@ class ProductMatcher:
         if alias_match:
             return alias_match.product, False
         
-        # 3. Fuzzy поиск — высокая точность (>= 0.95)
-        high_similar = self.find_similar(normalized, threshold=self.EXACT_THRESHOLD, limit=1)
+        # 3. Fuzzy поиск — уверенное совпадение (>= 0.80) → создаём alias и используем существующий товар.
+        # Это снижает риск задвоений номенклатуры в снабжении.
+        high_similar = self.find_similar(normalized, threshold=self.FUZZY_THRESHOLD, limit=1)
         if high_similar:
             product = Product.objects.get(pk=high_similar[0]['product_id'])
             ProductAlias.objects.create(

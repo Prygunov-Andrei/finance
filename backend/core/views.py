@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status, permissions, serializers as drf_serializers
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -11,7 +12,8 @@ from .serializers import (
     RegisterSerializer,
     ChangePasswordSerializer,
 )
-from .models import Notification
+from .models import Notification, NotificationService
+from .service_permissions import IsServiceToken
 
 
 @extend_schema_view(
@@ -231,3 +233,40 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     def mark_all_read(self, request):
         Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({'status': 'ok'})
+
+
+class SystemNotificationCreateView(APIView):
+    """
+    Системный endpoint для межсервисных уведомлений (kanban -> ERP).
+    Требует X-Service-Token.
+    """
+
+    permission_classes = [IsServiceToken]
+    authentication_classes = []
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        notification_type = request.data.get('notification_type', Notification.NotificationType.GENERAL)
+        title = request.data.get('title', '')
+        message = request.data.get('message', '')
+        data = request.data.get('data', None)
+
+        if not user_id:
+            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not title:
+            return Response({'error': 'title is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=int(user_id))
+        except (User.DoesNotExist, ValueError):
+            return Response({'error': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        n = NotificationService.create(
+            user=user,
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            data=data,
+        )
+
+        return Response({'id': n.id, 'status': 'ok'}, status=status.HTTP_201_CREATED)

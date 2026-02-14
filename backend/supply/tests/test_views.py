@@ -57,6 +57,19 @@ class TestBitrixWebhookView:
         assert resp.data == {'status': 'ok'}
         mock_task.delay.assert_called_once_with(555, integration.id)
 
+    @patch('supply.tasks.process_bitrix_deal')
+    def test_cutover_disabled_webhook_returns_200_and_does_not_queue(self, mock_task, api_client, settings):
+        settings.BITRIX_WEBHOOK_ENABLED = False
+        integration = _make_integration()
+        payload = {
+            'application_token': integration.outgoing_webhook_token,
+            'data': {'FIELDS': {'ID': '555'}},
+        }
+        resp = api_client.post(WEBHOOK_URL, payload, format='json')
+        assert resp.status_code == 200
+        assert resp.data == {'status': 'disabled'}
+        mock_task.delay.assert_not_called()
+
     def test_invalid_token_returns_403(self, api_client):
         _make_integration()
         payload = {

@@ -111,6 +111,17 @@ const menuItems: MenuItem[] = [
       { id: 'supply-dashboard', label: 'Дашборд', icon: <BarChart3 className="w-4 h-4" />, path: '/supply/dashboard' },
     ]
   },
+  {
+    id: 'kanban',
+    label: 'Канбан',
+    icon: <ClipboardList className="w-5 h-5" />,
+    path: '/kanban',
+    children: [
+      { id: 'kanban-supply', label: 'Канбан снабжения', icon: <ShoppingCart className="w-4 h-4" />, path: '/kanban/supply' },
+      { id: 'kanban-object-tasks', label: 'Задачи по объектам', icon: <CheckSquare className="w-4 h-4" />, path: '/kanban/object-tasks' },
+      { id: 'warehouse-balances', label: 'Склад: остатки', icon: <Package className="w-4 h-4" />, path: '/warehouse' },
+    ],
+  },
   { 
     id: 'catalog', 
     label: 'Каталог', 
@@ -166,6 +177,9 @@ const pageTitles: Record<string, string> = {
   'supply/recurring': 'Периодические платежи',
   'supply/income': 'Доходы',
   'supply/dashboard': 'Дашборд снабжения',
+  'kanban/supply': 'Канбан снабжения',
+  'kanban/object-tasks': 'Задачи по объектам',
+  warehouse: 'Склад: остатки',
   'settings/bitrix': 'Интеграция с Битрикс24',
   communications: 'Переписка',
   settings: 'Настройки',
@@ -174,7 +188,7 @@ const pageTitles: Record<string, string> = {
 
 export function Layout({ children, onLogout, user }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['contracts', 'proposals', 'pricelists', 'estimates', 'catalog', 'supply', 'settings']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['contracts', 'proposals', 'pricelists', 'estimates', 'catalog', 'supply', 'kanban', 'settings']);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebarWidth');
     return saved ? parseInt(saved) : 256;

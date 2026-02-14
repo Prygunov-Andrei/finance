@@ -272,17 +272,8 @@ class ShiftViewSet(viewsets.ModelViewSet):
             distance = R * c
             geo_valid = distance <= obj.geo_radius
 
-        # Если вне геозоны и bypass не разрешён — блокируем регистрацию
-        if not geo_valid and not obj.allow_geo_bypass:
-            return Response(
-                {
-                    'error': 'Вы находитесь за пределами геозоны объекта',
-                    'geo_valid': False,
-                    'distance': round(distance) if distance is not None else None,
-                    'geo_radius': obj.geo_radius,
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Вне геозоны: не блокируем регистрацию (V1), но помечаем geo_valid=False.
+        # Строгий режим можно включать позже как отдельную политику.
 
         registration, created = ShiftRegistration.objects.get_or_create(
             shift=shift,
@@ -300,11 +291,13 @@ class ShiftViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        if not geo_valid and obj.allow_geo_bypass:
+        if not geo_valid:
             return Response(
                 {
                     'warning': 'Зарегистрировано, но вы вне геозоны объекта',
                     'geo_valid': False,
+                    'distance': round(distance) if distance is not None else None,
+                    'geo_radius': obj.geo_radius,
                     'registration': ShiftRegistrationSerializer(registration).data,
                 },
                 status=status.HTTP_201_CREATED,

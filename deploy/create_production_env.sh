@@ -49,6 +49,11 @@ DB_NAME=finans_assistant_prod
 DB_USER=finans_user
 DB_PASSWORD=${DB_PASSWORD}
 
+# --- Kanban service DB (separate database in same postgres) ---
+KANBAN_DB_NAME=finans_assistant_kanban_prod
+KANBAN_SECRET_KEY=${DJANGO_SECRET}
+KANBAN_SERVICE_TOKEN=
+
 # --- MinIO ---
 MINIO_ROOT_USER=${MINIO_USER}
 MINIO_ROOT_PASSWORD=${MINIO_PASSWORD}
@@ -58,9 +63,20 @@ DEBUG=False
 SECRET_KEY=${DJANGO_SECRET}
 DJANGO_SETTINGS_MODULE=finans_assistant.settings
 BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY}
+ERP_SERVICE_TOKEN=
+
+# --- JWT (RS256) ---
+# В production требуется задать пару ключей (PEM).
+# JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+# JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+JWT_PRIVATE_KEY=
+JWT_PUBLIC_KEY=
+JWT_ISSUER=finans-assistant-erp
+JWT_AUDIENCE=kanban-service
 
 # --- Supply / LLM (заполните нужный ключ) ---
 BITRIX_WEBHOOK_TIMEOUT=30
+BITRIX_WEBHOOK_ENABLED=true
 OPENAI_API_KEY=
 GEMINI_API_KEY=
 

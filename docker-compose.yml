@@ -62,6 +62,25 @@ services:
       /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
       /usr/bin/mc mb myminio/worklog-media --ignore-existing;
       /usr/bin/mc anonymous set download myminio/worklog-media;
+      /usr/bin/mc mb myminio/files --ignore-existing;
+      exit 0;
+      "
+
+  createkanbandb:
+    image: postgres:14-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-postgres}
+      DB_USER: ${DB_USER:-postgres}
+      DB_HOST: postgres
+      KANBAN_DB_NAME: ${KANBAN_DB_NAME:-kanban}
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Ensuring kanban database exists...';
+      psql -h $$DB_HOST -U $$DB_USER -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='$$KANBAN_DB_NAME'\" | grep -q 1
+      || psql -h $$DB_HOST -U $$DB_USER -d postgres -c \"CREATE DATABASE \\\"$$KANBAN_DB_NAME\\\"\" ;
       exit 0;
       "
 
@@ -94,6 +113,7 @@ services:
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
+      - ERP_SERVICE_TOKEN=${ERP_SERVICE_TOKEN:-}
     volumes:
       - backend_media:/app/media
       - backend_logs:/app/logs
@@ -109,6 +129,90 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
+
+  kanban-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["gunicorn", "kanban_service.wsgi:application", "--bind", "0.0.0.0:8010", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+    ports:
+      - "8010:8010"
+    environment:
+      - KANBAN_DEBUG=${KANBAN_DEBUG:-True}
+      - KANBAN_SECRET_KEY=${KANBAN_SECRET_KEY:-django-insecure-kanban-dev-key}
+      - KANBAN_DB_HOST=postgres
+      - KANBAN_DB_PORT=5432
+      - KANBAN_DB_NAME=${KANBAN_DB_NAME:-kanban}
+      - KANBAN_DB_USER=${DB_USER:-postgres}
+      - KANBAN_DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - KANBAN_CELERY_BROKER_URL=redis://redis:6379/1
+      - KANBAN_CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - KANBAN_S3_ENDPOINT_URL=http://minio:9000
+      - KANBAN_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - KANBAN_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - KANBAN_S3_BUCKET_NAME=files
+      - ERP_API_BASE_URL=http://backend:8000/api/v1
+      - ERP_SERVICE_TOKEN=${ERP_SERVICE_TOKEN:-}
+    depends_on:
+      createkanbandb:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kanban-celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A kanban_service worker --loglevel=info --concurrency=2
+    environment:
+      - KANBAN_DEBUG=${KANBAN_DEBUG:-True}
+      - KANBAN_SECRET_KEY=${KANBAN_SECRET_KEY:-django-insecure-kanban-dev-key}
+      - KANBAN_DB_HOST=postgres
+      - KANBAN_DB_PORT=5432
+      - KANBAN_DB_NAME=${KANBAN_DB_NAME:-kanban}
+      - KANBAN_DB_USER=${DB_USER:-postgres}
+      - KANBAN_DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - KANBAN_CELERY_BROKER_URL=redis://redis:6379/1
+      - KANBAN_CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - KANBAN_S3_ENDPOINT_URL=http://minio:9000
+      - KANBAN_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - KANBAN_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - KANBAN_S3_BUCKET_NAME=files
+      - ERP_API_BASE_URL=http://backend:8000/api/v1
+      - ERP_SERVICE_TOKEN=${ERP_SERVICE_TOKEN:-}
+    depends_on:
+      createkanbandb:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kanban-celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A kanban_service beat --loglevel=info
+    environment:
+      - KANBAN_DEBUG=${KANBAN_DEBUG:-True}
+      - KANBAN_SECRET_KEY=${KANBAN_SECRET_KEY:-django-insecure-kanban-dev-key}
+      - KANBAN_DB_HOST=postgres
+      - KANBAN_DB_PORT=5432
+      - KANBAN_DB_NAME=${KANBAN_DB_NAME:-kanban}
+      - KANBAN_DB_USER=${DB_USER:-postgres}
+      - KANBAN_DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - KANBAN_CELERY_BROKER_URL=redis://redis:6379/1
+      - KANBAN_CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - KANBAN_S3_ENDPOINT_URL=http://minio:9000
+      - KANBAN_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - KANBAN_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - KANBAN_S3_BUCKET_NAME=files
+      - ERP_API_BASE_URL=http://backend:8000/api/v1
+      - ERP_SERVICE_TOKEN=${ERP_SERVICE_TOKEN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # =========================================================================

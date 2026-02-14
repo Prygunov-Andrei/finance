@@ -43,6 +43,9 @@ sleep 30
 echo -e "${GREEN}[6/10] Running database migrations...${NC}"
 docker compose -f docker-compose.prod.yml exec -T backend python manage.py migrate --noinput
 
+echo -e "${GREEN}[6.1/10] Running kanban database migrations...${NC}"
+docker compose -f docker-compose.prod.yml exec -T kanban-api python manage_kanban.py migrate --noinput
+
 echo -e "${GREEN}[7/10] Collecting static files...${NC}"
 docker compose -f docker-compose.prod.yml exec -T backend python manage.py collectstatic --noinput
 
@@ -52,6 +55,9 @@ docker compose -f docker-compose.prod.yml ps
 echo -e "${GREEN}[9/10] Testing backend health...${NC}"
 sleep 5
 curl -f http://localhost:8000/api/v1/ || echo -e "${YELLOW}Warning: Backend health check failed${NC}"
+
+echo -e "${GREEN}[9.1/10] Testing kanban health...${NC}"
+curl -f http://localhost:8010/kanban-api/health/ || echo -e "${YELLOW}Warning: Kanban health check failed${NC}"
 
 echo -e "${GREEN}[10/10] Deployment completed!${NC}"
 echo ""

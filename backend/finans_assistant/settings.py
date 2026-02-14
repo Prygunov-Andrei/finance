@@ -260,14 +260,26 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 # ]
 
 # JWT Settings
+JWT_PRIVATE_KEY = os.environ.get('JWT_PRIVATE_KEY', '').strip()
+JWT_PUBLIC_KEY = os.environ.get('JWT_PUBLIC_KEY', '').strip()
+JWT_ISSUER = os.environ.get('JWT_ISSUER', 'finans-assistant-erp')
+JWT_AUDIENCE = os.environ.get('JWT_AUDIENCE', 'kanban-service')
+
+JWT_ALGORITHM = 'RS256' if (JWT_PRIVATE_KEY and JWT_PUBLIC_KEY) else 'HS256'
+JWT_SIGNING_KEY = JWT_PRIVATE_KEY if JWT_ALGORITHM == 'RS256' else SECRET_KEY
+JWT_VERIFYING_KEY = JWT_PUBLIC_KEY if JWT_ALGORITHM == 'RS256' else ''
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
+    'ALGORITHM': JWT_ALGORITHM,
+    'SIGNING_KEY': JWT_SIGNING_KEY,
+    'VERIFYING_KEY': JWT_VERIFYING_KEY,
+    'ISSUER': JWT_ISSUER,
+    'AUDIENCE': JWT_AUDIENCE,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
     'USER_ID_FIELD': 'id',
@@ -328,6 +340,10 @@ CELERY_BEAT_SCHEDULE = {
 
 # Bitrix24 Integration
 BITRIX_WEBHOOK_TIMEOUT = int(os.environ.get('BITRIX_WEBHOOK_TIMEOUT', '30'))
+BITRIX_WEBHOOK_ENABLED = os.environ.get('BITRIX_WEBHOOK_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'y', 'on')
+
+# Service-to-service (kanban -> ERP)
+ERP_SERVICE_TOKEN = os.environ.get('ERP_SERVICE_TOKEN', '').strip()
 
 # =============================================================================
 # MinIO / S3 Configuration (для медиа сервиса фиксации работ)

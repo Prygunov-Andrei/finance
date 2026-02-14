@@ -8,7 +8,7 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
+from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -26,6 +26,8 @@ from payments.views import (
     InvoiceViewSet, RecurringPaymentViewSet, IncomeRecordViewSet,
 )
 from core.views import UserViewSet, NotificationViewSet
+from core.views import SystemNotificationCreateView
+from core.auth_views import ERPTokenObtainPairView
 
 # Создаём роутер для ViewSets
 router = DefaultRouter()
@@ -95,10 +97,12 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     # JWT аутентификация
-    path('api/v1/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/v1/auth/login/', ERPTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/v1/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
     # API endpoints
+    # Важно: должен матчиться раньше router (иначе попадет в /notifications/{pk}/).
+    path('api/v1/notifications/system_create/', SystemNotificationCreateView.as_view(), name='system-notification-create'),
     path('api/v1/', include(router.urls)),
     path('api/v1/', include('accounting.urls')),
     path('api/v1/', include('communications.urls')),

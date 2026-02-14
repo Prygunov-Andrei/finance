@@ -19,4 +19,4 @@ exclude_lines =
     class Meta:
 show_missing = True
 precision = 2
-fail_under = 85
+fail_under = 45

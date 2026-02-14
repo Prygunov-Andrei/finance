@@ -281,7 +281,7 @@ describe('WorkJournalTab', () => {
       expect(screen.getByText('Журнал работ')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/будет доступен после подключения/)).toBeInTheDocument();
+    expect(screen.getByText(/Здесь будут отображаться смены/i)).toBeInTheDocument();
   });
 
   // T4-c-3: Навигация по секциям
@@ -644,13 +644,15 @@ describe('GeoSettingsSection', () => {
 
     renderWithProviders(<GeoSettingsSection objectId={1} />);
 
-    expect(screen.getByText('Гео-настройки объекта')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Гео-настройки объекта')).toBeInTheDocument();
+    });
     expect(screen.getByLabelText('Широта объекта')).toBeInTheDocument();
     expect(screen.getByLabelText('Долгота объекта')).toBeInTheDocument();
     expect(screen.getByLabelText('Радиус гео-зоны')).toBeInTheDocument();
 
     // Кнопка сохранения
-    expect(screen.getByText('Сохранить гео-настройки')).toBeInTheDocument();
+    expect(screen.getByText('Сохранить настройки')).toBeInTheDocument();
   });
 });
 

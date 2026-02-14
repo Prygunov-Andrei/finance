@@ -80,9 +80,43 @@ class ShiftSerializer(serializers.ModelSerializer):
 
 
 class ShiftCreateSerializer(serializers.ModelSerializer):
+    """
+    Создание смены.
+
+    Поддерживает два сценария:
+    - Через договор: передаём `contract`, object/contractor проставятся автоматически (Shift.save()).
+    - Без договора: передаём `object` и `contractor` явно.
+    """
+
+    object = serializers.PrimaryKeyRelatedField(
+        queryset=Shift._meta.get_field('object').remote_field.model.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    contractor = serializers.PrimaryKeyRelatedField(
+        queryset=Shift._meta.get_field('contractor').remote_field.model.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = Shift
-        fields = ['contract', 'date', 'shift_type', 'start_time', 'end_time']
+        fields = ['contract', 'object', 'contractor', 'date', 'shift_type', 'start_time', 'end_time']
+
+    def validate(self, attrs):
+        contract = attrs.get('contract')
+        obj = attrs.get('object')
+        contractor = attrs.get('contractor')
+
+        if contract:
+            return attrs
+
+        if obj and contractor:
+            return attrs
+
+        raise serializers.ValidationError(
+            'Нужно указать либо contract, либо пару object + contractor.'
+        )
 
 
 # =============================================================================

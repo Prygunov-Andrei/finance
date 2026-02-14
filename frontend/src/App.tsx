@@ -55,6 +55,8 @@ import { RecurringPaymentsPage } from './components/supply/RecurringPaymentsPage
 import { IncomeRecordsPage } from './components/supply/IncomeRecordsPage';
 import { SupplyDashboardPage } from './components/supply/SupplyDashboardPage';
 import { BitrixSettingsPage } from './components/supply/BitrixSettingsPage';
+import { KanbanBoardPage } from './components/kanban/KanbanBoardPage';
+import { WarehouseBalancesPage } from './components/warehouse/WarehouseBalancesPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Создаем QueryClient
@@ -538,6 +540,29 @@ export default function App() {
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
                 <SupplyDashboardPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Kanban (API-first service) */}
+          <Route path="/kanban/supply" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <KanbanBoardPage boardKey="supply" pageTitle="Канбан снабжения" cardType="supply_case" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/kanban/object-tasks" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <KanbanBoardPage boardKey="object_tasks" pageTitle="Задачи по объектам" cardType="object_task" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/warehouse" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <WarehouseBalancesPage />
               </Layout>
             </ProtectedRoute>
           } />

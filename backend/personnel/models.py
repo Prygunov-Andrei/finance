@@ -18,6 +18,9 @@ ERP_SECTIONS = [
     ('supply', 'Снабжение'),
     ('supply_approve', 'Одобрение счетов'),
     ('recurring_payments', 'Периодические платежи'),
+    ('warehouse', 'Склад'),
+    ('object_tasks', 'Задачи по объектам'),
+    ('kanban_admin', 'Администрирование канбана'),
 ]
 
 PERMISSION_LEVELS = ('none', 'read', 'edit')
