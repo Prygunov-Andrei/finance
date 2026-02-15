@@ -41,6 +41,13 @@ export type StockBalanceRow = {
   ahhtung: boolean;
 };
 
+type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
 class KanbanApiClient {
   private getAuthHeader(): HeadersInitLike {
     const token = localStorage.getItem('access_token');
@@ -75,22 +82,34 @@ class KanbanApiClient {
     return undefined as T;
   }
 
-  listBoards() {
-    return this.request<KanbanBoard[]>('/boards/');
+  private normalizeListResponse<T>(resp: PaginatedResponse<T> | T[]): T[] {
+    if (Array.isArray(resp)) return resp;
+    if (resp && typeof resp === 'object' && Array.isArray((resp as any).results)) {
+      return (resp as PaginatedResponse<T>).results;
+    }
+    return [];
+  }
+
+  async listBoards() {
+    const resp = await this.request<PaginatedResponse<KanbanBoard> | KanbanBoard[]>('/boards/');
+    return this.normalizeListResponse(resp);
   }
 
   async getBoardByKey(key: string) {
-    const boards = await this.request<KanbanBoard[]>(`/boards/?key=${encodeURIComponent(key)}`);
+    const resp = await this.request<PaginatedResponse<KanbanBoard> | KanbanBoard[]>(`/boards/?key=${encodeURIComponent(key)}`);
+    const boards = this.normalizeListResponse(resp);
     return boards[0] || null;
   }
 
-  listColumns(boardId: string) {
-    return this.request<KanbanColumn[]>(`/columns/?board_id=${encodeURIComponent(boardId)}`);
+  async listColumns(boardId: string) {
+    const resp = await this.request<PaginatedResponse<KanbanColumn> | KanbanColumn[]>(`/columns/?board_id=${encodeURIComponent(boardId)}`);
+    return this.normalizeListResponse(resp);
   }
 
-  listCards(boardId: string, type?: string) {
+  async listCards(boardId: string, type?: string) {
     const typeParam = type ? `&type=${encodeURIComponent(type)}` : '';
-    return this.request<KanbanCard[]>(`/cards/?board_id=${encodeURIComponent(boardId)}${typeParam}`);
+    const resp = await this.request<PaginatedResponse<KanbanCard> | KanbanCard[]>(`/cards/?board_id=${encodeURIComponent(boardId)}${typeParam}`);
+    return this.normalizeListResponse(resp);
   }
 
   moveCard(cardId: string, toColumnKey: string) {
@@ -101,8 +120,9 @@ class KanbanApiClient {
   }
 
   // Warehouse (V1)
-  listStockLocations() {
-    return this.request<StockLocation[]>('/stock-locations/');
+  async listStockLocations() {
+    const resp = await this.request<PaginatedResponse<StockLocation> | StockLocation[]>('/stock-locations/');
+    return this.normalizeListResponse(resp);
   }
 
   getBalances(locationId: string) {

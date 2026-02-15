@@ -34,5 +34,12 @@ describe('kanbanApi.listBoards', () => {
     const [url] = mockFetch.mock.calls[0];
     expect(url).toContain('/kanban-api/v1/boards/');
   });
+
+  it('supports paginated response', async () => {
+    mockSuccess({ count: 1, next: null, previous: null, results: [{ id: 'b1', key: 'supply', title: 'Supply' }] });
+    const result = await kanbanApi.listBoards();
+    expect(result).toHaveLength(1);
+    expect(result[0].key).toBe('supply');
+  });
 });
 
