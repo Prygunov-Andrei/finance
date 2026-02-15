@@ -163,8 +163,14 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       - ERP_SERVICE_TOKEN=${ERP_SERVICE_TOKEN:-}
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY:-}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-}
+      - JWT_ISSUER=${JWT_ISSUER:-}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-}
       # --- Supply / LLM ---
       - BITRIX_WEBHOOK_TIMEOUT=${BITRIX_WEBHOOK_TIMEOUT:-30}
+      - BITRIX_WEBHOOK_ENABLED=${BITRIX_WEBHOOK_ENABLED:-true}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
@@ -231,6 +237,18 @@ services:
       - KANBAN_S3_BUCKET_NAME=files
       - ERP_API_BASE_URL=http://backend:8000/api/v1
       - ERP_SERVICE_TOKEN=${ERP_SERVICE_TOKEN:-}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-RS256}
+      - JWT_ISSUER=${JWT_ISSUER:-finans-assistant-erp}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kanban-service}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-RS256}
+      - JWT_ISSUER=${JWT_ISSUER:-finans-assistant-erp}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kanban-service}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-RS256}
+      - JWT_ISSUER=${JWT_ISSUER:-finans-assistant-erp}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kanban-service}
     depends_on:
       createkanbandb:
         condition: service_completed_successfully
