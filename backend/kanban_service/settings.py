@@ -181,7 +181,7 @@ KANBAN_SERVICE_TOKEN = os.environ.get('KANBAN_SERVICE_TOKEN', '').strip()
 KANBAN_JWT_ISSUER = os.environ.get('JWT_ISSUER', 'finans-assistant-erp')
 KANBAN_JWT_AUDIENCE = os.environ.get('JWT_AUDIENCE', 'kanban-service')
 KANBAN_JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'RS256')
-KANBAN_JWT_VERIFYING_KEY = os.environ.get('JWT_PUBLIC_KEY', '').strip()
+KANBAN_JWT_VERIFYING_KEY = os.environ.get('JWT_PUBLIC_KEY', '').replace('\\n', '\n').strip()
 
 # ERP integration (kanban -> ERP)
 ERP_API_BASE_URL = os.environ.get('ERP_API_BASE_URL', 'http://backend:8000/api/v1').rstrip('/')

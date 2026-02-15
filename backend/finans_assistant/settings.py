@@ -260,8 +260,9 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 # ]
 
 # JWT Settings
-JWT_PRIVATE_KEY = os.environ.get('JWT_PRIVATE_KEY', '').strip()
-JWT_PUBLIC_KEY = os.environ.get('JWT_PUBLIC_KEY', '').strip()
+# Docker compose .env не поддерживает multiline, поэтому ключи обычно хранятся как PEM с \n.
+JWT_PRIVATE_KEY = os.environ.get('JWT_PRIVATE_KEY', '').replace('\\n', '\n').strip()
+JWT_PUBLIC_KEY = os.environ.get('JWT_PUBLIC_KEY', '').replace('\\n', '\n').strip()
 JWT_ISSUER = os.environ.get('JWT_ISSUER', 'finans-assistant-erp')
 JWT_AUDIENCE = os.environ.get('JWT_AUDIENCE', 'kanban-service')
 
