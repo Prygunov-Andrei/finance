@@ -88,7 +88,9 @@ class ERPJWTAuthentication(BaseAuthentication):
                 audience=settings.KANBAN_JWT_AUDIENCE,
                 issuer=settings.KANBAN_JWT_ISSUER,
                 options={
-                    'require': ['exp', 'nbf', 'iat', 'iss', 'aud'],
+                    # SimpleJWT по умолчанию не включает nbf. Требуем только то,
+                    # что гарантированно присутствует в access token.
+                    'require': ['exp', 'iat', 'iss', 'aud'],
                 },
             )
         except Exception as exc:
