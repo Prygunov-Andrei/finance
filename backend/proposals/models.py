@@ -44,6 +44,11 @@ class FrontOfWorkItem(TimestampedModel):
         default=True,
         verbose_name='Активна'
     )
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name='По умолчанию',
+        help_text='Автоматически выбирается при создании ТКП'
+    )
     sort_order = models.PositiveIntegerField(
         default=0,
         verbose_name='Порядок сортировки'
@@ -73,6 +78,11 @@ class MountingCondition(TimestampedModel):
     is_active = models.BooleanField(
         default=True,
         verbose_name='Активна'
+    )
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name='По умолчанию',
+        help_text='Автоматически выбирается при создании МП'
     )
     sort_order = models.PositiveIntegerField(
         default=0,
@@ -765,13 +775,11 @@ class MountingProposal(TimestampedModel):
         related_name='mounting_proposals',
         verbose_name='Родительское ТКП'
     )
-    mounting_estimate = models.ForeignKey(
+    mounting_estimates = models.ManyToManyField(
         'estimates.MountingEstimate',
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name='mounting_proposals',
-        verbose_name='Монтажная смета'
+        verbose_name='Монтажные сметы'
     )
     total_amount = models.DecimalField(
         max_digits=14,
@@ -863,11 +871,16 @@ class MountingProposal(TimestampedModel):
             self.number = generate_mp_number(self.parent_tkp, self.date)
         super().save(*args, **kwargs)
 
-    def copy_from_mounting_estimate(self):
-        """Скопировать данные из монтажной сметы"""
-        if self.mounting_estimate:
-            self.total_amount = self.mounting_estimate.total_amount
-            self.man_hours = self.mounting_estimate.man_hours
+    def copy_from_mounting_estimates(self):
+        """Скопировать агрегированные данные из монтажных смет"""
+        estimates = self.mounting_estimates.all()
+        if estimates.exists():
+            totals = estimates.aggregate(
+                total=Sum('total_amount'),
+                hours=Sum('man_hours')
+            )
+            self.total_amount = totals['total'] or Decimal('0')
+            self.man_hours = totals['hours'] or Decimal('0')
 
     @classmethod
     def create_from_tkp(cls, tkp: TechnicalProposal, created_by: User) -> 'MountingProposal':
@@ -890,7 +903,6 @@ class MountingProposal(TimestampedModel):
             object=self.object,
             counterparty=self.counterparty,
             parent_tkp=self.parent_tkp,
-            mounting_estimate=self.mounting_estimate,
             total_amount=self.total_amount,
             man_hours=self.man_hours,
             notes=self.notes,
@@ -900,7 +912,7 @@ class MountingProposal(TimestampedModel):
             version_number=self.version_number + 1
         )
         
-        # Копировать условия
+        new_mp.mounting_estimates.set(self.mounting_estimates.all())
         new_mp.conditions.set(self.conditions.all())
         
         return new_mp

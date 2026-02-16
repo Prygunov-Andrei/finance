@@ -23,6 +23,7 @@ export function FrontOfWorkItems() {
     name: '',
     category: '',
     is_active: true,
+    is_default: false,
     sort_order: 0,
   });
 
@@ -81,6 +82,7 @@ export function FrontOfWorkItems() {
         name: item.name,
         category: item.category || '',
         is_active: item.is_active,
+        is_default: item.is_default,
         sort_order: item.sort_order,
       });
     } else {
@@ -89,6 +91,7 @@ export function FrontOfWorkItems() {
         name: '',
         category: '',
         is_active: true,
+        is_default: false,
         sort_order: 0,
       });
     }
@@ -102,6 +105,7 @@ export function FrontOfWorkItems() {
       name: '',
       category: '',
       is_active: true,
+      is_default: false,
       sort_order: 0,
     });
   };
@@ -222,6 +226,7 @@ export function FrontOfWorkItems() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Название</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Категория</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Порядок</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">По умолч.</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Активен</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия</th>
               </tr>
@@ -229,7 +234,7 @@ export function FrontOfWorkItems() {
             <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                     Загрузка...
                   </td>
                 </tr>
@@ -249,6 +254,13 @@ export function FrontOfWorkItems() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{item.sort_order}</td>
+                    <td className="px-4 py-3">
+                      {item.is_default ? (
+                        <Badge variant="default" className="bg-blue-100 text-blue-800">Да</Badge>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       {item.is_active ? (
                         <Badge variant="default" className="bg-green-100 text-green-800">Да</Badge>
@@ -279,7 +291,7 @@ export function FrontOfWorkItems() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                     Нет данных
                   </td>
                 </tr>
@@ -336,15 +348,27 @@ export function FrontOfWorkItems() {
               />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is_active"
-                checked={formData.is_active}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked as boolean })}
-              />
-              <Label htmlFor="is_active" className="cursor-pointer">
-                Активен
-              </Label>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_active"
+                  checked={formData.is_active}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked as boolean })}
+                />
+                <Label htmlFor="is_active" className="cursor-pointer">
+                  Активен
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_default"
+                  checked={formData.is_default}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_default: checked as boolean })}
+                />
+                <Label htmlFor="is_default" className="cursor-pointer">
+                  По умолчанию
+                </Label>
+              </div>
             </div>
 
             <DialogFooter>

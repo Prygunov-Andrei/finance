@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ConstructionObject, CreateConstructionObjectData } from '../lib/api';
@@ -16,14 +16,24 @@ import { Building2, Loader2, Plus, Search, Calendar, MapPin, MoreVertical, Penci
 import { toast } from 'sonner';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
-export function ConstructionObjects() {
+type ConstructionObjectsProps = {
+  defaultStatusFilter?: string;
+  defaultCreateStatus?: string;
+  pageTitle?: string;
+};
+
+export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, pageTitle }: ConstructionObjectsProps = {}) {
   const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingObject, setEditingObject] = useState<ConstructionObject | null>(null);
   const [deletingObject, setDeletingObject] = useState<ConstructionObject | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>(defaultStatusFilter || '');
   const [searchQuery, setSearchQuery] = useState('');
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (defaultStatusFilter !== undefined) setStatusFilter(defaultStatusFilter);
+  }, [defaultStatusFilter]);
 
   const { data: objectsData, isLoading, error } = useQuery({
     queryKey: ['construction-objects', statusFilter, searchQuery],
@@ -119,7 +129,7 @@ export function ConstructionObjects() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-semibold">Объекты строительства</h1>
+            <h1 className="text-3xl font-semibold">{pageTitle || 'Объекты строительства'}</h1>
             <p className="text-gray-500 mt-1">
               {objects?.length || 0} {objects?.length === 1 ? 'объект' : 'объектов'}
             </p>
@@ -170,6 +180,7 @@ export function ConstructionObjects() {
             <ConstructionObjectForm 
               onSubmit={(data) => createMutation.mutate(data)}
               isLoading={createMutation.isPending}
+              defaultStatus={defaultCreateStatus}
             />
           </DialogContent>
         </Dialog>
@@ -316,13 +327,14 @@ interface ConstructionObjectFormProps {
   object?: ConstructionObject;
   onSubmit: (data: CreateConstructionObjectData) => void;
   isLoading: boolean;
+  defaultStatus?: string;
 }
 
-function ConstructionObjectForm({ object, onSubmit, isLoading }: ConstructionObjectFormProps) {
+function ConstructionObjectForm({ object, onSubmit, isLoading, defaultStatus }: ConstructionObjectFormProps) {
   const [formData, setFormData] = useState({
     name: object?.name || '',
     address: object?.address || '',
-    status: object?.status || 'planned',
+    status: object?.status || defaultStatus || 'planned',
     start_date: object?.start_date || '',
     end_date: object?.end_date || '',
     description: object?.description || '',

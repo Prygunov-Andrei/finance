@@ -49,6 +49,7 @@ class Card(models.Model):
     class CardType(models.TextChoices):
         SUPPLY_CASE = 'supply_case', 'Supply case'
         OBJECT_TASK = 'object_task', 'Object task'
+        COMMERCIAL_CASE = 'commercial_case', 'Commercial case'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name='cards')

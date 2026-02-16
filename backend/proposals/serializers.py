@@ -161,19 +161,26 @@ class TechnicalProposalDetailSerializer(serializers.ModelSerializer):
         return obj.child_versions.count()
 
 
+def get_mounting_estimate_queryset():
+    """Lazy import для избежания циклических зависимостей"""
+    from estimates.models import MountingEstimate
+    return MountingEstimate.objects.all()
+
+
 class MountingProposalListSerializer(serializers.ModelSerializer):
     """Сериализатор для списка МП"""
     object_name = serializers.CharField(source='object.name', read_only=True)
     counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True)
     parent_tkp_number = serializers.CharField(source='parent_tkp.number', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    mounting_estimates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     
     class Meta:
         model = MountingProposal
         fields = [
             'id', 'number', 'name', 'date', 'object', 'object_name',
             'counterparty', 'counterparty_name', 'parent_tkp', 'parent_tkp_number',
-            'mounting_estimate', 'total_amount', 'man_hours', 'status',
+            'mounting_estimates', 'total_amount', 'man_hours', 'status',
             'telegram_published', 'telegram_published_at', 'created_by',
             'created_by_name', 'version_number', 'parent_version',
             'created_at', 'updated_at'
@@ -187,8 +194,15 @@ class MountingProposalDetailSerializer(serializers.ModelSerializer):
     counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True)
     parent_tkp_number = serializers.CharField(source='parent_tkp.number', read_only=True)
     parent_tkp_name = serializers.CharField(source='parent_tkp.name', read_only=True)
-    mounting_estimate_number = serializers.CharField(source='mounting_estimate.number', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    mounting_estimates_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=get_mounting_estimate_queryset(),
+        source='mounting_estimates',
+        write_only=True,
+        required=False
+    )
+    mounting_estimates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     conditions = MountingConditionSerializer(many=True, read_only=True)
     conditions_ids = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -208,7 +222,8 @@ class MountingProposalDetailSerializer(serializers.ModelSerializer):
             'created_by'
         ]
         extra_kwargs = {
-            'conditions': {'read_only': True}
+            'conditions': {'read_only': True},
+            'mounting_estimates': {'read_only': True}
         }
     
     def get_file_url(self, obj):

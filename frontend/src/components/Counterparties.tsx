@@ -14,15 +14,26 @@ import { Plus, Loader2, Users, MoreVertical, Pencil, Trash2, Search, Database, G
 import { toast } from 'sonner';
 import { useCounterparties } from '../hooks';
 
-type CounterpartyFilter = 'all' | 'customer' | 'supplier' | 'executor';
+type CounterpartyFilter = 'all' | 'customer' | 'potential_customer' | 'supplier' | 'executor';
 
-export function Counterparties() {
-  const [filter, setFilter] = useState<CounterpartyFilter>('all');
+type CounterpartiesProps = {
+  lockedFilter?: CounterpartyFilter;
+  lockedCreateType?: Counterparty['type'];
+  pageTitle?: string;
+};
+
+export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: CounterpartiesProps = {}) {
+  const effectiveFilter = lockedFilter || 'all';
+  const [filter, setFilter] = useState<CounterpartyFilter>(effectiveFilter);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCounterparty, setEditingCounterparty] = useState<Counterparty | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (lockedFilter) setFilter(lockedFilter);
+  }, [lockedFilter]);
 
   const { data: counterpartiesData, isLoading, error } = useCounterparties();
   const counterparties = counterpartiesData || [];
@@ -82,6 +93,7 @@ export function Counterparties() {
   const filteredCounterparties = counterparties?.filter((cp) => {
     if (filter === 'all') return true;
     if (filter === 'customer') return cp.type === 'customer' || cp.type === 'both';
+    if (filter === 'potential_customer') return cp.type === 'potential_customer';
     if (filter === 'supplier') {
       return (cp.type === 'vendor' || cp.type === 'both') && 
              (cp.vendor_subtype === 'supplier' || cp.vendor_subtype === 'both');
@@ -96,8 +108,10 @@ export function Counterparties() {
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'customer': return 'Заказчик';
+      case 'potential_customer': return 'Потенциальный Заказчик';
       case 'vendor': return 'Исполнитель-Поставщик';
       case 'both': return 'Заказчик и Исполнитель-Поставщик';
+      case 'employee': return 'Сотрудник';
       default: return type;
     }
   };
@@ -128,7 +142,7 @@ export function Counterparties() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-semibold">Контрагенты</h1>
+          <h1 className="text-3xl font-semibold">{pageTitle || 'Контрагенты'}</h1>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700">
@@ -144,20 +158,24 @@ export function Counterparties() {
               <CreateCounterpartyForm 
                 onSubmit={(data) => createMutation.mutate(data)}
                 isLoading={createMutation.isPending}
+                lockedType={lockedCreateType}
               />
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* Filters */}
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as CounterpartyFilter)} className="mb-6">
-          <TabsList>
-            <TabsTrigger value="all">Все</TabsTrigger>
-            <TabsTrigger value="customer">Заказчики</TabsTrigger>
-            <TabsTrigger value="supplier">Поставщики</TabsTrigger>
-            <TabsTrigger value="executor">Исполнители</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Filters — hidden when lockedFilter is set */}
+        {!lockedFilter && (
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as CounterpartyFilter)} className="mb-6">
+            <TabsList>
+              <TabsTrigger value="all">Все</TabsTrigger>
+              <TabsTrigger value="customer">Заказчики</TabsTrigger>
+              <TabsTrigger value="potential_customer">Потенциальные</TabsTrigger>
+              <TabsTrigger value="supplier">Поставщики</TabsTrigger>
+              <TabsTrigger value="executor">Исполнители</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
         {/* Content */}
         {isLoading ? (
@@ -237,6 +255,8 @@ export function Counterparties() {
                           <span className={`px-2 py-0.5 text-xs font-medium rounded ${
                             counterparty.type === 'customer' 
                               ? 'bg-green-100 text-green-700'
+                              : counterparty.type === 'potential_customer'
+                              ? 'bg-orange-100 text-orange-700'
                               : counterparty.type === 'vendor'
                               ? 'bg-purple-100 text-purple-700'
                               : 'bg-blue-100 text-blue-700'
@@ -431,16 +451,17 @@ function FNSSuggestDropdown({ query, onSelect, isVisible, onClose }: FNSSuggestD
 interface CreateCounterpartyFormProps {
   onSubmit: (data: CreateCounterpartyData) => void;
   isLoading: boolean;
+  lockedType?: Counterparty['type'];
 }
 
-function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormProps) {
+function CreateCounterpartyForm({ onSubmit, isLoading, lockedType }: CreateCounterpartyFormProps) {
   const [formData, setFormData] = useState<CreateCounterpartyData>({
     name: '',
     short_name: '',
     inn: '',
     kpp: '',
     ogrn: '',
-    type: 'customer',
+    type: lockedType || 'customer',
     vendor_subtype: null,
     legal_form: 'ooo',
     address: '',
@@ -725,31 +746,34 @@ function CreateCounterpartyForm({ onSubmit, isLoading }: CreateCounterpartyFormP
             />
           </div>
 
-          <div>
-            <Label htmlFor="create-type">
-              Тип <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={formData.type}
-              onValueChange={(value: any) => {
-                setFormData({ 
-                  ...formData, 
-                  type: value,
-                  vendor_subtype: value === 'customer' ? null : formData.vendor_subtype
-                });
-              }}
-              disabled={isLoading}
-            >
-              <SelectTrigger className="mt-1.5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="customer">Заказчик</SelectItem>
-                <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
-                <SelectItem value="both">Заказчик и Исполнитель-Поставщик</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!lockedType && (
+            <div>
+              <Label htmlFor="create-type">
+                Тип <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value: any) => {
+                  setFormData({ 
+                    ...formData, 
+                    type: value,
+                    vendor_subtype: value === 'customer' ? null : formData.vendor_subtype
+                  });
+                }}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer">Заказчик</SelectItem>
+                  <SelectItem value="potential_customer">Потенциальный Заказчик</SelectItem>
+                  <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
+                  <SelectItem value="both">Заказчик и Исполнитель-Поставщик</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {showVendorSubtype && (
             <div>
@@ -1015,6 +1039,7 @@ function EditCounterpartyForm({ counterparty, onSubmit, isLoading }: EditCounter
           <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="customer">Заказчик</SelectItem>
+            <SelectItem value="potential_customer">Потенциальный Заказчик</SelectItem>
             <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
             <SelectItem value="both">Заказчик и Исполнитель-Поставщик</SelectItem>
           </SelectContent>

@@ -40,7 +40,7 @@ class FrontOfWorkItemViewSet(viewsets.ModelViewSet):
     serializer_class = FrontOfWorkItemSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['category', 'is_active']
+    filterset_fields = ['category', 'is_active', 'is_default']
     search_fields = ['name']
     ordering_fields = ['sort_order', 'name']
     ordering = ['sort_order', 'name']
@@ -52,7 +52,7 @@ class MountingConditionViewSet(viewsets.ModelViewSet):
     serializer_class = MountingConditionSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['is_active']
+    filterset_fields = ['is_active', 'is_default']
     search_fields = ['name', 'description']
     ordering_fields = ['sort_order', 'name']
     ordering = ['sort_order', 'name']
@@ -238,9 +238,9 @@ class TKPFrontOfWorkViewSet(viewsets.ModelViewSet):
 class MountingProposalViewSet(VersioningMixin, viewsets.ModelViewSet):
     """ViewSet для МП (с поддержкой версионирования через VersioningMixin)"""
     queryset = MountingProposal.objects.select_related(
-        'object', 'counterparty', 'parent_tkp', 'mounting_estimate',
+        'object', 'counterparty', 'parent_tkp',
         'created_by', 'parent_version'
-    ).prefetch_related('conditions')
+    ).prefetch_related('conditions', 'mounting_estimates')
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['object', 'counterparty', 'parent_tkp', 'status', 'telegram_published']

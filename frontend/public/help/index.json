@@ -1,0 +1,17 @@
+{
+  "title": "Справочная система ERP «Август»",
+  "sections": [
+    {
+      "id": "commercial-instructions",
+      "title": "Коммерческие предложения",
+      "description": "Инструкции по работе с канбаном КП, созданию ТКП и МП, выбору смет и фронта работ.",
+      "path": "/commercial/instructions"
+    },
+    {
+      "id": "getting-started",
+      "title": "Начало работы",
+      "description": "Общее описание системы, первые шаги, навигация по интерфейсу.",
+      "path": "/help"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 # Проект Finans Assistant — Полная документация
 
-**Версия:** 3.0  
-**Дата:** 14.02.2026  
+**Версия:** 3.1  
+**Дата:** 15.02.2026  
 **Статус:** Бекенд полностью реализован ✅
 
 ---
@@ -90,6 +90,10 @@
 | `catalog` | Каталог товаров и услуг, модерация, ProductMatcher |
 | `supply` | Интеграция с Bitrix24, запросы на снабжение |
 | `personnel` | Кадры, сотрудники, разрешения ERP |
+| `kanban_core` | Ядро канбан-микросервиса: Board, Column, Card |
+| `kanban_supply` | Оверлей: кейсы снабжения (SupplyCase) |
+| `kanban_object_tasks` | Оверлей: задачи по объектам |
+| `kanban_commercial` | Оверлей: коммерческий пайплайн (CommercialCase) |
 
 ### Структура проекта
 
@@ -183,7 +187,7 @@ unique: (account, balance_date)
 #### Counterparty (Контрагент)
 ```
 - name, short_name: наименования
-- type: customer / vendor / both
+- type: customer / potential_customer / vendor / both / employee
 - vendor_subtype: supplier / executor / both (для vendor)
 - legal_form: ooo / ip / self_employed / fiz
 - inn, kpp, ogrn: реквизиты
@@ -369,14 +373,14 @@ unique: (cipher, date)
 ```
 - name: "Подвести электропитание..."
 - category: "Электрика" / "Строительство" / ...
-- is_active, sort_order
+- is_active, is_default, sort_order
 ```
 
 #### MountingCondition (Справочник "Условия для МП")
 ```
 - name: "Проживание" / "Инструмент" / "Питание"
 - description
-- is_active, sort_order
+- is_active, is_default, sort_order
 ```
 
 #### TechnicalProposal (ТКП) — с версионированием
@@ -449,7 +453,7 @@ unique: (tkp, front_item)
 - object: FK → Object
 - counterparty: FK → Counterparty (vendor only!)
 - parent_tkp: FK → TechnicalProposal
-- mounting_estimate: FK → MountingEstimate
+- mounting_estimates: M2M → MountingEstimate
 - total_amount, man_hours
 - notes
 - status: draft / published / sent / approved / rejected
@@ -1133,7 +1137,28 @@ Bitrix24 CRM (Канбан) → Webhook → SupplyRequest → Invoice (recogniti
 
 ## 8. История изменений
 
-### Версия 3.0 (14.02.2026) — Текущая
+### Версия 3.1 (15.02.2026) — Текущая
+
+**Добавлено:**
+- Реорганизация левого меню: 11 корневых разделов, process-centric навигация, max 2 уровня вложенности
+- Тип контрагента `potential_customer` (Потенциальный Заказчик) с фильтрами и оранжевым бейджем
+- Поле `is_default` в FrontOfWorkItem и MountingCondition для предвыбора в формах ТКП/МП
+- Изменение MountingProposal: `mounting_estimate` FK → `mounting_estimates` M2M (множественные монтажные сметы)
+- Приложение `kanban_commercial` — оверлей коммерческого пайплайна (CommercialCase)
+- Единый Kanban board `commercial_pipeline` с 12 колонками и механизмом «тоннеля» (Маркетинг ↔ КП)
+- Формы ТКП/МП с табами: мульти-выбор смет по объекту + предвыбор фронта работ / условий МП
+- Объединённая страница «Фронт работ и монтажные условия» в Справочниках
+- Справочная система на Markdown (react-markdown, HelpIndexPage, MarkdownPage, public/help/)
+- Страница «Инструкции» в разделе КП с подробной документацией пользователю
+- Frontend тесты: kanban visibleColumnKeys, формы ТКП/МП, help рендеринг, counterparties (93 теста)
+- Backend тесты: potential_customer, is_default, M2M mounting_estimates, CommercialCase overlay
+
+**Изменено:**
+- Фронт работ и Условия для МП перенесены из КП в «Справочники и Настройки»
+- «Поиск объектов» в Маркетинге заменён на «Канбан поиска объектов»
+- Добавлен ярлык «Сметы ↗» в раздел КП (источник истины — Договоры)
+
+### Версия 3.0 (14.02.2026)
 
 **Добавлено:**
 - Приложение `supply` — интеграция с Bitrix24, управление запросами на снабжение
@@ -1207,4 +1232,4 @@ COMMERCIAL_PROPOSAL_START_NUMBER = 210  # Начальный номер ТКП
 
 ---
 
-*Документация обновлена: 14.02.2026*
+*Документация обновлена: 15.02.2026*

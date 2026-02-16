@@ -90,7 +90,13 @@ def api_root(request):
         }
     })
 
+def health_check(request):
+    from django.http import JsonResponse
+    return JsonResponse({'status': 'ok'})
+
+
 urlpatterns = [
+    path('api/v1/health/', health_check, name='health-check'),
     path('admin/', admin.site.urls),
     # OpenAPI/Swagger документация
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

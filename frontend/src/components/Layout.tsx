@@ -2,10 +2,12 @@ import { ReactNode, useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { 
   Home, Users, Building2, FileText, DollarSign, Settings, 
-  LogOut, Menu, ChevronRight, List, Briefcase, Star,
+  LogOut, Menu, ChevronRight, List, Briefcase,
   FolderOpen, ClipboardList, Wrench, CreditCard, Mail,
-  Package, Layers, CheckSquare, Landmark, Receipt,
-  Truck, CalendarClock, TrendingUp, BarChart3, ShoppingCart, Link2
+  Package, CheckSquare, Landmark, Receipt,
+  Truck, CalendarClock, TrendingUp, BarChart3, ShoppingCart, Link2,
+  ExternalLink, HardHat, Search, BookOpen, HelpCircle, Archive,
+  Calendar, PieChart, Wallet, Scale, Megaphone, Calculator
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { 
@@ -33,162 +35,238 @@ interface MenuItem {
   icon: ReactNode;
   path: string;
   children?: MenuItem[];
+  isShortcut?: boolean;
+  isSeparator?: boolean;
 }
 
 const menuItems: MenuItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <Home className="w-5 h-5" />, path: '/dashboard' },
-  { id: 'counterparties', label: 'Контрагенты', icon: <Users className="w-5 h-5" />, path: '/counterparties' },
-  { id: 'objects', label: 'Объекты', icon: <Building2 className="w-5 h-5" />, path: '/objects' },
-  { 
-    id: 'pricelists', 
-    label: 'Прайс-листы', 
-    icon: <List className="w-5 h-5" />, 
-    path: '/pricelists',
+  // 1. ПУНКТ УПРАВЛЕНИЯ
+  { id: 'dashboard', label: 'Пункт управления', icon: <Home className="w-5 h-5" />, path: '/dashboard' },
+
+  // 2. КОММЕРЧЕСКИЕ ПРЕДЛОЖЕНИЯ
+  {
+    id: 'commercial',
+    label: 'Коммерческие предложения',
+    icon: <Briefcase className="w-5 h-5" />,
+    path: '/commercial',
     children: [
-      { id: 'price-lists', label: 'Прайс-листы', icon: <FileText className="w-4 h-4" />, path: '/price-lists' },
-      { id: 'work-items', label: 'Работы', icon: <Briefcase className="w-4 h-4" />, path: '/work-items' },
-      { id: 'work-sections', label: 'Разделы работ', icon: <FileText className="w-4 h-4" />, path: '/work-sections' },
-      { id: 'worker-grades', label: 'Разряды', icon: <Star className="w-4 h-4" />, path: '/worker-grades' },
-      { id: 'worker-grade-skills', label: 'Навыки разрядов', icon: <Star className="w-4 h-4" />, path: '/worker-grade-skills' },
-    ]
-  },
-  { 
-    id: 'estimates', 
-    label: 'Проекты и Сметы', 
-    icon: <FolderOpen className="w-5 h-5" />, 
-    path: '/estimates',
-    children: [
-      { id: 'projects', label: 'Проекты', icon: <FolderOpen className="w-4 h-4" />, path: '/estimates/projects' },
-      { id: 'estimates-list', label: 'Сметы', icon: <ClipboardList className="w-4 h-4" />, path: '/estimates/estimates' },
-      { id: 'mounting-estimates', label: 'Монтажные сметы', icon: <Wrench className="w-4 h-4" />, path: '/estimates/mounting-estimates' },
-    ]
-  },
-  { 
-    id: 'proposals', 
-    label: 'Предложения', 
-    icon: <Briefcase className="w-5 h-5" />, 
-    path: '/proposals',
-    children: [
+      { id: 'kanban-cp', label: 'Канбан КП', icon: <ClipboardList className="w-4 h-4" />, path: '/commercial/kanban' },
       { id: 'technical-proposals', label: 'ТКП', icon: <FileText className="w-4 h-4" />, path: '/proposals/technical-proposals' },
       { id: 'mounting-proposals', label: 'МП', icon: <Wrench className="w-4 h-4" />, path: '/proposals/mounting-proposals' },
-      { id: 'front-of-work-items', label: 'Фронт работ', icon: <ClipboardList className="w-4 h-4" />, path: '/proposals/front-of-work-items' },
-      { id: 'mounting-conditions', label: 'Условия для МП', icon: <FileText className="w-4 h-4" />, path: '/proposals/mounting-conditions' },
-    ]
-  },
-  { 
-    id: 'contracts', 
-    label: 'Договоры', 
-    icon: <FileText className="w-5 h-5" />, 
-    path: '/contracts',
-    children: [
-      { id: 'contracts-list', label: 'Договоры', icon: <FileText className="w-4 h-4" />, path: '/contracts' },
-      { id: 'framework-contracts', label: 'Рамочные договоры', icon: <FileText className="w-4 h-4" />, path: '/contracts/framework-contracts' },
-      { id: 'acts', label: 'Акты', icon: <FileText className="w-4 h-4" />, path: '/contracts/acts' },
-    ]
-  },
-  { 
-    id: 'payments', 
-    label: 'Платежи', 
-    icon: <DollarSign className="w-5 h-5" />, 
-    path: '/payments',
-    children: [
-      { id: 'payments-list', label: 'Платежи', icon: <DollarSign className="w-4 h-4" />, path: '/payments' },
-      { id: 'payment-registry', label: 'Реестр платежей', icon: <CreditCard className="w-4 h-4" />, path: '/payment-registry' },
-      { id: 'bank-statements', label: 'Банковские выписки', icon: <Landmark className="w-4 h-4" />, path: '/bank-statements' },
-      { id: 'bank-payment-orders', label: 'Платёжные поручения', icon: <Receipt className="w-4 h-4" />, path: '/bank-payment-orders' },
-    ]
-  },
-  { 
-    id: 'supply', 
-    label: 'Снабжение', 
-    icon: <Truck className="w-5 h-5" />, 
-    path: '/supply',
-    children: [
-      { id: 'invoices', label: 'Счета на оплату', icon: <Receipt className="w-4 h-4" />, path: '/supply/invoices' },
-      { id: 'supply-requests', label: 'Запросы из Битрикс', icon: <ShoppingCart className="w-4 h-4" />, path: '/supply/requests' },
-      { id: 'recurring-payments', label: 'Периодические платежи', icon: <CalendarClock className="w-4 h-4" />, path: '/supply/recurring' },
-      { id: 'income-records', label: 'Доходы', icon: <TrendingUp className="w-4 h-4" />, path: '/supply/income' },
-      { id: 'supply-dashboard', label: 'Дашборд', icon: <BarChart3 className="w-4 h-4" />, path: '/supply/dashboard' },
-    ]
-  },
-  {
-    id: 'kanban',
-    label: 'Канбан',
-    icon: <ClipboardList className="w-5 h-5" />,
-    path: '/kanban',
-    children: [
-      { id: 'kanban-supply', label: 'Канбан снабжения', icon: <ShoppingCart className="w-4 h-4" />, path: '/kanban/supply' },
-      { id: 'kanban-object-tasks', label: 'Задачи по объектам', icon: <CheckSquare className="w-4 h-4" />, path: '/kanban/object-tasks' },
-      { id: 'warehouse-balances', label: 'Склад: остатки', icon: <Package className="w-4 h-4" />, path: '/warehouse' },
+      { id: 'commercial-estimates', label: 'Сметы', icon: <FileText className="w-4 h-4" />, path: '/estimates/estimates', isShortcut: true },
+      { id: 'price-lists', label: 'Прайс-листы', icon: <List className="w-4 h-4" />, path: '/price-lists' },
+      { id: 'commercial-instructions', label: 'Инструкции', icon: <BookOpen className="w-4 h-4" />, path: '/commercial/instructions' },
     ],
   },
-  { 
-    id: 'catalog', 
-    label: 'Каталог', 
-    icon: <Package className="w-5 h-5" />, 
-    path: '/catalog',
+
+  // 3. ОБЪЕКТЫ
+  { id: 'objects', label: 'Объекты', icon: <Building2 className="w-5 h-5" />, path: '/objects' },
+
+  // 4. ФИНАНСЫ
+  {
+    id: 'finance',
+    label: 'Финансы',
+    icon: <DollarSign className="w-5 h-5" />,
+    path: '/finance',
     children: [
-      { id: 'catalog-categories', label: 'Категории товаров', icon: <Layers className="w-4 h-4" />, path: '/catalog/categories' },
-      { id: 'catalog-products', label: 'Товары и услуги', icon: <Package className="w-4 h-4" />, path: '/catalog/products' },
-      { id: 'catalog-moderation', label: 'Модерация товаров', icon: <CheckSquare className="w-4 h-4" />, path: '/catalog/moderation' },
-    ]
+      { id: 'finance-dashboard', label: 'Дашборд Финансы', icon: <BarChart3 className="w-4 h-4" />, path: '/finance/dashboard' },
+      { id: 'finance-invoices', label: 'Счета на оплату', icon: <Receipt className="w-4 h-4" />, path: '/supply/invoices' },
+      { id: 'finance-income', label: 'Входящие платежи', icon: <TrendingUp className="w-4 h-4" />, path: '/supply/income' },
+      { id: 'finance-registry', label: 'Реестр оплат', icon: <CreditCard className="w-4 h-4" />, path: '/payment-registry' },
+      { id: 'finance-statements', label: 'Выписки за период', icon: <Landmark className="w-4 h-4" />, path: '/bank-statements' },
+      { id: 'finance-recurring', label: 'Периодические платежи', icon: <CalendarClock className="w-4 h-4" />, path: '/supply/recurring' },
+      { id: 'finance-debtors', label: 'Дебиторская задолженность', icon: <Scale className="w-4 h-4" />, path: '/finance/debtors' },
+      { id: 'finance-accounting', label: 'Бухгалтерия', icon: <Calculator className="w-4 h-4" />, path: '/finance/accounting' },
+      { id: 'finance-budget', label: 'Расходный бюджет', icon: <Wallet className="w-4 h-4" />, path: '/finance/budget' },
+      { id: 'finance-indicators', label: 'Финансовые показатели', icon: <PieChart className="w-4 h-4" />, path: '/finance/indicators' },
+    ],
   },
-  { id: 'communications', label: 'Переписка', icon: <Mail className="w-5 h-5" />, path: '/communications' },
-  { 
-    id: 'settings', 
-    label: 'Настройки', 
-    icon: <Settings className="w-5 h-5" />, 
-    path: '/settings',
+
+  // 5. ДОГОВОРЫ
+  {
+    id: 'contracts',
+    label: 'Договоры',
+    icon: <FileText className="w-5 h-5" />,
+    path: '/contracts',
     children: [
-      { id: 'settings-general', label: 'Общие настройки', icon: <Settings className="w-4 h-4" />, path: '/settings' },
-      { id: 'settings-bitrix', label: 'Битрикс24', icon: <Link2 className="w-4 h-4" />, path: '/settings/bitrix' },
-    ]
+      { id: 'framework-contracts', label: 'Рамочные Договора', icon: <FileText className="w-4 h-4" />, path: '/contracts/framework-contracts' },
+      { id: 'object-contracts', label: 'Договора по объектам', icon: <FileText className="w-4 h-4" />, path: '/contracts' },
+      { id: 'estimates', label: 'Сметы', icon: <ClipboardList className="w-4 h-4" />, path: '/estimates/estimates' },
+      { id: 'mounting-estimates', label: 'Монтажные сметы', icon: <Wrench className="w-4 h-4" />, path: '/estimates/mounting-estimates' },
+      { id: 'acts', label: 'Акты', icon: <FileText className="w-4 h-4" />, path: '/contracts/acts' },
+      { id: 'household-contracts', label: 'Хозяйственные Договора', icon: <FileText className="w-4 h-4" />, path: '/contracts/household' },
+    ],
+  },
+
+  // 6. СНАБЖЕНИЕ И СКЛАД
+  {
+    id: 'supply',
+    label: 'Снабжение и Склад',
+    icon: <Truck className="w-5 h-5" />,
+    path: '/supply',
+    children: [
+      { id: 'kanban-supply', label: 'Канбан Снабжения', icon: <ShoppingCart className="w-4 h-4" />, path: '/kanban/supply' },
+      { id: 'supply-invoices', label: 'Счета на оплату', icon: <Receipt className="w-4 h-4" />, path: '/supply/invoices', isShortcut: true },
+      { id: 'supply-drivers', label: 'Календарь водителей', icon: <Calendar className="w-4 h-4" />, path: '/supply/drivers' },
+      { id: 'supply-moderation', label: 'Модерация товаров', icon: <CheckSquare className="w-4 h-4" />, path: '/catalog/moderation', isShortcut: true },
+      { id: 'warehouse', label: 'Склад: Остатки', icon: <Package className="w-4 h-4" />, path: '/warehouse' },
+      { id: 'supply-counterparties', label: 'Поставщики', icon: <Users className="w-4 h-4" />, path: '/counterparties', isShortcut: true },
+    ],
+  },
+
+  // 7. ПТО
+  {
+    id: 'pto',
+    label: 'ПТО',
+    icon: <HardHat className="w-5 h-5" />,
+    path: '/pto',
+    children: [
+      { id: 'pto-projects', label: 'Проекты', icon: <FolderOpen className="w-4 h-4" />, path: '/estimates/projects' },
+      { id: 'pto-production', label: 'Производственная документация', icon: <FileText className="w-4 h-4" />, path: '/pto/production-docs' },
+      { id: 'pto-executive', label: 'Исполнительная документация', icon: <FileText className="w-4 h-4" />, path: '/pto/executive-docs' },
+      { id: 'pto-samples', label: 'Образцы документов', icon: <FileText className="w-4 h-4" />, path: '/pto/samples' },
+      { id: 'pto-knowledge', label: 'Руководящие документы', icon: <BookOpen className="w-4 h-4" />, path: '/pto/knowledge-base' },
+    ],
+  },
+
+  // 8. МАРКЕТИНГ
+  {
+    id: 'marketing',
+    label: 'Маркетинг',
+    icon: <Megaphone className="w-5 h-5" />,
+    path: '/marketing',
+    children: [
+      { id: 'marketing-objects', label: 'Канбан поиска объектов', icon: <ClipboardList className="w-4 h-4" />, path: '/marketing/objects' },
+      { id: 'marketing-potential-customers', label: 'Потенциальные заказчики', icon: <Users className="w-4 h-4" />, path: '/marketing/potential-customers' },
+      { id: 'marketing-objects-list', label: 'Объекты', icon: <Building2 className="w-4 h-4" />, path: '/marketing/objects-list', isShortcut: true },
+      { id: 'marketing-executors', label: 'Поиск Исполнителей', icon: <Search className="w-4 h-4" />, path: '/marketing/executors' },
+    ],
+  },
+
+  // 9. ПЕРЕПИСКА
+  { id: 'communications', label: 'Переписка', icon: <Mail className="w-5 h-5" />, path: '/communications' },
+
+  // 10. СПРАВОЧНИКИ И НАСТРОЙКИ
+  {
+    id: 'references',
+    label: 'Справочники и Настройки',
+    icon: <BookOpen className="w-5 h-5" />,
+    path: '/references',
+    children: [
+      { id: 'ref-goods', label: 'Товары и услуги', icon: <Package className="w-4 h-4" />, path: '/references/goods' },
+      { id: 'ref-work-conditions', label: 'Фронт работ и монтажные условия', icon: <ClipboardList className="w-4 h-4" />, path: '/references/work-conditions' },
+      { id: 'ref-personnel', label: 'Персонал', icon: <Users className="w-4 h-4" />, path: '/personnel' },
+      { id: 'ref-counterparties', label: 'Контрагенты', icon: <Users className="w-4 h-4" />, path: '/counterparties' },
+      { id: 'ref-settings', label: 'Настройки', icon: <Settings className="w-4 h-4" />, path: '/settings' },
+    ],
+  },
+
+  // 11. СПРАВКА
+  { id: 'help', label: 'Справка', icon: <HelpCircle className="w-5 h-5" />, path: '/help' },
+
+  // --- Разделитель ---
+  { id: 'separator', label: '', icon: <></>, path: '', isSeparator: true },
+
+  // НЕРАСПРЕДЕЛЁННОЕ
+  {
+    id: 'unassigned',
+    label: 'Нераспределённое',
+    icon: <Archive className="w-5 h-5" />,
+    path: '/unassigned',
+    children: [
+      { id: 'legacy-payments', label: 'Платежи (legacy)', icon: <DollarSign className="w-4 h-4" />, path: '/payments' },
+      { id: 'legacy-orders', label: 'Платёжные поручения', icon: <Receipt className="w-4 h-4" />, path: '/bank-payment-orders' },
+      { id: 'legacy-bitrix-requests', label: 'Запросы из Битрикс', icon: <ShoppingCart className="w-4 h-4" />, path: '/supply/requests' },
+      { id: 'legacy-bitrix-settings', label: 'Настройки Битрикс24', icon: <Link2 className="w-4 h-4" />, path: '/settings/bitrix' },
+      { id: 'legacy-supply-dashboard', label: 'Дашборд снабжения', icon: <BarChart3 className="w-4 h-4" />, path: '/supply/dashboard' },
+      { id: 'legacy-kanban-tasks', label: 'Канбан задач', icon: <CheckSquare className="w-4 h-4" />, path: '/kanban/object-tasks' },
+      { id: 'legacy-work-items', label: 'Работы', icon: <Briefcase className="w-4 h-4" />, path: '/work-items' },
+      { id: 'legacy-work-sections', label: 'Разделы работ', icon: <FileText className="w-4 h-4" />, path: '/work-sections' },
+      { id: 'legacy-worker-grades', label: 'Разряды', icon: <FileText className="w-4 h-4" />, path: '/worker-grades' },
+      { id: 'legacy-worker-grade-skills', label: 'Навыки разрядов', icon: <FileText className="w-4 h-4" />, path: '/worker-grade-skills' },
+      { id: 'legacy-catalog-categories', label: 'Категории товаров', icon: <Package className="w-4 h-4" />, path: '/catalog/categories' },
+      { id: 'legacy-catalog-products', label: 'Товары и услуги', icon: <Package className="w-4 h-4" />, path: '/catalog/products' },
+    ],
   },
 ];
 
 const pageTitles: Record<string, string> = {
-  dashboard: 'Панель управления',
-  counterparties: 'Контрагенты',
-  objects: 'Объекты',
-  contracts: 'Договоры',
-  'framework-contracts': 'Рамочные договоры',
-  'contracts/acts': 'Акты',
-  payments: 'Платежи',
-  'payment-registry': 'Реестр платежей',
-  'bank-statements': 'Банковские выписки',
-  'bank-payment-orders': 'Платёжные поручения',
+  // 1. Пункт управления
+  dashboard: 'Пункт управления',
+  // 2. Коммерческие предложения
+  'commercial/kanban': 'Канбан КП',
+  'commercial/instructions': 'Инструкции КП',
   'proposals/technical-proposals': 'ТКП',
   'proposals/mounting-proposals': 'МП',
+  'price-lists': 'Прайс-листы',
   'proposals/front-of-work-items': 'Фронт работ',
   'proposals/mounting-conditions': 'Условия для МП',
-  'estimates/projects': 'Проекты',
+  // 3. Объекты
+  objects: 'Объекты',
+  // 4. Финансы
+  'finance/dashboard': 'Дашборд Финансы',
+  'supply/invoices': 'Счета на оплату',
+  'supply/income': 'Входящие платежи',
+  'payment-registry': 'Реестр оплат',
+  'bank-statements': 'Выписки за период',
+  'supply/recurring': 'Периодические платежи',
+  'finance/debtors': 'Дебиторская задолженность',
+  'finance/accounting': 'Бухгалтерия',
+  'finance/budget': 'Расходный бюджет',
+  'finance/indicators': 'Финансовые показатели',
+  // 5. Договоры
+  contracts: 'Договоры по объектам',
+  'contracts/framework-contracts': 'Рамочные Договора',
   'estimates/estimates': 'Сметы',
   'estimates/mounting-estimates': 'Монтажные сметы',
-  'price-lists': 'Прайс-листы',
+  'contracts/acts': 'Акты',
+  'contracts/household': 'Хозяйственные Договора',
+  // 6. Снабжение и Склад
+  'kanban/supply': 'Канбан Снабжения',
+  'supply/drivers': 'Календарь водителей',
+  'catalog/moderation': 'Модерация товаров',
+  warehouse: 'Склад: Остатки',
+  counterparties: 'Контрагенты',
+  // 7. ПТО
+  'estimates/projects': 'Проекты',
+  'pto/production-docs': 'Производственная документация',
+  'pto/executive-docs': 'Исполнительная документация',
+  'pto/samples': 'Образцы документов',
+  'pto/knowledge-base': 'Руководящие документы',
+  // 8. Маркетинг
+  'marketing/objects': 'Канбан поиска объектов',
+  'marketing/potential-customers': 'Потенциальные заказчики',
+  'marketing/objects-list': 'Объекты (Маркетинг)',
+  'marketing/executors': 'Поиск Исполнителей',
+  // 9. Переписка
+  communications: 'Переписка',
+  // 10. Справочники и Настройки
+  'references/goods': 'Товары и услуги',
+  'references/work-conditions': 'Фронт работ и монтажные условия',
+  personnel: 'Персонал',
+  settings: 'Настройки',
+  'settings/llm': 'Настройки LLM',
+  // 11. Справка
+  help: 'Справка',
+  // Legacy / Нераспределённое
+  payments: 'Платежи (legacy)',
+  'bank-payment-orders': 'Платёжные поручения',
+  'supply/requests': 'Запросы из Битрикс',
+  'settings/bitrix': 'Интеграция с Битрикс24',
+  'supply/dashboard': 'Дашборд снабжения',
+  'kanban/object-tasks': 'Задачи по объектам',
+  // Detail pages (kept for breadcrumbs)
   'work-items': 'Работы',
   'worker-grades': 'Разряды',
   'work-sections': 'Разделы работ',
   'worker-grade-skills': 'Навыки разрядов',
   'catalog/categories': 'Категории товаров',
   'catalog/products': 'Товары и услуги',
-  'catalog/moderation': 'Модерация товаров',
-  'supply/invoices': 'Счета на оплату',
-  'supply/requests': 'Запросы из Битрикс',
-  'supply/recurring': 'Периодические платежи',
-  'supply/income': 'Доходы',
-  'supply/dashboard': 'Дашборд снабжения',
-  'kanban/supply': 'Канбан снабжения',
-  'kanban/object-tasks': 'Задачи по объектам',
-  warehouse: 'Склад: остатки',
-  'settings/bitrix': 'Интеграция с Битрикс24',
-  communications: 'Переписка',
-  settings: 'Настройки',
-  'settings/llm': 'Настройки LLM',
 };
 
 export function Layout({ children, onLogout, user }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['contracts', 'proposals', 'pricelists', 'estimates', 'catalog', 'supply', 'kanban', 'settings']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['commercial', 'finance', 'contracts', 'supply', 'pto', 'references']);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebarWidth');
     return saved ? parseInt(saved) : 256;
@@ -294,6 +372,18 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
+            // Разделитель
+            if (item.isSeparator) {
+              if (!isSidebarOpen) return null;
+              return (
+                <div key={item.id} className="py-2">
+                  <div className="border-t border-gray-200" />
+                </div>
+              );
+            }
+
+            const isUnassigned = item.id === 'unassigned';
+
             // Проверяем, активен ли какой-либо дочерний пункт
             const isAnyChildActive = item.children?.some(child => 
               location.pathname === child.path
@@ -301,7 +391,7 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
             
             // Родительский пункт активен, если совпадает его путь ИЛИ активен любой дочерний пункт
             const isActive = location.pathname === item.path || 
-                            (item.path !== '/' && location.pathname.startsWith(item.path)) ||
+                            (item.path !== '/' && item.path !== '' && location.pathname.startsWith(item.path)) ||
                             isAnyChildActive;
             
             return (
@@ -317,7 +407,9 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-700 hover:bg-gray-50'
+                      : isUnassigned
+                        ? 'text-gray-400 hover:bg-gray-50'
+                        : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex-shrink-0">
@@ -325,7 +417,9 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                   </div>
                   {isSidebarOpen && (
                     <>
-                      <span className="truncate">{item.label}</span>
+                      <span className={`truncate ${isUnassigned ? 'text-xs uppercase tracking-wider' : ''}`}>
+                        {item.label}
+                      </span>
                       {item.id === 'contracts' && <NotificationBadge type="expiring-contracts" />}
                     </>
                   )}
@@ -333,8 +427,6 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                 {item.children && isSidebarOpen && expandedMenus.includes(item.id) && (
                   <div className="pl-8">
                     {item.children.map(child => {
-                      // ИСПРАВЛЕНИЕ: используем точное совпадение для дочерних пунктов
-                      // чтобы избежать конфликтов при схожих путях (например /contracts и /contracts/acts)
                       const isChildActive = location.pathname === child.path;
                       
                       return (
@@ -344,14 +436,21 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                             isChildActive
                               ? 'bg-blue-50 text-blue-600'
-                              : 'text-gray-700 hover:bg-gray-50'
+                              : isUnassigned
+                                ? 'text-gray-400 hover:bg-gray-50'
+                                : 'text-gray-700 hover:bg-gray-50'
                           }`}
                         >
                           <div className="flex-shrink-0">
                             {child.icon}
                           </div>
                           {isSidebarOpen && (
-                            <span className="truncate">{child.label}</span>
+                            <span className="truncate flex items-center gap-1">
+                              {child.label}
+                              {child.isShortcut && (
+                                <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              )}
+                            </span>
                           )}
                         </button>
                       );

@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'kanban_supply',
     'kanban_warehouse',
     'kanban_object_tasks',
+    'kanban_commercial',
 ]
 
 MIDDLEWARE = [
@@ -173,15 +174,31 @@ SIMPLE_JWT = {
 }
 
 # =============================================================================
-# Канбан-сервис верифицирует токены ERP (RS256)
+# Канбан-сервис верифицирует токены ERP
+# Если JWT_PUBLIC_KEY задан — RS256, иначе fallback на HS256 + SECRET_KEY
+# (аналогично логике finans_assistant/settings.py)
 # =============================================================================
 
 KANBAN_SERVICE_TOKEN = os.environ.get('KANBAN_SERVICE_TOKEN', '').strip()
 
 KANBAN_JWT_ISSUER = os.environ.get('JWT_ISSUER', 'finans-assistant-erp')
 KANBAN_JWT_AUDIENCE = os.environ.get('JWT_AUDIENCE', 'kanban-service')
-KANBAN_JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'RS256')
-KANBAN_JWT_VERIFYING_KEY = os.environ.get('JWT_PUBLIC_KEY', '').replace('\\n', '\n').strip()
+
+_jwt_public_key = os.environ.get('JWT_PUBLIC_KEY', '').replace('\\n', '\n').strip()
+_jwt_algorithm_env = os.environ.get('JWT_ALGORITHM', '').strip()
+_erp_jwt_secret = os.environ.get('ERP_JWT_SECRET', '').strip()
+
+if _jwt_algorithm_env:
+    KANBAN_JWT_ALGORITHM = _jwt_algorithm_env
+    KANBAN_JWT_VERIFYING_KEY = _jwt_public_key if _jwt_algorithm_env == 'RS256' else (
+        _erp_jwt_secret or _jwt_public_key or SECRET_KEY
+    )
+elif _jwt_public_key:
+    KANBAN_JWT_ALGORITHM = 'RS256'
+    KANBAN_JWT_VERIFYING_KEY = _jwt_public_key
+else:
+    KANBAN_JWT_ALGORITHM = 'HS256'
+    KANBAN_JWT_VERIFYING_KEY = _erp_jwt_secret or SECRET_KEY
 
 # ERP integration (kanban -> ERP)
 ERP_API_BASE_URL = os.environ.get('ERP_API_BASE_URL', 'http://backend:8000/api/v1').rstrip('/')

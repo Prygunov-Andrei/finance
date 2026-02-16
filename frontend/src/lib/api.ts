@@ -295,9 +295,10 @@ class ApiClient {
   }
 
   // Counterparties
-  async getCounterparties(params?: { search?: string }) {
+  async getCounterparties(params?: { search?: string; type?: string }) {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
+    if (params?.type) queryParams.append('type', params.type);
     const queryString = queryParams.toString();
     const endpoint = `/counterparties/${queryString ? `?${queryString}` : ''}`;
     const response = await this.request<PaginatedResponse<Counterparty> | Counterparty[]>(endpoint);
@@ -1634,10 +1635,11 @@ class ApiClient {
   // ==================== ТКП И МП - СПРАВОЧНИКИ ====================
   
   // Фронт работ
-  async getFrontOfWorkItems(filters?: { category?: string; is_active?: boolean; search?: string }) {
+  async getFrontOfWorkItems(filters?: { category?: string; is_active?: boolean; is_default?: boolean; search?: string }) {
     const params = new URLSearchParams();
     if (filters?.category) params.append('category', filters.category);
     if (filters?.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+    if (filters?.is_default !== undefined) params.append('is_default', filters.is_default.toString());
     if (filters?.search) params.append('search', filters.search);
     
     const url = `/front-of-work-items/${params.toString() ? `?${params.toString()}` : ''}`;
@@ -1670,9 +1672,10 @@ class ApiClient {
   }
 
   // Условия для МП
-  async getMountingConditions(filters?: { is_active?: boolean; search?: string }) {
+  async getMountingConditions(filters?: { is_active?: boolean; is_default?: boolean; search?: string }) {
     const params = new URLSearchParams();
     if (filters?.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+    if (filters?.is_default !== undefined) params.append('is_default', filters.is_default.toString());
     if (filters?.search) params.append('search', filters.search);
     
     const url = `/mounting-conditions/${params.toString() ? `?${params.toString()}` : ''}`;
@@ -2664,7 +2667,7 @@ export interface Counterparty {
   inn: string;
   kpp?: string;
   ogrn?: string;
-  type: 'customer' | 'vendor' | 'both' | 'employee';
+  type: 'customer' | 'potential_customer' | 'vendor' | 'both' | 'employee';
   vendor_subtype?: 'supplier' | 'executor' | 'both' | null;
   vendor_subtype_display?: string;
   legal_form?: string;
@@ -2703,7 +2706,7 @@ export interface CreateCounterpartyData {
   inn: string;
   kpp?: string;
   ogrn?: string;
-  type: 'customer' | 'vendor' | 'both' | 'employee';
+  type: 'customer' | 'potential_customer' | 'vendor' | 'both' | 'employee';
   vendor_subtype?: 'supplier' | 'executor' | 'both' | null;
   legal_form: string;
   address?: string;
@@ -3457,6 +3460,7 @@ export interface FrontOfWorkItem {
   name: string;
   category: string;
   is_active: boolean;
+  is_default: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -3466,6 +3470,7 @@ export interface CreateFrontOfWorkItemData {
   name: string;
   category?: string;
   is_active?: boolean;
+  is_default?: boolean;
   sort_order?: number;
 }
 
@@ -3475,6 +3480,7 @@ export interface MountingCondition {
   name: string;
   description: string;
   is_active: boolean;
+  is_default: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -3484,6 +3490,7 @@ export interface CreateMountingConditionData {
   name: string;
   description?: string;
   is_active?: boolean;
+  is_default?: boolean;
   sort_order?: number;
 }
 
@@ -3608,7 +3615,7 @@ export interface MountingProposalListItem {
   counterparty_name: string | null;
   parent_tkp: number | null;
   parent_tkp_number: string | null;
-  mounting_estimate: number | null;
+  mounting_estimates: number[];
   total_amount: string;
   man_hours: string;
   status: MPStatus;
@@ -3626,10 +3633,10 @@ export interface MountingProposalDetail extends MountingProposalListItem {
   notes: string;
   conditions: MountingCondition[];
   conditions_ids: number[];
+  mounting_estimates_ids: number[];
   file_url: string | null;
   versions_count: number;
   parent_tkp_name: string | null;
-  mounting_estimate_number: string | null;
 }
 
 export interface ActPaymentAllocation {

@@ -305,6 +305,7 @@ class Counterparty(TimestampedModel):
     
     class Type(models.TextChoices):
         CUSTOMER = 'customer', 'Заказчик'
+        POTENTIAL_CUSTOMER = 'potential_customer', 'Потенциальный Заказчик'
         VENDOR = 'vendor', 'Исполнитель/Поставщик'
         BOTH = 'both', 'Заказчик и Исполнитель'
         EMPLOYEE = 'employee', 'Сотрудник'

@@ -57,6 +57,7 @@ urlpatterns = [
     path('kanban-api/', include('kanban_supply.urls')),
     path('kanban-api/', include('kanban_warehouse.urls')),
     path('kanban-api/', include('kanban_object_tasks.urls')),
+    path('kanban-api/', include('kanban_commercial.urls')),
 
     # RBAC smoke endpoints (Этап 3)
     path('kanban-api/v1/rbac/warehouse_only/', rbac_warehouse_only),

@@ -55,9 +55,37 @@ import { RecurringPaymentsPage } from './components/supply/RecurringPaymentsPage
 import { IncomeRecordsPage } from './components/supply/IncomeRecordsPage';
 import { SupplyDashboardPage } from './components/supply/SupplyDashboardPage';
 import { BitrixSettingsPage } from './components/supply/BitrixSettingsPage';
-import { KanbanBoardPage } from './components/kanban/KanbanBoardPage';
+import { KanbanBoardPage, KanbanBoardConfig } from './components/kanban/KanbanBoardPage';
+import { CreateCommercialCardDialog } from './components/kanban/CreateCommercialCardDialog';
+import { KanbanCardDetailDialog } from './components/kanban/KanbanCardDetailDialog';
 import { WarehouseBalancesPage } from './components/warehouse/WarehouseBalancesPage';
+import { StubPage } from './components/StubPage';
+import { WorkConditionsPage } from './components/references/WorkConditionsPage';
+import { MarkdownPage } from './components/help/MarkdownPage';
+import { HelpIndexPage } from './components/help/HelpIndexPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const commercialBoardConfig: KanbanBoardConfig = {
+  renderCreateDialog: (props) => (
+    <CreateCommercialCardDialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      boardId={props.boardId}
+      firstColumnId={props.firstColumnId}
+      cardType={props.cardType}
+      onCreated={props.onCreated}
+    />
+  ),
+  renderDetailDialog: (props) => (
+    <KanbanCardDetailDialog
+      card={props.card}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      allColumns={props.allColumns}
+      onUpdated={props.onUpdated}
+    />
+  ),
+};
 
 // Создаем QueryClient
 const queryClient = new QueryClient({
@@ -570,6 +598,204 @@ export default function App() {
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
                 <BitrixSettingsPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* === Stub pages (новые разделы — заглушки) === */}
+
+          {/* Коммерческие предложения */}
+          <Route path="/commercial/kanban" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <KanbanBoardPage
+                  boardKey="commercial_pipeline"
+                  pageTitle="Канбан КП"
+                  cardType="commercial_case"
+                  visibleColumnKeys={['new_calculation','in_progress','invoices_requested','estimate_approval','estimate_approved','kp_prepared']}
+                  boardConfig={commercialBoardConfig}
+                  tunnelRules={[
+                    { fromColumnKey: 'kp_prepared', toColumnKey: 'calculation_done', buttonLabel: 'Вернуть в маркетинг' },
+                  ]}
+                  columnGroups={[
+                    ['new_calculation','in_progress','invoices_requested','estimate_approval','estimate_approved','kp_prepared'],
+                  ]}
+                />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/commercial/instructions" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <MarkdownPage filePath="commercial/instructions.md" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Финансы */}
+          <Route path="/finance/dashboard" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Дашборд Финансы" description="Сводная панель по финансовым показателям и кассе" parentSection="Финансы" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/finance/debtors" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Дебиторская задолженность" description="Контроль дебиторской задолженности по контрагентам" parentSection="Финансы" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/finance/accounting" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Бухгалтерия" description="Календарь бухгалтера и налоговый учёт" parentSection="Финансы" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/finance/budget" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Расходный бюджет" description="Бюджетирование по статьям расходов" parentSection="Финансы" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/finance/indicators" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Финансовые показатели" description="Оборотные средства, прибыль, отчёты, чистые активы, премии" parentSection="Финансы" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Договоры */}
+          <Route path="/contracts/household" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Хозяйственные Договора" description="Аренда, телефония и прочие хозяйственные договоры" parentSection="Договоры" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Снабжение и Склад */}
+          <Route path="/supply/drivers" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Календарь водителей" description="Планирование доставок и логистики" parentSection="Снабжение и Склад" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* ПТО */}
+          <Route path="/pto/production-docs" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Производственная документация" description="Журналы, приказы, ППР и прочие документы" parentSection="ПТО" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/pto/executive-docs" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Исполнительная документация" description="Комплекты исполнительной документации по объектам" parentSection="ПТО" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/pto/samples" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Образцы документов" description="Шаблоны производственной и исполнительной документации" parentSection="ПТО" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/pto/knowledge-base" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Руководящие документы" description="База знаний: нормативные и руководящие документы" parentSection="ПТО" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Маркетинг */}
+          <Route path="/marketing/objects" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <KanbanBoardPage
+                  boardKey="commercial_pipeline"
+                  pageTitle="Канбан поиска объектов"
+                  cardType="commercial_case"
+                  visibleColumnKeys={['new_clients','meeting_scheduled','meeting_done','calculation_done','no_result','has_result']}
+                  boardConfig={commercialBoardConfig}
+                  tunnelRules={[
+                    { fromColumnKey: 'meeting_done', toColumnKey: 'new_calculation', buttonLabel: 'Передать на расчёт КП' },
+                  ]}
+                  columnGroups={[
+                    ['new_clients','meeting_scheduled','meeting_done'],
+                    ['calculation_done','no_result','has_result'],
+                  ]}
+                />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/marketing/potential-customers" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <Counterparties
+                  lockedFilter="potential_customer"
+                  lockedCreateType="potential_customer"
+                  pageTitle="Потенциальные заказчики"
+                />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/marketing/objects-list" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <ConstructionObjects
+                  pageTitle="Объекты (Маркетинг)"
+                  defaultStatusFilter="planned"
+                  defaultCreateStatus="planned"
+                />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/marketing/executors" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Поиск Исполнителей" description="Поиск субподрядчиков и исполнителей" parentSection="Маркетинг" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Справочники и Настройки */}
+          <Route path="/references/goods" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Товары и услуги" description="Каталог, структура, разряды, навыки, модерация" parentSection="Справочники и Настройки" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/references/work-conditions" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <WorkConditionsPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/personnel" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <StubPage title="Персонал" description="Сотрудники, иерархия, матрица обязанностей" parentSection="Справочники и Настройки" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Справка */}
+          <Route path="/help" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <HelpIndexPage />
               </Layout>
             </ProtectedRoute>
           } />
