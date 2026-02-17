@@ -149,6 +149,7 @@ services:
       - KANBAN_CELERY_BROKER_URL=redis://redis:6379/1
       - KANBAN_CELERY_RESULT_BACKEND=redis://redis:6379/1
       - KANBAN_S3_ENDPOINT_URL=http://minio:9000
+      - KANBAN_S3_PUBLIC_URL=${KANBAN_S3_PUBLIC_URL:-http://localhost:9000}
       - KANBAN_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - KANBAN_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - KANBAN_S3_BUCKET_NAME=files
@@ -178,6 +179,7 @@ services:
       - KANBAN_CELERY_BROKER_URL=redis://redis:6379/1
       - KANBAN_CELERY_RESULT_BACKEND=redis://redis:6379/1
       - KANBAN_S3_ENDPOINT_URL=http://minio:9000
+      - KANBAN_S3_PUBLIC_URL=${KANBAN_S3_PUBLIC_URL:-http://localhost:9000}
       - KANBAN_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - KANBAN_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - KANBAN_S3_BUCKET_NAME=files
@@ -206,6 +208,7 @@ services:
       - KANBAN_CELERY_BROKER_URL=redis://redis:6379/1
       - KANBAN_CELERY_RESULT_BACKEND=redis://redis:6379/1
       - KANBAN_S3_ENDPOINT_URL=http://minio:9000
+      - KANBAN_S3_PUBLIC_URL=${KANBAN_S3_PUBLIC_URL:-http://localhost:9000}
       - KANBAN_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - KANBAN_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - KANBAN_S3_BUCKET_NAME=files

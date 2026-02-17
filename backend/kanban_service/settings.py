@@ -235,6 +235,7 @@ CELERY_BEAT_SCHEDULE = {
 # =============================================================================
 
 KANBAN_S3_ENDPOINT_URL = os.environ.get('KANBAN_S3_ENDPOINT_URL', os.environ.get('WORKLOG_S3_ENDPOINT_URL', 'http://minio:9000'))
+KANBAN_S3_PUBLIC_URL = os.environ.get('KANBAN_S3_PUBLIC_URL', 'http://localhost:9000')
 KANBAN_S3_ACCESS_KEY = os.environ.get('KANBAN_S3_ACCESS_KEY', os.environ.get('WORKLOG_S3_ACCESS_KEY', 'minioadmin'))
 KANBAN_S3_SECRET_KEY = os.environ.get('KANBAN_S3_SECRET_KEY', os.environ.get('WORKLOG_S3_SECRET_KEY', 'minioadmin'))
 KANBAN_S3_REGION = os.environ.get('KANBAN_S3_REGION', 'us-east-1')

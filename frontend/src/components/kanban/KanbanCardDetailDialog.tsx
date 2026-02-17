@@ -59,8 +59,8 @@ export const KanbanCardDetailDialog = ({ card, open, onOpenChange, allColumns, o
   const [contactsInfo, setContactsInfo] = useState('');
   const [comments, setComments] = useState('');
   const [tkpIds, setTkpIds] = useState<number[]>([]);
-  const [newTkpId, setNewTkpId] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [isQuickCreateCPOpen, setIsQuickCreateCPOpen] = useState(false);
   const [isQuickCreateObjOpen, setIsQuickCreateObjOpen] = useState(false);
 
@@ -89,17 +89,23 @@ export const KanbanCardDetailDialog = ({ card, open, onOpenChange, allColumns, o
     (c: any) => c.type === 'potential_customer' || c.type === 'customer',
   );
 
-  const tkpListQuery = useQuery({
-    queryKey: ['technical-proposals-for-kanban', tkpIds],
-    enabled: tkpIds.length > 0 && open,
-    queryFn: () => api.getTechnicalProposals(),
+  const tkpByObjectQuery = useQuery({
+    queryKey: ['technical-proposals-by-object', objectId],
+    enabled: Boolean(objectId) && open,
+    queryFn: () => api.getTechnicalProposals({ object: Number(objectId) }),
     staleTime: 60_000,
   });
 
-  const tkpItems = (tkpListQuery.data as any)?.results ?? tkpListQuery.data ?? [];
-  const linkedTkps = Array.isArray(tkpItems)
-    ? tkpItems.filter((t: any) => tkpIds.includes(t.id))
-    : [];
+  const allTkpForObject: any[] = (() => {
+    const data = tkpByObjectQuery.data;
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if ((data as any)?.results) return (data as any).results;
+    return [];
+  })();
+
+  const linkedTkps = allTkpForObject.filter((t: any) => tkpIds.includes(t.id));
+  const availableTkps = allTkpForObject.filter((t: any) => !tkpIds.includes(t.id));
 
   useEffect(() => {
     if (!card || !open) return;
@@ -211,11 +217,10 @@ export const KanbanCardDetailDialog = ({ card, open, onOpenChange, allColumns, o
     setObjectName(obj.name);
   };
 
-  const handleAddTkp = () => {
-    const id = Number(newTkpId);
+  const handleAddTkpFromSelect = (value: string) => {
+    const id = Number(value);
     if (id && !tkpIds.includes(id)) {
       setTkpIds((prev) => [...prev, id]);
-      setNewTkpId('');
     }
   };
 
@@ -224,35 +229,56 @@ export const KanbanCardDetailDialog = ({ card, open, onOpenChange, allColumns, o
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !cardId) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !cardId) return;
+
+    const total = files.length;
     setIsUploading(true);
-    try {
-      const sha256 = await computeSha256(file);
-      const initResp = await kanbanApi.initFileUpload({
-        sha256,
-        size_bytes: file.size,
-        mime_type: file.type || 'application/octet-stream',
-        original_filename: file.name,
-      });
+    let successCount = 0;
+    let errorCount = 0;
 
-      if (!initResp.already_exists) {
-        await fetch(initResp.upload_url, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    for (let i = 0; i < total; i++) {
+      const file = files[i];
+      setUploadProgress(`Загрузка ${i + 1}/${total}: ${file.name}`);
+      try {
+        const sha256 = await computeSha256(file);
+        const initResp = await kanbanApi.initFileUpload({
+          sha256,
+          size_bytes: file.size,
+          mime_type: file.type || 'application/octet-stream',
+          original_filename: file.name,
         });
-        await kanbanApi.finalizeFileUpload(initResp.file.id);
-      }
 
-      await kanbanApi.attachFileToCard(cardId, initResp.file.id, { title: file.name });
-      qc.invalidateQueries({ queryKey: ['kanban', 'attachments', cardId] });
-    } catch (err) {
-      console.error('File upload failed:', err);
-    } finally {
-      setIsUploading(false);
-      e.target.value = '';
+        if (!initResp.already_exists) {
+          const uploadResp = await fetch(initResp.upload_url, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          });
+          if (!uploadResp.ok) {
+            throw new Error(`HTTP ${uploadResp.status} при загрузке файла`);
+          }
+          await kanbanApi.finalizeFileUpload(initResp.file.id);
+        }
+
+        await kanbanApi.attachFileToCard(cardId, initResp.file.id, { title: file.name });
+        successCount++;
+      } catch (err: any) {
+        errorCount++;
+        console.error(`File upload failed (${file.name}):`, err);
+        toast.error(`Ошибка загрузки "${file.name}": ${err?.message || 'Неизвестная ошибка'}`);
+      }
     }
+
+    qc.invalidateQueries({ queryKey: ['kanban', 'attachments', cardId] });
+
+    if (successCount > 0) {
+      toast.success(`Загружено файлов: ${successCount}${errorCount > 0 ? `, ошибок: ${errorCount}` : ''}`);
+    }
+
+    setIsUploading(false);
+    setUploadProgress('');
+    e.target.value = '';
   };
 
   const handleDownload = async (attachment: KanbanAttachment) => {
@@ -273,7 +299,7 @@ export const KanbanCardDetailDialog = ({ card, open, onOpenChange, allColumns, o
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="sr-only">Карточка</DialogTitle>
         </DialogHeader>
@@ -441,26 +467,33 @@ export const KanbanCardDetailDialog = ({ card, open, onOpenChange, allColumns, o
                 );
               })}
             </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="ID ТКП"
-                value={newTkpId}
-                onChange={(e) => setNewTkpId(e.target.value)}
-                type="number"
-                className="w-32"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleAddTkp();
-                }}
-              />
-              <Button
-                variant="outline"
-                onClick={handleAddTkp}
-                disabled={!newTkpId}
-                tabIndex={0}
-                aria-label="Добавить ТКП"
-              >
-                Добавить
-              </Button>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Добавить ТКП</label>
+              {!objectId ? (
+                <div className="text-sm text-muted-foreground">
+                  Сначала выберите объект во вкладке «Основное»
+                </div>
+              ) : tkpByObjectQuery.isLoading ? (
+                <div className="text-sm text-muted-foreground">Загрузка ТКП...</div>
+              ) : availableTkps.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  Нет доступных ТКП для этого объекта
+                </div>
+              ) : (
+                <Select onValueChange={handleAddTkpFromSelect}>
+                  <SelectTrigger aria-label="Выбрать ТКП для привязки">
+                    <SelectValue placeholder="Выберите ТКП..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTkps.map((tkp: any) => (
+                      <SelectItem key={tkp.id} value={String(tkp.id)}>
+                        #{tkp.number || tkp.id} — {tkp.name || tkp.object_name || 'Без названия'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </TabsContent>
 
@@ -470,10 +503,11 @@ export const KanbanCardDetailDialog = ({ card, open, onOpenChange, allColumns, o
               <div className="text-sm font-medium">Вложения</div>
               <label className="cursor-pointer">
                 <Button variant="outline" size="sm" disabled={isUploading} asChild>
-                  <span>{isUploading ? 'Загрузка...' : '+ Загрузить файл'}</span>
+                  <span>{isUploading ? uploadProgress || 'Загрузка...' : '+ Загрузить файлы'}</span>
                 </Button>
                 <input
                   type="file"
+                  multiple
                   className="hidden"
                   onChange={handleFileUpload}
                   disabled={isUploading}

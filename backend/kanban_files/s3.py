@@ -12,22 +12,34 @@ def _get_s3_client():
     )
 
 
+def _to_public_url(internal_url: str) -> str:
+    public_base = getattr(settings, 'KANBAN_S3_PUBLIC_URL', None)
+    if not public_base:
+        return internal_url
+    internal_base = settings.KANBAN_S3_ENDPOINT_URL
+    if internal_base and internal_url.startswith(internal_base):
+        return internal_url.replace(internal_base, public_base, 1)
+    return internal_url
+
+
 def presign_put(bucket: str, key: str, content_type: str, expires_in: int = 600) -> str:
     client = _get_s3_client()
-    return client.generate_presigned_url(
+    url = client.generate_presigned_url(
         ClientMethod='put_object',
         Params={'Bucket': bucket, 'Key': key, 'ContentType': content_type or 'application/octet-stream'},
         ExpiresIn=expires_in,
     )
+    return _to_public_url(url)
 
 
 def presign_get(bucket: str, key: str, expires_in: int = 600) -> str:
     client = _get_s3_client()
-    return client.generate_presigned_url(
+    url = client.generate_presigned_url(
         ClientMethod='get_object',
         Params={'Bucket': bucket, 'Key': key},
         ExpiresIn=expires_in,
     )
+    return _to_public_url(url)
 
 
 def head_object(bucket: str, key: str) -> dict:
