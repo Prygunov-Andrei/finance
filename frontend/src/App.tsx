@@ -243,7 +243,7 @@ export default function App() {
           <Route path="/objects" element={
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
-                <ConstructionObjects />
+                <ConstructionObjects defaultStatusFilter="in_progress" />
               </Layout>
             </ProtectedRoute>
           } />

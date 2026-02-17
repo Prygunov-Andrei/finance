@@ -179,7 +179,6 @@ const menuItems: MenuItem[] = [
       { id: 'legacy-bitrix-requests', label: 'Запросы из Битрикс', icon: <ShoppingCart className="w-4 h-4" />, path: '/supply/requests' },
       { id: 'legacy-bitrix-settings', label: 'Настройки Битрикс24', icon: <Link2 className="w-4 h-4" />, path: '/settings/bitrix' },
       { id: 'legacy-supply-dashboard', label: 'Дашборд снабжения', icon: <BarChart3 className="w-4 h-4" />, path: '/supply/dashboard' },
-      { id: 'legacy-kanban-tasks', label: 'Канбан задач', icon: <CheckSquare className="w-4 h-4" />, path: '/kanban/object-tasks' },
       { id: 'legacy-work-items', label: 'Работы', icon: <Briefcase className="w-4 h-4" />, path: '/work-items' },
       { id: 'legacy-work-sections', label: 'Разделы работ', icon: <FileText className="w-4 h-4" />, path: '/work-sections' },
       { id: 'legacy-worker-grades', label: 'Разряды', icon: <FileText className="w-4 h-4" />, path: '/worker-grades' },
@@ -254,7 +253,6 @@ const pageTitles: Record<string, string> = {
   'supply/requests': 'Запросы из Битрикс',
   'settings/bitrix': 'Интеграция с Битрикс24',
   'supply/dashboard': 'Дашборд снабжения',
-  'kanban/object-tasks': 'Задачи по объектам',
   // Detail pages (kept for breadcrumbs)
   'work-items': 'Работы',
   'worker-grades': 'Разряды',

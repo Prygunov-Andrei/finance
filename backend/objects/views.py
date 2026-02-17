@@ -1,4 +1,7 @@
-from rest_framework import viewsets, filters, permissions
+from rest_framework import viewsets, filters, permissions, status
+from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -64,7 +67,7 @@ class ObjectViewSet(CashFlowMixin, viewsets.ModelViewSet):
     queryset = Object.objects.all()
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = []
+    filterset_fields = ['status']
     search_fields = ['name', 'address', 'description']
     ordering_fields = ['name', 'created_at', 'updated_at']
     ordering = ['-created_at']
@@ -90,3 +93,41 @@ class ObjectViewSet(CashFlowMixin, viewsets.ModelViewSet):
             'entity_id_key': 'object_id',
             'entity_name_key': 'object_name',
         }
+
+    @extend_schema(
+        summary='Загрузить фото объекта',
+        description='Загрузить или обновить фотографию объекта',
+        tags=['Объекты'],
+    )
+    @action(
+        detail=True,
+        methods=['put', 'patch'],
+        permission_classes=[permissions.IsAuthenticated],
+        parser_classes=[MultiPartParser, FormParser],
+        url_path='upload-photo',
+    )
+    def upload_photo(self, request, pk=None):
+        """Загрузить или обновить фотографию объекта"""
+        obj = self.get_object()
+        photo = request.FILES.get('photo')
+
+        if not photo:
+            return Response(
+                {'error': 'Фотография не предоставлена'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not photo.content_type.startswith('image/'):
+            return Response(
+                {'error': 'Файл должен быть изображением'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if obj.photo:
+            obj.photo.delete(save=False)
+
+        obj.photo = photo
+        obj.save(update_fields=['photo'])
+
+        serializer = ObjectSerializer(obj, context={'request': request})
+        return Response(serializer.data)

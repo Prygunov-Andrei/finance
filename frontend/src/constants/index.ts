@@ -37,7 +37,7 @@ export enum PaymentType {
 /** Статусы объектов */
 export enum ObjectStatus {
   PLANNED = 'planned',
-  ACTIVE = 'active',
+  IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
   SUSPENDED = 'suspended',
 }

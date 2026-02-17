@@ -1,9 +1,15 @@
+import os
 from decimal import Decimal
 from datetime import date
 from typing import Optional, Dict
 from django.db import models
 from core.models import TimestampedModel
 from core.cashflow import CashFlowCalculator
+
+
+def object_photo_upload_path(instance, filename):
+    ext = filename.split('.')[-1]
+    return os.path.join('objects', 'photos', f'object_{instance.id}_photo.{ext}')
 
 
 class Object(TimestampedModel):
@@ -66,6 +72,12 @@ class Object(TimestampedModel):
         default=0,
         verbose_name='Окно регистрации (минуты)',
         help_text='За сколько минут до начала и после окончания смены разрешена регистрация. 0 = без ограничений.'
+    )
+    photo = models.ImageField(
+        upload_to=object_photo_upload_path,
+        blank=True,
+        null=True,
+        verbose_name='Фото объекта'
     )
 
     class Meta:

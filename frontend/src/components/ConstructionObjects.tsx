@@ -1,20 +1,20 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ConstructionObject, CreateConstructionObjectData } from '../lib/api';
 import { CONSTANTS } from '../constants';
 import { formatDate } from '../lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import { Building2, Loader2, Plus, Search, Calendar, MapPin, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Building2, Loader2, Plus, Search, Calendar, MapPin, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+
+type ViewMode = 'table' | 'grid';
 
 type ConstructionObjectsProps = {
   defaultStatusFilter?: string;
@@ -25,10 +25,9 @@ type ConstructionObjectsProps = {
 export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, pageTitle }: ConstructionObjectsProps = {}) {
   const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingObject, setEditingObject] = useState<ConstructionObject | null>(null);
-  const [deletingObject, setDeletingObject] = useState<ConstructionObject | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(defaultStatusFilter || '');
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -44,8 +43,7 @@ export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, 
     staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
   });
 
-  // Извлекаем массив из ответа API
-  const objects = objectsData?.results || objectsData || [];
+  const objects = (objectsData as any)?.results || objectsData || [];
 
   const createMutation = useMutation({
     mutationFn: (data: CreateConstructionObjectData) => api.createConstructionObject(data),
@@ -63,41 +61,11 @@ export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, 
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<CreateConstructionObjectData> }) => 
-      api.updateConstructionObject(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['construction-objects'] });
-      setEditingObject(null);
-      toast.success('Объект успешно обновлен');
-    },
-    onError: (error: any) => {
-      toast.error(`Ошибка: ${error.message}`);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteConstructionObject(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['construction-objects'] });
-      setDeletingObject(null);
-      toast.success('Объект успешно удален');
-    },
-    onError: (error: any) => {
-      if (error.message.includes('Cannot delete') || error.message.includes('связанные')) {
-        toast.error('Нельзя удалить объект, по которому есть операции');
-      } else {
-        toast.error(`Ошибка: ${error.message}`);
-      }
-      setDeletingObject(null);
-    },
-  });
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'planned':
         return <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded">Планируется</span>;
-      case 'active':
+      case 'in_progress':
         return <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">В работе</span>;
       case 'completed':
         return <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">Завершён</span>;
@@ -140,10 +108,9 @@ export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, 
           </Button>
         </div>
 
-        {/* Фильтры */}
+        {/* Фильтры и переключатель вида */}
         <div className="mb-6 space-y-4">
-          <div className="flex flex-wrap gap-4">
-            {/* Поиск */}
+          <div className="flex flex-wrap gap-4 items-center">
             <div className="flex-1 min-w-[250px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -153,20 +120,40 @@ export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
+                  aria-label="Поиск объектов"
                 />
               </div>
             </div>
 
-            {/* Фильтр по статусу */}
             <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
               <TabsList>
                 <TabsTrigger value="">Все</TabsTrigger>
                 <TabsTrigger value="planned">Планируются</TabsTrigger>
-                <TabsTrigger value="active">В работе</TabsTrigger>
+                <TabsTrigger value="in_progress">В работе</TabsTrigger>
                 <TabsTrigger value="completed">Завершённые</TabsTrigger>
                 <TabsTrigger value="suspended">Приостановлены</TabsTrigger>
               </TabsList>
             </Tabs>
+
+            {/* Переключатель вида */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-2 transition-colors ${viewMode === 'table' ? 'bg-blue-100 text-blue-700' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                aria-label="Табличный вид"
+                tabIndex={0}
+              >
+                <TableIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-blue-100 text-blue-700' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                aria-label="Вид мозаикой"
+                tabIndex={0}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -185,45 +172,7 @@ export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, 
           </DialogContent>
         </Dialog>
 
-        {/* Edit Dialog */}
-        <Dialog open={!!editingObject} onOpenChange={(open) => !open && setEditingObject(null)}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Редактировать объект</DialogTitle>
-              <DialogDescription>Измените информацию об объекте строительства</DialogDescription>
-            </DialogHeader>
-            {editingObject && (
-              <ConstructionObjectForm 
-                object={editingObject}
-                onSubmit={(data) => updateMutation.mutate({ id: editingObject.id, data })}
-                isLoading={updateMutation.isPending}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete AlertDialog */}
-        <AlertDialog open={!!deletingObject} onOpenChange={(open) => !open && setDeletingObject(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Это действие нельзя отменить. Объект "{deletingObject?.name}" будет удален навсегда.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Отмена</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deletingObject && deleteMutation.mutate(deletingObject.id)}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {deleteMutation.isPending ? 'Удаление...' : 'Удалить'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Grid карточек */}
+        {/* Content */}
         {!objects || objects.length === 0 ? (
           <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
             <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -233,95 +182,143 @@ export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, 
               Добавить первый объект
             </Button>
           </div>
+        ) : viewMode === 'table' ? (
+          <ObjectsTable objects={objects} getStatusBadge={getStatusBadge} onRowClick={(id) => navigate(`/objects/${id}`)} />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {objects.map((object: ConstructionObject) => (
-              <div
-                key={object.id}
-                className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow cursor-pointer group relative"
-                onClick={() => navigate(`/objects/${object.id}`)}
-              >
-                {/* Dropdown в углу */}
-                <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingObject(object);
-                      }}>
-                        <Pencil className="w-4 h-4 mr-2" />
-                        Редактировать
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeletingObject(object);
-                        }}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Удалить
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-
-                {/* Иконка объекта */}
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                  <Building2 className="w-6 h-6 text-blue-600" />
-                </div>
-
-                {/* Название */}
-                <h3 className="text-lg font-semibold text-gray-900 mb-2 pr-8">{object.name}</h3>
-
-                {/* Адрес */}
-                <div className="flex items-start gap-2 text-sm text-gray-600 mb-3">
-                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span className="line-clamp-2">{object.address}</span>
-                </div>
-
-                {/* Статус */}
-                <div className="mb-3">
-                  {getStatusBadge(object.status)}
-                </div>
-
-                {/* Даты */}
-                <div className="space-y-1 text-sm text-gray-500">
-                  {object.start_date && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      <span>Начало: {formatDate(object.start_date)}</span>
-                    </div>
-                  )}
-                  {object.end_date && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      <span>Окончание: {formatDate(object.end_date)}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Количество договоров */}
-                {object.contracts_count !== undefined && (
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <span className="text-xs text-gray-500">
-                      Договоров: <span className="font-semibold text-gray-700">{object.contracts_count}</span>
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <ObjectsGrid objects={objects} getStatusBadge={getStatusBadge} onCardClick={(id) => navigate(`/objects/${id}`)} />
         )}
       </div>
     </div>
   );
 }
+
+/* ===== TABLE VIEW ===== */
+
+type ObjectsTableProps = {
+  objects: ConstructionObject[];
+  getStatusBadge: (status: string) => React.ReactElement;
+  onRowClick: (id: number) => void;
+};
+
+const ObjectsTable = ({ objects, getStatusBadge, onRowClick }: ObjectsTableProps) => {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-200 bg-gray-50">
+            <th className="text-left py-3 px-4 font-medium text-gray-600 w-10"></th>
+            <th className="text-left py-3 px-4 font-medium text-gray-600">Название</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-600">Адрес</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-600">Статус</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-600">Начало</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-600">Окончание</th>
+            <th className="text-right py-3 px-4 font-medium text-gray-600">Договоров</th>
+          </tr>
+        </thead>
+        <tbody>
+          {objects.map((object: ConstructionObject) => (
+            <tr
+              key={object.id}
+              onClick={() => onRowClick(object.id)}
+              className="border-b border-gray-100 last:border-0 hover:bg-blue-50/50 cursor-pointer transition-colors"
+              tabIndex={0}
+              role="button"
+              aria-label={`Открыть объект ${object.name}`}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(object.id); } }}
+            >
+              <td className="py-3 px-4">
+                {object.photo ? (
+                  <img src={object.photo} alt={object.name} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                  </div>
+                )}
+              </td>
+              <td className="py-3 px-4 font-medium text-gray-900">{object.name}</td>
+              <td className="py-3 px-4 text-gray-600 max-w-[250px] truncate">{object.address}</td>
+              <td className="py-3 px-4">{getStatusBadge(object.status)}</td>
+              <td className="py-3 px-4 text-gray-500">{object.start_date ? formatDate(object.start_date) : '—'}</td>
+              <td className="py-3 px-4 text-gray-500">{object.end_date ? formatDate(object.end_date) : '—'}</td>
+              <td className="py-3 px-4 text-right text-gray-600">{object.contracts_count ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+/* ===== GRID VIEW ===== */
+
+type ObjectsGridProps = {
+  objects: ConstructionObject[];
+  getStatusBadge: (status: string) => React.ReactElement;
+  onCardClick: (id: number) => void;
+};
+
+const ObjectsGrid = ({ objects, getStatusBadge, onCardClick }: ObjectsGridProps) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {objects.map((object: ConstructionObject) => (
+        <div
+          key={object.id}
+          className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow cursor-pointer"
+          onClick={() => onCardClick(object.id)}
+          tabIndex={0}
+          role="button"
+          aria-label={`Открыть объект ${object.name}`}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCardClick(object.id); } }}
+        >
+          {/* Фото/Иконка объекта */}
+          {object.photo ? (
+            <img src={object.photo} alt={object.name} className="w-12 h-12 rounded-full object-cover mb-4" />
+          ) : (
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+              <Building2 className="w-6 h-6 text-blue-600" />
+            </div>
+          )}
+
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">{object.name}</h3>
+
+          <div className="flex items-start gap-2 text-sm text-gray-600 mb-3">
+            <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span className="line-clamp-2">{object.address}</span>
+          </div>
+
+          <div className="mb-3">
+            {getStatusBadge(object.status)}
+          </div>
+
+          <div className="space-y-1 text-sm text-gray-500">
+            {object.start_date && (
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>Начало: {formatDate(object.start_date)}</span>
+              </div>
+            )}
+            {object.end_date && (
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>Окончание: {formatDate(object.end_date)}</span>
+              </div>
+            )}
+          </div>
+
+          {object.contracts_count !== undefined && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <span className="text-xs text-gray-500">
+                Договоров: <span className="font-semibold text-gray-700">{object.contracts_count}</span>
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* ===== CREATE/EDIT FORM ===== */
 
 interface ConstructionObjectFormProps {
   object?: ConstructionObject;
@@ -350,7 +347,7 @@ function ConstructionObjectForm({ object, onSubmit, isLoading, defaultStatus }: 
     const dataToSubmit: CreateConstructionObjectData = {
       name: formData.name,
       address: formData.address,
-      status: formData.status as 'planned' | 'active' | 'completed' | 'suspended',
+      status: formData.status as 'planned' | 'in_progress' | 'completed' | 'suspended',
     };
 
     if (formData.start_date) dataToSubmit.start_date = formData.start_date;
@@ -407,7 +404,7 @@ function ConstructionObjectForm({ object, onSubmit, isLoading, defaultStatus }: 
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="planned">Планируется</SelectItem>
-              <SelectItem value="active">В работе</SelectItem>
+              <SelectItem value="in_progress">В работе</SelectItem>
               <SelectItem value="completed">Завершён</SelectItem>
               <SelectItem value="suspended">Приостановлен</SelectItem>
             </SelectContent>

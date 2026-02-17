@@ -134,9 +134,26 @@ backend/
 - name: название (unique)
 - address: адрес
 - start_date, end_date: плановые сроки
-- status: planned / active / completed / suspended
+- status: planned / in_progress / completed / suspended
 - description
+- photo: ImageField (upload, nullable) — фото объекта
+- latitude, longitude, geo_radius: геозона
+- allow_geo_bypass, registration_window_minutes: настройки журнала
 ```
+
+**Карточка объекта (фронтенд):**
+- Шапка: inline-редактирование полей (имя, адрес, описание), фото-аватар, статус (с подтверждением), даты
+- 4 корневых вкладки:
+  - **Основное**: Канбан задач, Журнал работ (График/Обзор/Смены/Медиа/Отчёты), Проекты, Канбан снабжения, ПТО, Финансы
+  - **Заказчик**: Сметы, ТКП, Переписка, Договоры и ДОП, Акты, Сверки
+  - **Исполнители**: Монтажные сметы, МП, Переписка, Договоры и ДОП, Акты, Сверки
+  - **Настройки**: Приглашения, Геозона, Telegram, Удаление объекта (с подтверждением имени)
+
+**API:**
+- `GET/POST /api/v1/objects/` — список/создание (фильтр: `?status=`)
+- `GET/PATCH/DELETE /api/v1/objects/{id}/` — детали/обновление/удаление
+- `PUT /api/v1/objects/{id}/upload-photo/` — загрузка фото
+- `GET /api/v1/objects/{id}/cash-flow/` — денежный поток
 
 **Связи:**
 - contracts, projects, estimates, technical_proposals, mounting_proposals

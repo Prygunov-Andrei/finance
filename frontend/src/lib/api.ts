@@ -414,6 +414,22 @@ class ApiClient {
     return this.request<ConstructionObject>(`/objects/${id}/`);
   }
 
+  async uploadObjectPhoto(id: number, photo: File): Promise<ConstructionObject> {
+    const formData = new FormData();
+    formData.append('photo', photo);
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${this.baseUrl}/objects/${id}/upload-photo/`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Upload failed: ${res.status}`);
+    }
+    return res.json();
+  }
+
   async getObjectCashFlow(id: number, params?: { start_date?: string; end_date?: string }) {
     const queryParams = new URLSearchParams();
     if (params?.start_date) queryParams.append('start_date', params.start_date);
@@ -2682,10 +2698,11 @@ export interface ConstructionObject {
   id: number;
   name: string;
   address: string;
-  status: 'planned' | 'active' | 'completed' | 'suspended';
+  status: 'planned' | 'in_progress' | 'completed' | 'suspended';
   start_date: string | null;
   end_date: string | null;
   description?: string;
+  photo?: string | null;
   contracts_count?: number;
   created_at?: string;
   updated_at?: string;
@@ -2694,7 +2711,7 @@ export interface ConstructionObject {
 export interface CreateConstructionObjectData {
   name: string;
   address: string;
-  status: 'planned' | 'active' | 'completed' | 'suspended';
+  status: 'planned' | 'in_progress' | 'completed' | 'suspended';
   start_date?: string | null;
   end_date?: string | null;
   description?: string;

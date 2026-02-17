@@ -15,6 +15,7 @@ class ObjectSerializer(serializers.ModelSerializer):
             'start_date',
             'end_date',
             'status',
+            'photo',
             'latitude',
             'longitude',
             'geo_radius',
@@ -23,7 +24,7 @@ class ObjectSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'photo']
 
 
 class ObjectListSerializer(serializers.ModelSerializer):
@@ -41,6 +42,7 @@ class ObjectListSerializer(serializers.ModelSerializer):
             'start_date',
             'end_date',
             'status',
+            'photo',
             'created_at',
         ]
         read_only_fields = ['id', 'created_at']
