@@ -14,6 +14,7 @@ from .models import (
     Payment, PaymentRegistry, ExpenseCategory,
     Invoice, InvoiceItem, InvoiceEvent,
     RecurringPayment, IncomeRecord,
+    JournalEntry,
 )
 from personnel.permissions import ERPSectionPermission
 from .serializers import (
@@ -28,8 +29,10 @@ from .serializers import (
     InvoiceActionSerializer,
     RecurringPaymentSerializer,
     IncomeRecordSerializer,
+    JournalEntrySerializer,
 )
 from .services import InvoiceService
+from .journal_service import JournalService
 
 logger = logging.getLogger(__name__)
 
@@ -268,30 +271,37 @@ class PaymentRegistryViewSet(viewsets.ModelViewSet):
 )
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
     """
-    ViewSet для управления категориями расходов/доходов
-    
-    list: Получить список категорий
-    retrieve: Получить детали категории
-    create: Создать новую категорию
-    update: Обновить категорию
-    partial_update: Частично обновить категорию
-    destroy: Удалить категорию
+    ViewSet для управления Внутренним планом счетов.
     """
     permission_classes = [permissions.IsAuthenticated, ERPSectionPermission]
-    queryset = ExpenseCategory.objects.select_related('parent').filter(is_active=True)
+    queryset = ExpenseCategory.objects.select_related('parent', 'object', 'contract').filter(is_active=True)
     serializer_class = ExpenseCategorySerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['parent', 'is_active', 'requires_contract']
+    filterset_fields = ['parent', 'is_active', 'requires_contract', 'account_type']
     search_fields = ['name', 'code', 'description']
     ordering_fields = ['sort_order', 'name', 'created_at']
     ordering = ['sort_order', 'name']
-    
+
     def get_queryset(self):
-        """Возвращает все категории для администраторов, активные для остальных"""
-        queryset = ExpenseCategory.objects.select_related('parent').all()
+        queryset = ExpenseCategory.objects.select_related(
+            'parent', 'object', 'contract',
+        ).all()
         if not self.request.user.is_staff:
             queryset = queryset.filter(is_active=True)
         return queryset
+
+    @extend_schema(summary='Баланс счёта', tags=['Внутренний план счетов'])
+    @action(detail=True, methods=['get'])
+    def balance(self, request, pk=None):
+        account = self.get_object()
+        bal = account.get_balance()
+        return Response({
+            'id': account.id,
+            'name': account.name,
+            'code': account.code,
+            'account_type': account.account_type,
+            'balance': str(bal),
+        })
 
 
 # =============================================================================
@@ -308,10 +318,14 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     - reject: директор отклонил
     - reschedule: директор перенёс дату
     - dashboard: сводная аналитика
+    - check_balance: проверка сальдо объекта
     """
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'source', 'object', 'counterparty', 'category', 'account']
+    filterset_fields = [
+        'status', 'source', 'invoice_type', 'is_debt',
+        'object', 'counterparty', 'category', 'account',
+    ]
     search_fields = ['invoice_number', 'counterparty__name', 'description']
     ordering_fields = ['created_at', 'due_date', 'amount_gross', 'invoice_date']
     ordering = ['-created_at']
@@ -320,7 +334,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return (
             Invoice.objects
             .select_related(
-                'counterparty', 'object', 'contract', 'category',
+                'counterparty', 'object', 'contract', 'act',
+                'category', 'target_internal_account',
                 'account', 'legal_entity', 'supply_request',
                 'recurring_payment', 'bank_payment_order',
                 'created_by', 'reviewed_by', 'approved_by',
@@ -343,11 +358,34 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             validated_data=serializer.validated_data,
             user=self.request.user,
         )
-        # Если есть файл — запустить распознавание
-        if invoice.invoice_file:
+        if invoice.invoice_file and not invoice.skip_recognition:
             from supply.tasks import recognize_invoice
             recognize_invoice.delay(invoice.id)
         serializer.instance = invoice
+
+    @extend_schema(summary='Проверка сальдо объекта', tags=['Счета на оплату'])
+    @action(detail=False, methods=['get'])
+    def check_balance(self, request):
+        """Проверить баланс объекта перед оплатой."""
+        object_id = request.query_params.get('object_id')
+        amount = request.query_params.get('amount', '0')
+        if not object_id:
+            return Response(
+                {'error': 'Укажите object_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from objects.models import Object as Obj
+        try:
+            obj = Obj.objects.get(pk=object_id)
+        except Obj.DoesNotExist:
+            return Response(
+                {'error': 'Объект не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        result = JournalService.check_object_balance(obj, Decimal(amount))
+        result['balance'] = str(result['balance'])
+        result['deficit'] = str(result['deficit'])
+        return Response(result)
 
     @action(detail=True, methods=['post'])
     def submit_to_registry(self, request, pk=None):
@@ -516,11 +554,88 @@ class IncomeRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = IncomeRecordSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['account', 'category', 'counterparty']
+    filterset_fields = ['account', 'category', 'counterparty', 'income_type', 'object', 'is_cash']
     search_fields = ['description', 'counterparty__name']
     ordering = ['-payment_date', '-created_at']
 
     def get_queryset(self):
         return IncomeRecord.objects.select_related(
-            'account', 'contract', 'category', 'legal_entity', 'counterparty',
+            'account', 'object', 'contract', 'act',
+            'category', 'legal_entity', 'counterparty',
+            'bank_transaction',
         )
+
+
+@extend_schema_view(
+    list=extend_schema(summary='Список проводок', tags=['Проводки']),
+    retrieve=extend_schema(summary='Детали проводки', tags=['Проводки']),
+    create=extend_schema(summary='Создать проводку', tags=['Проводки']),
+)
+class JournalEntryViewSet(viewsets.ModelViewSet):
+    """CRUD для проводок (двойная запись)."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = JournalEntrySerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['from_account', 'to_account', 'is_auto', 'invoice', 'income_record']
+    search_fields = ['description']
+    ordering_fields = ['date', 'amount', 'created_at']
+    ordering = ['-date', '-created_at']
+
+    def get_queryset(self):
+        return JournalEntry.objects.select_related(
+            'from_account', 'to_account',
+            'invoice', 'income_record',
+            'created_by',
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @extend_schema(summary='Создать ручную проводку', tags=['Проводки'])
+    @action(detail=False, methods=['post'])
+    def manual(self, request):
+        """Создать ручную проводку между счетами Внутреннего плана."""
+        from_account_id = request.data.get('from_account')
+        to_account_id = request.data.get('to_account')
+        amount = request.data.get('amount')
+        description = request.data.get('description', '')
+        posting_date = request.data.get('date')
+
+        if not all([from_account_id, to_account_id, amount]):
+            return Response(
+                {'error': 'Укажите from_account, to_account и amount'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from_acc = ExpenseCategory.objects.get(pk=from_account_id)
+            to_acc = ExpenseCategory.objects.get(pk=to_account_id)
+        except ExpenseCategory.DoesNotExist:
+            return Response(
+                {'error': 'Счёт не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            from datetime import date as date_cls
+            p_date = None
+            if posting_date:
+                p_date = date_cls.fromisoformat(posting_date)
+
+            entry = JournalService.create_manual_posting(
+                from_account=from_acc,
+                to_account=to_acc,
+                amount=Decimal(str(amount)),
+                description=description,
+                user=request.user,
+                posting_date=p_date,
+            )
+            return Response(
+                JournalEntrySerializer(entry).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except ValueError as exc:
+            return Response(
+                {'error': str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )

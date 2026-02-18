@@ -9,6 +9,7 @@ from .models import (
     Payment, PaymentRegistry, ExpenseCategory, PaymentItem,
     Invoice, InvoiceItem, InvoiceEvent,
     RecurringPayment, IncomeRecord,
+    JournalEntry,
 )
 from .services import PaymentService
 
@@ -17,30 +18,53 @@ MAX_PAYMENT_ITEMS = 200
 
 
 class ExpenseCategorySerializer(serializers.ModelSerializer):
-    """Сериализатор для категории расходов/доходов"""
-    
-    parent_name = serializers.CharField(source='parent.name', read_only=True)
+    """Сериализатор для Внутреннего плана счетов."""
+
+    parent_name = serializers.CharField(source='parent.name', read_only=True, default=None)
     full_path = serializers.SerializerMethodField()
-    
+    account_type_display = serializers.CharField(source='get_account_type_display', read_only=True)
+    balance = serializers.SerializerMethodField()
+    object_name = serializers.CharField(source='object.name', read_only=True, default=None)
+    contract_number = serializers.CharField(source='contract.number', read_only=True, default=None)
+
     class Meta:
         model = ExpenseCategory
         fields = [
             'id',
             'name',
             'code',
+            'account_type',
+            'account_type_display',
             'parent',
             'parent_name',
             'full_path',
+            'object',
+            'object_name',
+            'contract',
+            'contract_number',
             'description',
             'is_active',
             'requires_contract',
             'sort_order',
+            'balance',
         ]
-        read_only_fields = ['id', 'parent_name', 'full_path']
-    
+        read_only_fields = [
+            'id', 'parent_name', 'full_path',
+            'account_type_display', 'balance',
+            'object_name', 'contract_number',
+        ]
+
     def get_full_path(self, obj):
-        """Возвращает полный путь категории"""
         return obj.get_full_path()
+
+    def get_balance(self, obj):
+        if obj.account_type in (
+            ExpenseCategory.AccountType.SYSTEM,
+            ExpenseCategory.AccountType.OBJECT,
+            ExpenseCategory.AccountType.CONTRACT,
+        ):
+            return str(obj.get_balance())
+        return None
 
 
 class PaymentItemSerializer(serializers.ModelSerializer):
@@ -421,18 +445,21 @@ class InvoiceListSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source='account.name', read_only=True, default=None)
     source_display = serializers.CharField(source='get_source_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    invoice_type_display = serializers.CharField(source='get_invoice_type_display', read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Invoice
         fields = [
-            'id', 'source', 'source_display', 'status', 'status_display',
+            'id', 'invoice_type', 'invoice_type_display',
+            'source', 'source_display', 'status', 'status_display',
             'invoice_number', 'invoice_date', 'due_date',
             'counterparty', 'counterparty_name',
             'object', 'object_name',
             'category_name', 'account_name',
             'amount_gross', 'amount_net', 'vat_amount',
-            'is_overdue', 'created_at',
+            'is_overdue', 'is_debt', 'skip_recognition',
+            'created_at',
         ]
 
 
@@ -441,11 +468,16 @@ class InvoiceDetailSerializer(serializers.ModelSerializer):
     counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True, default=None)
     object_name = serializers.CharField(source='object.name', read_only=True, default=None)
     contract_number = serializers.CharField(source='contract.number', read_only=True, default=None)
+    act_number = serializers.CharField(source='act.number', read_only=True, default=None)
     category_name = serializers.CharField(source='category.name', read_only=True, default=None)
+    target_internal_account_name = serializers.CharField(
+        source='target_internal_account.name', read_only=True, default=None,
+    )
     account_name = serializers.CharField(source='account.name', read_only=True, default=None)
     legal_entity_name = serializers.CharField(source='legal_entity.short_name', read_only=True, default=None)
     source_display = serializers.CharField(source='get_source_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    invoice_type_display = serializers.CharField(source='get_invoice_type_display', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
     reviewed_by_name = serializers.CharField(source='reviewed_by.get_full_name', read_only=True, default=None)
     approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True, default=None)
@@ -456,15 +488,19 @@ class InvoiceDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = [
-            'id', 'source', 'source_display', 'status', 'status_display',
+            'id', 'invoice_type', 'invoice_type_display',
+            'source', 'source_display', 'status', 'status_display',
             'invoice_file', 'invoice_number', 'invoice_date', 'due_date',
             'counterparty', 'counterparty_name',
             'object', 'object_name',
             'contract', 'contract_number',
+            'act', 'act_number',
             'category', 'category_name',
+            'target_internal_account', 'target_internal_account_name',
             'account', 'account_name',
             'legal_entity', 'legal_entity_name',
             'amount_gross', 'amount_net', 'vat_amount',
+            'is_debt', 'skip_recognition',
             'supply_request', 'recurring_payment',
             'bank_payment_order',
             'description', 'comment',
@@ -478,9 +514,10 @@ class InvoiceDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id', 'source_display', 'status_display',
+            'id', 'source_display', 'status_display', 'invoice_type_display',
             'counterparty_name', 'object_name', 'contract_number',
-            'category_name', 'account_name', 'legal_entity_name',
+            'act_number', 'category_name', 'target_internal_account_name',
+            'account_name', 'legal_entity_name',
             'created_by_name', 'reviewed_by_name', 'approved_by_name',
             'reviewed_at', 'approved_at', 'paid_at',
             'recognition_confidence',
@@ -496,10 +533,13 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         model = Invoice
         fields = [
             'id',
+            'invoice_type',
             'invoice_file', 'invoice_number', 'invoice_date', 'due_date',
-            'counterparty', 'object', 'contract', 'category',
+            'counterparty', 'object', 'contract', 'act',
+            'category', 'target_internal_account',
             'account', 'legal_entity',
             'amount_gross', 'amount_net', 'vat_amount',
+            'is_debt', 'skip_recognition',
             'description',
         ]
         read_only_fields = ['id']
@@ -545,16 +585,60 @@ class RecurringPaymentSerializer(serializers.ModelSerializer):
 
 class IncomeRecordSerializer(serializers.ModelSerializer):
     account_name = serializers.CharField(source='account.name', read_only=True, default=None)
+    object_name = serializers.CharField(source='object.name', read_only=True, default=None)
+    contract_number = serializers.CharField(source='contract.number', read_only=True, default=None)
+    act_number = serializers.CharField(source='act.number', read_only=True, default=None)
     category_name = serializers.CharField(source='category.name', read_only=True, default=None)
     counterparty_name = serializers.CharField(source='counterparty.short_name', read_only=True, default=None)
+    income_type_display = serializers.CharField(source='get_income_type_display', read_only=True)
 
     class Meta:
         model = IncomeRecord
         fields = [
-            'id', 'account', 'account_name',
-            'contract', 'category', 'category_name',
+            'id', 'income_type', 'income_type_display',
+            'account', 'account_name',
+            'object', 'object_name',
+            'contract', 'contract_number',
+            'act', 'act_number',
+            'category', 'category_name',
             'legal_entity', 'counterparty', 'counterparty_name',
+            'bank_transaction', 'is_cash',
             'amount', 'payment_date', 'description', 'scan_file',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'account_name', 'category_name', 'counterparty_name', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'income_type_display',
+            'account_name', 'object_name', 'contract_number',
+            'act_number', 'category_name', 'counterparty_name',
+            'created_at', 'updated_at',
+        ]
+
+
+# =============================================================================
+# JournalEntry — сериализаторы проводок
+# =============================================================================
+
+class JournalEntrySerializer(serializers.ModelSerializer):
+    from_account_name = serializers.CharField(source='from_account.name', read_only=True)
+    to_account_name = serializers.CharField(source='to_account.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True, default=None)
+
+    class Meta:
+        model = JournalEntry
+        fields = [
+            'id', 'date',
+            'from_account', 'from_account_name',
+            'to_account', 'to_account_name',
+            'amount', 'description',
+            'invoice', 'invoice_number',
+            'income_record',
+            'created_by', 'created_by_name',
+            'is_auto',
+            'created_at',
+        ]
+        read_only_fields = [
+            'id', 'from_account_name', 'to_account_name',
+            'created_by_name', 'invoice_number',
+            'created_at',
+        ]

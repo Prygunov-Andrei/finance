@@ -4,6 +4,7 @@ from .models import (
     Payment, PaymentRegistry, ExpenseCategory,
     Invoice, InvoiceItem, InvoiceEvent,
     RecurringPayment, IncomeRecord,
+    JournalEntry,
 )
 
 
@@ -13,6 +14,7 @@ class ExpenseCategoryAdmin(admin.ModelAdmin):
     list_display = (
         'name',
         'code',
+        'account_type',
         'get_parent',
         'requires_contract',
         'is_active',
@@ -21,6 +23,7 @@ class ExpenseCategoryAdmin(admin.ModelAdmin):
     )
     list_filter = (
         'is_active',
+        'account_type',
         'requires_contract',
         'parent',
     )
@@ -33,7 +36,11 @@ class ExpenseCategoryAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'code', 'parent', 'description')
+            'fields': ('name', 'code', 'account_type', 'parent', 'description')
+        }),
+        ('Привязки', {
+            'fields': ('object', 'contract'),
+            'classes': ('collapse',),
         }),
         ('Настройки', {
             'fields': ('is_active', 'requires_contract', 'sort_order')
@@ -181,15 +188,16 @@ class InvoiceEventInline(admin.TabularInline):
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
     list_display = (
-        'invoice_number', 'counterparty', 'amount_gross',
-        'status', 'source', 'due_date', 'object', 'created_at',
+        'invoice_number', 'invoice_type', 'counterparty', 'amount_gross',
+        'status', 'source', 'due_date', 'object', 'is_debt', 'created_at',
     )
-    list_filter = ('status', 'source', 'object')
+    list_filter = ('status', 'source', 'invoice_type', 'is_debt', 'object')
     search_fields = (
         'invoice_number', 'counterparty__name', 'description',
     )
     raw_id_fields = (
-        'counterparty', 'object', 'contract', 'category',
+        'counterparty', 'object', 'contract', 'act',
+        'category', 'target_internal_account',
         'account', 'legal_entity', 'supply_request',
         'recurring_payment', 'bank_payment_order', 'parsed_document',
         'created_by', 'reviewed_by', 'approved_by',
@@ -215,8 +223,18 @@ class RecurringPaymentAdmin(admin.ModelAdmin):
 
 @admin.register(IncomeRecord)
 class IncomeRecordAdmin(admin.ModelAdmin):
-    list_display = ('amount', 'payment_date', 'account', 'category', 'counterparty')
-    list_filter = ('account', 'category')
+    list_display = ('amount', 'income_type', 'payment_date', 'account', 'object', 'category', 'counterparty', 'is_cash')
+    list_filter = ('income_type', 'is_cash', 'account', 'category')
     search_fields = ('description', 'counterparty__name')
-    raw_id_fields = ('account', 'contract', 'category', 'legal_entity', 'counterparty')
+    raw_id_fields = ('account', 'object', 'contract', 'act', 'category', 'legal_entity', 'counterparty', 'bank_transaction')
     date_hierarchy = 'payment_date'
+
+
+@admin.register(JournalEntry)
+class JournalEntryAdmin(admin.ModelAdmin):
+    list_display = ('date', 'from_account', 'to_account', 'amount', 'is_auto', 'created_by', 'created_at')
+    list_filter = ('is_auto', 'date')
+    search_fields = ('description', 'from_account__name', 'to_account__name')
+    raw_id_fields = ('from_account', 'to_account', 'invoice', 'income_record', 'created_by')
+    date_hierarchy = 'date'
+    readonly_fields = ('created_at', 'updated_at')

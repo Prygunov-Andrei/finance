@@ -60,6 +60,8 @@ import { CreateCommercialCardDialog } from './components/kanban/CreateCommercial
 import { KanbanCardDetailDialog } from './components/kanban/KanbanCardDetailDialog';
 import { WarehouseBalancesPage } from './components/warehouse/WarehouseBalancesPage';
 import { StubPage } from './components/StubPage';
+import { FinanceDashboard } from './components/finance/FinanceDashboard';
+import { PaymentsTabPage } from './components/finance/PaymentsTabPage';
 import { WorkConditionsPage } from './components/references/WorkConditionsPage';
 import { MarkdownPage } from './components/help/MarkdownPage';
 import { HelpIndexPage } from './components/help/HelpIndexPage';
@@ -444,18 +446,10 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="/payments" element={
-            <ProtectedRoute>
-              <Layout onLogout={handleLogout} user={user}>
-                <Payments />
-              </Layout>
-            </ProtectedRoute>
+            <Navigate to="/finance/payments?tab=invoices" replace />
           } />
           <Route path="/payment-registry" element={
-            <ProtectedRoute>
-              <Layout onLogout={handleLogout} user={user}>
-                <PaymentRegistry />
-              </Layout>
-            </ProtectedRoute>
+            <Navigate to="/finance/payments?tab=registry" replace />
           } />
           <Route path="/bank-statements" element={
             <ProtectedRoute>
@@ -636,7 +630,21 @@ export default function App() {
           <Route path="/finance/dashboard" element={
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
-                <StubPage title="Дашборд Финансы" description="Сводная панель по финансовым показателям и кассе" parentSection="Финансы" />
+                <FinanceDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/finance/payments" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <PaymentsTabPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/finance/instructions" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <MarkdownPage filePath="finance.md" />
               </Layout>
             </ProtectedRoute>
           } />

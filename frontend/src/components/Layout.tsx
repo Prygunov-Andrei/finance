@@ -70,15 +70,14 @@ const menuItems: MenuItem[] = [
     path: '/finance',
     children: [
       { id: 'finance-dashboard', label: 'Дашборд Финансы', icon: <BarChart3 className="w-4 h-4" />, path: '/finance/dashboard' },
-      { id: 'finance-invoices', label: 'Счета на оплату', icon: <Receipt className="w-4 h-4" />, path: '/supply/invoices' },
-      { id: 'finance-income', label: 'Входящие платежи', icon: <TrendingUp className="w-4 h-4" />, path: '/supply/income' },
-      { id: 'finance-registry', label: 'Реестр оплат', icon: <CreditCard className="w-4 h-4" />, path: '/payment-registry' },
+      { id: 'finance-payments', label: 'Платежи', icon: <CreditCard className="w-4 h-4" />, path: '/finance/payments' },
       { id: 'finance-statements', label: 'Выписки за период', icon: <Landmark className="w-4 h-4" />, path: '/bank-statements' },
       { id: 'finance-recurring', label: 'Периодические платежи', icon: <CalendarClock className="w-4 h-4" />, path: '/supply/recurring' },
       { id: 'finance-debtors', label: 'Дебиторская задолженность', icon: <Scale className="w-4 h-4" />, path: '/finance/debtors' },
       { id: 'finance-accounting', label: 'Бухгалтерия', icon: <Calculator className="w-4 h-4" />, path: '/finance/accounting' },
       { id: 'finance-budget', label: 'Расходный бюджет', icon: <Wallet className="w-4 h-4" />, path: '/finance/budget' },
       { id: 'finance-indicators', label: 'Финансовые показатели', icon: <PieChart className="w-4 h-4" />, path: '/finance/indicators' },
+      { id: 'finance-instructions', label: 'Инструкции', icon: <BookOpen className="w-4 h-4" />, path: '/finance/instructions' },
     ],
   },
 
@@ -106,7 +105,7 @@ const menuItems: MenuItem[] = [
     path: '/supply',
     children: [
       { id: 'kanban-supply', label: 'Канбан Снабжения', icon: <ShoppingCart className="w-4 h-4" />, path: '/kanban/supply' },
-      { id: 'supply-invoices', label: 'Счета на оплату', icon: <Receipt className="w-4 h-4" />, path: '/supply/invoices', isShortcut: true },
+      { id: 'supply-invoices', label: 'Счета на оплату', icon: <Receipt className="w-4 h-4" />, path: '/finance/payments?tab=invoices', isShortcut: true },
       { id: 'supply-drivers', label: 'Календарь водителей', icon: <Calendar className="w-4 h-4" />, path: '/supply/drivers' },
       { id: 'supply-moderation', label: 'Модерация товаров', icon: <CheckSquare className="w-4 h-4" />, path: '/catalog/moderation', isShortcut: true },
       { id: 'warehouse', label: 'Склад: Остатки', icon: <Package className="w-4 h-4" />, path: '/warehouse' },
@@ -174,7 +173,6 @@ const menuItems: MenuItem[] = [
     icon: <Archive className="w-5 h-5" />,
     path: '/unassigned',
     children: [
-      { id: 'legacy-payments', label: 'Платежи (legacy)', icon: <DollarSign className="w-4 h-4" />, path: '/payments' },
       { id: 'legacy-orders', label: 'Платёжные поручения', icon: <Receipt className="w-4 h-4" />, path: '/bank-payment-orders' },
       { id: 'legacy-bitrix-requests', label: 'Запросы из Битрикс', icon: <ShoppingCart className="w-4 h-4" />, path: '/supply/requests' },
       { id: 'legacy-bitrix-settings', label: 'Настройки Битрикс24', icon: <Link2 className="w-4 h-4" />, path: '/settings/bitrix' },

@@ -24,6 +24,7 @@ from contracts.views import (
 from payments.views import (
     PaymentViewSet, PaymentRegistryViewSet, ExpenseCategoryViewSet,
     InvoiceViewSet, RecurringPaymentViewSet, IncomeRecordViewSet,
+    JournalEntryViewSet,
 )
 from core.views import UserViewSet, NotificationViewSet
 from core.views import SystemNotificationCreateView
@@ -46,6 +47,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'recurring-payments', RecurringPaymentViewSet, basename='recurring-payment')
 router.register(r'income-records', IncomeRecordViewSet, basename='income-record')
+router.register(r'journal-entries', JournalEntryViewSet, basename='journal-entry')
 
 @api_view(['GET'])
 def api_root(request):

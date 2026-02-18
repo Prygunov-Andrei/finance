@@ -1,4 +1,7 @@
+from decimal import Decimal
+
 from django.db import models
+from django.db.models import Sum
 from django.core.exceptions import ValidationError
 from core.models import TimestampedModel
 from django.conf import settings
@@ -20,21 +23,40 @@ def invoice_file_path(instance, filename):
 
 
 # =============================================================================
-# ExpenseCategory — категория расходов/доходов (без изменений)
+# ExpenseCategory — Внутренний план счетов
 # =============================================================================
 
 class ExpenseCategory(TimestampedModel):
-    """Категория расходов/доходов с поддержкой иерархии"""
+    """
+    Внутренний план счетов.
+
+    Объединяет категории расходов/доходов, системные счета (Прибыль,
+    Оборотные средства, НДС), виртуальные счета объектов и субсчета
+    по договорам. Иерархическая структура через parent.
+    """
+
+    class AccountType(models.TextChoices):
+        EXPENSE = 'expense', 'Расходная категория'
+        INCOME = 'income', 'Доходная категория'
+        SYSTEM = 'system', 'Системный счёт'
+        OBJECT = 'object', 'Счёт объекта'
+        CONTRACT = 'contract', 'Субсчёт договора'
 
     name = models.CharField(
         max_length=255,
-        verbose_name='Название категории'
+        verbose_name='Название'
     )
     code = models.CharField(
         max_length=100,
         unique=True,
-        verbose_name='Код категории',
-        help_text='Уникальный код для программного использования (например: salary, rent)'
+        verbose_name='Код счёта',
+        help_text='Уникальный код (например: salary, rent, profit, obj_123)'
+    )
+    account_type = models.CharField(
+        max_length=20,
+        choices=AccountType.choices,
+        default=AccountType.EXPENSE,
+        verbose_name='Тип счёта',
     )
     parent = models.ForeignKey(
         'self',
@@ -42,8 +64,26 @@ class ExpenseCategory(TimestampedModel):
         related_name='children',
         null=True,
         blank=True,
-        verbose_name='Родительская категория',
-        help_text='Оставьте пустым для категории верхнего уровня'
+        verbose_name='Родительский счёт',
+        help_text='Оставьте пустым для счёта верхнего уровня'
+    )
+    object = models.OneToOneField(
+        'objects.Object',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='internal_account',
+        verbose_name='Объект',
+        help_text='Заполняется автоматически для типа OBJECT',
+    )
+    contract = models.OneToOneField(
+        'contracts.Contract',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='internal_account',
+        verbose_name='Договор',
+        help_text='Заполняется автоматически для типа CONTRACT',
     )
     description = models.TextField(
         blank=True,
@@ -51,8 +91,8 @@ class ExpenseCategory(TimestampedModel):
     )
     is_active = models.BooleanField(
         default=True,
-        verbose_name='Активна',
-        help_text='Неактивные категории не отображаются в списках'
+        verbose_name='Активен',
+        help_text='Неактивные счета не отображаются в списках'
     )
     requires_contract = models.BooleanField(
         default=False,
@@ -66,12 +106,13 @@ class ExpenseCategory(TimestampedModel):
     )
 
     class Meta:
-        verbose_name = 'Категория расходов/доходов'
-        verbose_name_plural = 'Категории расходов/доходов'
+        verbose_name = 'Внутренний план счетов'
+        verbose_name_plural = 'Внутренний план счетов'
         ordering = ['sort_order', 'name']
         indexes = [
             models.Index(fields=['code']),
             models.Index(fields=['parent', 'is_active']),
+            models.Index(fields=['account_type']),
         ]
 
     def __str__(self) -> str:
@@ -85,7 +126,7 @@ class ExpenseCategory(TimestampedModel):
             while parent:
                 if parent.id == self.id:
                     raise ValidationError(
-                        'Нельзя создать циклическую ссылку на родительскую категорию'
+                        'Нельзя создать циклическую ссылку на родительский счёт'
                     )
                 parent = parent.parent
 
@@ -93,6 +134,18 @@ class ExpenseCategory(TimestampedModel):
         if self.parent:
             return f"{self.parent.get_full_path()} → {self.name}"
         return self.name
+
+    def get_balance(self) -> Decimal:
+        """Баланс = сумма входящих проводок - сумма исходящих проводок."""
+        credit = (
+            self.credit_entries.aggregate(total=Sum('amount'))['total']
+            or Decimal('0')
+        )
+        debit = (
+            self.debit_entries.aggregate(total=Sum('amount'))['total']
+            or Decimal('0')
+        )
+        return credit - debit
 
 
 # =============================================================================
@@ -389,6 +442,21 @@ class Invoice(TimestampedModel):
         PAID = 'paid', 'Оплачен'
         CANCELLED = 'cancelled', 'Отменён'
 
+    class InvoiceType(models.TextChoices):
+        SUPPLIER = 'supplier', 'От Поставщика'
+        ACT_BASED = 'act_based', 'По Акту выполненных работ'
+        HOUSEHOLD = 'household', 'Хозяйственная деятельность'
+        WAREHOUSE = 'warehouse', 'Закупка на склад'
+        INTERNAL_TRANSFER = 'internal_transfer', 'Внутренний перевод'
+
+    # --- Тип счёта ---
+    invoice_type = models.CharField(
+        max_length=20,
+        choices=InvoiceType.choices,
+        default=InvoiceType.SUPPLIER,
+        verbose_name='Тип счёта',
+    )
+
     # --- Источник ---
     source = models.CharField(
         max_length=20,
@@ -455,12 +523,27 @@ class Invoice(TimestampedModel):
         related_name='invoices',
         verbose_name='Договор',
     )
+    act = models.ForeignKey(
+        'contracts.Act',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='invoices',
+        verbose_name='Акт выполненных работ',
+        help_text='Для типа ACT_BASED',
+    )
     category = models.ForeignKey(
         ExpenseCategory,
         on_delete=models.PROTECT,
         null=True, blank=True,
         related_name='invoices',
-        verbose_name='Категория',
+        verbose_name='Категория / счёт плана',
+    )
+    target_internal_account = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='incoming_transfers',
+        verbose_name='Целевой счёт (для внутренних переводов)',
     )
     account = models.ForeignKey(
         'accounting.Account',
@@ -475,6 +558,18 @@ class Invoice(TimestampedModel):
         null=True, blank=True,
         related_name='invoices',
         verbose_name='Юридическое лицо',
+    )
+
+    # --- Долг ---
+    is_debt = models.BooleanField(
+        default=False,
+        verbose_name='Долговой счёт',
+        help_text='Отметить, если оплата будет отложена',
+    )
+    skip_recognition = models.BooleanField(
+        default=False,
+        verbose_name='Пропустить распознавание',
+        help_text='Не выполнять LLM-распознавание при загрузке',
     )
 
     # --- Суммы ---
@@ -580,6 +675,8 @@ class Invoice(TimestampedModel):
             models.Index(fields=['status', 'due_date']),
             models.Index(fields=['object', 'status']),
             models.Index(fields=['counterparty', 'status']),
+            models.Index(fields=['invoice_type']),
+            models.Index(fields=['is_debt']),
         ]
 
     def __str__(self) -> str:
@@ -844,11 +941,32 @@ class RecurringPayment(TimestampedModel):
 class IncomeRecord(TimestampedModel):
     """Поступление (доход) — упрощённая модель без workflow согласования."""
 
+    class IncomeType(models.TextChoices):
+        CUSTOMER_ACT = 'customer_act', 'Оплата по Акту от Заказчика'
+        ADVANCE = 'advance', 'Авансовый платёж'
+        WARRANTY_RETURN = 'warranty_return', 'Возврат гарантийных удержаний'
+        SUPPLIER_RETURN = 'supplier_return', 'Возврат от Поставщика'
+        BANK_INTEREST = 'bank_interest', 'Проценты банка'
+        OTHER = 'other', 'Прочие поступления'
+
+    income_type = models.CharField(
+        max_length=20,
+        choices=IncomeType.choices,
+        default=IncomeType.OTHER,
+        verbose_name='Тип поступления',
+    )
     account = models.ForeignKey(
         'accounting.Account',
         on_delete=models.PROTECT,
         related_name='income_records',
         verbose_name='Счёт зачисления',
+    )
+    object = models.ForeignKey(
+        'objects.Object',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='income_records',
+        verbose_name='Объект',
     )
     contract = models.ForeignKey(
         'contracts.Contract',
@@ -857,11 +975,18 @@ class IncomeRecord(TimestampedModel):
         related_name='income_records',
         verbose_name='Договор',
     )
+    act = models.ForeignKey(
+        'contracts.Act',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='income_records',
+        verbose_name='Акт',
+    )
     category = models.ForeignKey(
         ExpenseCategory,
         on_delete=models.PROTECT,
         related_name='income_records',
-        verbose_name='Категория',
+        verbose_name='Счёт плана',
     )
     legal_entity = models.ForeignKey(
         'accounting.LegalEntity',
@@ -876,12 +1001,23 @@ class IncomeRecord(TimestampedModel):
         related_name='income_records',
         verbose_name='Контрагент',
     )
+    bank_transaction = models.ForeignKey(
+        'banking.BankTransaction',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='income_records',
+        verbose_name='Банковская транзакция',
+    )
     amount = models.DecimalField(
         max_digits=14, decimal_places=2,
         verbose_name='Сумма',
     )
     payment_date = models.DateField(
         verbose_name='Дата поступления',
+    )
+    is_cash = models.BooleanField(
+        default=False,
+        verbose_name='Наличный платёж',
     )
     description = models.TextField(
         blank=True,
@@ -900,7 +1036,95 @@ class IncomeRecord(TimestampedModel):
         indexes = [
             models.Index(fields=['payment_date']),
             models.Index(fields=['account', 'payment_date']),
+            models.Index(fields=['income_type']),
+            models.Index(fields=['object', 'payment_date']),
         ]
 
     def __str__(self):
         return f'Поступление {self.amount} от {self.payment_date}'
+
+
+# =============================================================================
+# JournalEntry — проводка (двойная запись)
+# =============================================================================
+
+class JournalEntry(TimestampedModel):
+    """
+    Проводка — запись о перемещении средств между счетами
+    Внутреннего плана счетов (ExpenseCategory).
+
+    from_account (дебет): откуда списываются средства.
+    to_account (кредит): куда зачисляются средства.
+    """
+
+    date = models.DateField(
+        verbose_name='Дата проводки',
+    )
+    from_account = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        related_name='debit_entries',
+        verbose_name='Со счёта (дебет)',
+    )
+    to_account = models.ForeignKey(
+        ExpenseCategory,
+        on_delete=models.PROTECT,
+        related_name='credit_entries',
+        verbose_name='На счёт (кредит)',
+    )
+    amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        verbose_name='Сумма',
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name='Описание',
+    )
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='journal_entries',
+        verbose_name='Счёт на оплату',
+    )
+    income_record = models.ForeignKey(
+        IncomeRecord,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='journal_entries',
+        verbose_name='Поступление',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='journal_entries',
+        verbose_name='Создал',
+    )
+    is_auto = models.BooleanField(
+        default=False,
+        verbose_name='Автоматическая проводка',
+        help_text='Создана автоматически при оплате/поступлении',
+    )
+
+    class Meta:
+        verbose_name = 'Проводка'
+        verbose_name_plural = 'Проводки'
+        ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['from_account', 'date']),
+            models.Index(fields=['to_account', 'date']),
+        ]
+
+    def __str__(self):
+        return (
+            f'{self.date}: {self.from_account.name} → '
+            f'{self.to_account.name} — {self.amount}'
+        )
+
+    def clean(self):
+        if self.from_account_id == self.to_account_id:
+            raise ValidationError(
+                'Счёт-источник и счёт-получатель не могут совпадать'
+            )
