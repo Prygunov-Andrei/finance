@@ -34,7 +34,6 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '217.151.231.96',  # Production server IP
     '.ngrok-free.app',
     'finance.ngrok.app',  # Development ngrok domain
     '.ngrok.io',
@@ -44,6 +43,11 @@ ALLOWED_HOSTS = [
 PRODUCTION_DOMAIN = os.environ.get('PRODUCTION_DOMAIN', '')
 if PRODUCTION_DOMAIN:
     ALLOWED_HOSTS.extend([PRODUCTION_DOMAIN, f'www.{PRODUCTION_DOMAIN}'])
+
+# Optional: allow direct IP access (IP-only setup)
+PRODUCTION_IP = os.environ.get('PRODUCTION_IP', '')
+if PRODUCTION_IP:
+    ALLOWED_HOSTS.append(PRODUCTION_IP)
 
 CSRF_TRUSTED_ORIGINS = [
     'https://finance.ngrok.app',

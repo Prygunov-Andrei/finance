@@ -21,14 +21,20 @@ MINIO_PASSWORD=$(generate_password)
 DJANGO_SECRET=$(generate_django_secret)
 BANK_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 
+# Попробовать определить внешний IP (для IP-only режима), чтобы не хардкодить его в репозитории.
+DEFAULT_IP="$(curl -fsSL https://api.ipify.org 2>/dev/null || true)"
+if [ -z "$DEFAULT_IP" ]; then
+    DEFAULT_IP="SERVER_IP"
+fi
+
 # Запрос домена у пользователя
 read -p "Enter your domain name (or press Enter for IP-only setup): " DOMAIN_NAME
 
 if [ -z "$DOMAIN_NAME" ]; then
-    DOMAIN_NAME="217.151.231.96"
-    WEBHOOK_URL="http://217.151.231.96/bot/webhook"
-    MINIAPP_URL="http://217.151.231.96/miniapp/"
-    PUBLIC_URL="http://217.151.231.96"
+    DOMAIN_NAME="${DEFAULT_IP}"
+    WEBHOOK_URL="http://${DOMAIN_NAME}/bot/webhook"
+    MINIAPP_URL="http://${DOMAIN_NAME}/miniapp/"
+    PUBLIC_URL="http://${DOMAIN_NAME}"
     echo "Using IP-only setup (no HTTPS)"
 else
     WEBHOOK_URL="https://${DOMAIN_NAME}/bot/webhook"
@@ -36,6 +42,9 @@ else
     PUBLIC_URL="https://${DOMAIN_NAME}"
     echo "Using domain: ${DOMAIN_NAME}"
 fi
+
+# Telegram токен лучше не хранить в git; заполняется на сервере в /opt/finans_assistant/.env
+read -p "Enter TELEGRAM_BOT_TOKEN (optional; press Enter to skip): " TELEGRAM_BOT_TOKEN
 
 # Создание .env файла
 cat > /opt/finans_assistant/.env << EOF
@@ -81,15 +90,15 @@ OPENAI_API_KEY=
 GEMINI_API_KEY=
 
 # --- Telegram Bot ---
-TELEGRAM_BOT_TOKEN=8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 BOT_WEBHOOK_URL=${WEBHOOK_URL}
 MINI_APP_URL=${MINIAPP_URL}
 
 # --- ElevenLabs (transcription) ---
-ELEVENLABS_API_KEY=sk_b7d766e2ff68578bd4af7670534f429991bf3838ee9425e4
+ELEVENLABS_API_KEY=
 
 # --- Sentry ---
-SENTRY_DSN=https://637ea7a0734e1fedf97c76c688ecd65c@o4510856303673344.ingest.de.sentry.io/4510856306491472
+SENTRY_DSN=
 SENTRY_ENVIRONMENT=production
 
 # --- Public URLs (for client-side references) ---

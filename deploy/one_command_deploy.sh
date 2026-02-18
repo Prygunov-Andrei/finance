@@ -5,7 +5,7 @@
 # Этот скрипт нужно выполнить НА production сервере
 # 
 # Использование:
-#   1. SSH на сервер: ssh root@217.151.231.96
+#   1. SSH на сервер: ssh root@SERVER_IP
 #   2. Скопировать этот скрипт или выполнить команду ниже:
 #
 # curl -sSL https://raw.githubusercontent.com/Prygunov-Andrei/finance/main/deploy/one_command_deploy.sh | bash
@@ -94,68 +94,8 @@ fi
 cd /opt/finans_assistant
 
 echo -e "${GREEN}[7/12] Generating production .env file...${NC}"
-# Генерация безопасных паролей
-DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-MINIO_USER="minio_$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-12)"
-MINIO_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-DJANGO_SECRET=$(python3 -c "import secrets; print(''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*(-_=+)') for i in range(50)))" 2>/dev/null || openssl rand -base64 50)
-BANK_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
-
-# Определение домена (пока работаем по IP)
-DOMAIN="217.151.231.96"
-WEBHOOK_URL="http://${DOMAIN}/bot/webhook"
-MINIAPP_URL="http://${DOMAIN}/miniapp/"
-PUBLIC_URL="http://${DOMAIN}"
-
-cat > .env << EOF
-# =============================================================================
-# PRODUCTION Environment Variables
-# Generated: $(date)
-# =============================================================================
-
-# --- PostgreSQL ---
-DB_NAME=finans_assistant_prod
-DB_USER=finans_user
-DB_PASSWORD=${DB_PASSWORD}
-
-# --- MinIO ---
-MINIO_ROOT_USER=${MINIO_USER}
-MINIO_ROOT_PASSWORD=${MINIO_PASSWORD}
-
-# --- Django ---
-DEBUG=False
-SECRET_KEY=${DJANGO_SECRET}
-BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY}
-
-# --- Supply / LLM (заполните после деплоя) ---
-BITRIX_WEBHOOK_TIMEOUT=30
-OPENAI_API_KEY=
-GEMINI_API_KEY=
-
-# --- Telegram Bot ---
-TELEGRAM_BOT_TOKEN=8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU
-BOT_WEBHOOK_URL=${WEBHOOK_URL}
-MINI_APP_URL=${MINIAPP_URL}
-
-# --- ElevenLabs ---
-ELEVENLABS_API_KEY=sk_b7d766e2ff68578bd4af7670534f429991bf3838ee9425e4
-
-# --- Sentry ---
-SENTRY_DSN=https://637ea7a0734e1fedf97c76c688ecd65c@o4510856303673344.ingest.de.sentry.io/4510856306491472
-SENTRY_ENVIRONMENT=production
-
-# --- Public URLs ---
-PUBLIC_BACKEND_URL=${PUBLIC_URL}
-PRODUCTION_DOMAIN=${DOMAIN}
-EOF
-
+./deploy/create_production_env.sh
 echo "✓ Production .env created"
-echo ""
-echo -e "${YELLOW}Generated credentials (SAVE THESE!):${NC}"
-echo "  PostgreSQL password: ${DB_PASSWORD}"
-echo "  MinIO user: ${MINIO_USER}"
-echo "  MinIO password: ${MINIO_PASSWORD}"
-echo ""
 
 echo -e "${GREEN}[8/12] Installing nginx...${NC}"
 apt install -y nginx
@@ -195,7 +135,7 @@ echo "   systemctl start nginx"
 echo "   systemctl enable nginx"
 echo ""
 echo "3. Configure domain (optional):"
-echo "   - Setup DNS A-record: your-domain.com -> 217.151.231.96"
+echo "   - Setup DNS A-record: your-domain.com -> SERVER_IP"
 echo "   - Install SSL: apt install certbot python3-certbot-nginx"
 echo "   - Run: certbot --nginx -d your-domain.com"
 echo ""

@@ -22,7 +22,11 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${YELLOW}Current server information:${NC}"
-echo "  IP: 217.151.231.96"
+SERVER_IP="$(curl -fsSL https://api.ipify.org 2>/dev/null || true)"
+if [ -z "$SERVER_IP" ]; then
+    SERVER_IP="SERVER_IP"
+fi
+echo "  IP: ${SERVER_IP}"
 echo "  OS: $(lsb_release -d | cut -f2)"
 echo "  User: $(whoami)"
 echo ""
@@ -119,7 +123,7 @@ echo ""
 echo -e "${YELLOW}=== NEXT STEPS ===${NC}"
 echo ""
 echo "1. Configure DNS:"
-echo "   - Point your domain to 217.151.231.96"
+echo "   - Point your domain to SERVER_IP"
 echo "   - Or use Cloudflare DNS proxy"
 echo ""
 echo "2. Setup SSL Certificate:"

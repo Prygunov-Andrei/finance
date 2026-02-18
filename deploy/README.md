@@ -4,12 +4,16 @@
 
 ## Быстрый старт
 
-**Сервер:** `217.151.231.96` (SSH: `root@217.151.231.96`)
+**Сервер:** `SERVER_IP` / `PRODUCTION_DOMAIN` (SSH: `root@SERVER_IP`)
+
+Текущий production:
+- `SERVER_IP`: `72.56.111.111`
+- `PRODUCTION_DOMAIN`: `avgust.prygunov.com`
 
 ### Автоматическая установка (рекомендуется)
 
 ```bash
-ssh root@217.151.231.96
+ssh root@SERVER_IP
 cd /opt
 git clone https://github.com/Prygunov-Andrei/finance.git finans_assistant
 cd finans_assistant/deploy
@@ -73,7 +77,7 @@ crontab -e
 │   └── crontab.example              # Пример cron jobs
 ├── docker-compose.prod.yml          # Production Docker Compose
 ├── .env                             # Production environment variables (не в Git!)
-└── docs/work_logging/DEPLOYMENT.md  # Детальная документация
+└── docs/deploy/PRODUCTION.md         # Деплой-документация (индекс: docs/deploy/README.md)
 ```
 
 ---
@@ -93,7 +97,7 @@ crontab -e
 ```
 Type: A
 Name: @
-IPv4 address: 217.151.231.96
+IPv4 address: SERVER_IP
 Proxy status: ☁️ Proxied (оранжевое облако)
 TTL: Auto
 ```
@@ -102,7 +106,7 @@ TTL: Auto
 ```
 Type: A
 Name: www
-IPv4 address: 217.151.231.96
+IPv4 address: SERVER_IP
 Proxy status: ☁️ Proxied
 ```
 
@@ -225,7 +229,7 @@ curl https://your-domain.com/bot/webhook
 ### Проверка Telegram webhook
 
 ```bash
-curl "https://api.telegram.org/bot8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU/getWebhookInfo"
+curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 ```
 
 Должен вернуть:
@@ -408,7 +412,7 @@ ALTER USER finans_user WITH PASSWORD 'new_password';
 **Решение:**
 1. Проверить webhook info:
    ```bash
-   curl "https://api.telegram.org/bot8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU/getWebhookInfo"
+   curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
    ```
 2. Проверить логи бота:
    ```bash
@@ -457,7 +461,7 @@ ALTER USER finans_user WITH PASSWORD 'new_password';
 ## Контакты и поддержка
 
 - **GitHub**: https://github.com/Prygunov-Andrei/finance
-- **Документация**: `/opt/finans_assistant/docs/work_logging/`
+- **Документация**: `/opt/finans_assistant/docs/deploy/`
 - **Логи**: `docker compose -f docker-compose.prod.yml logs -f`
 
 ---

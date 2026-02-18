@@ -1,15 +1,15 @@
 # 🚀 Production Deployment - Quick Reference
 
 ## Server Info
-- **IP**: `217.151.231.96` (IPv6: `2a03:6f02::1:ef0`)
-- **SSH**: `ssh root@217.151.231.96`
-- **Password**: `nmuy@HPC-8L7TJ` ⚠️ **(НЕ коммитить! Только для локальной ref)**
+- **IP/Domain**: `SERVER_IP` / `PRODUCTION_DOMAIN` (текущий production: `72.56.111.111` / `avgust.prygunov.com`)
+- **SSH**: `ssh root@SERVER_IP` (пример: `ssh root@72.56.111.111`)
+- **Password**: `<ROOT_PASSWORD>` (не хранить в репозитории)
 
 ## ⚡ Quick Deploy
 
 ```bash
 # 1. SSH в production сервер
-ssh root@217.151.231.96
+ssh root@SERVER_IP
 
 # 2. Запустить мастер-скрипт
 cd /opt
@@ -35,7 +35,7 @@ chmod +x master_setup.sh
 
 ### 1. Настроить DNS/Cloudflare
 
-- Добавить A-запись: `your-domain.com` → `217.151.231.96`
+- Добавить A-запись: `your-domain.com` → `SERVER_IP`
 - Включить Cloudflare Proxy (оранжевое облако)
 - SSL/TLS mode: **Full (Strict)**
 
@@ -114,7 +114,7 @@ curl https://your-domain.com/health
 curl https://your-domain.com/api/v1/
 
 # Webhook status
-curl "https://api.telegram.org/bot8462412197:AAGyBinH5uYv1vTaum-4ry34gGCsGKLazaU/getWebhookInfo"
+curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 
 # Логи
 docker compose -f docker-compose.prod.yml logs -f backend
@@ -143,8 +143,8 @@ docker compose -f docker-compose.prod.yml logs -f [service]
 ## 📚 Документация
 
 - **Полное руководство**: [`deploy/README.md`](README.md)
-- **Техническая документация**: [`docs/work_logging/DEPLOYMENT.md`](../docs/work_logging/DEPLOYMENT.md)
-- **Архитектура**: [`docs/work_logging/ARCHITECTURE.md`](../docs/work_logging/ARCHITECTURE.md)
+- **Деплой (индекс)**: [`docs/deploy/README.md`](../docs/deploy/README.md)
+- **Production guide**: [`docs/deploy/PRODUCTION.md`](../docs/deploy/PRODUCTION.md)
 
 ## 🆘 Troubleshooting
 
