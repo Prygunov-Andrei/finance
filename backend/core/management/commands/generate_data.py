@@ -967,12 +967,15 @@ class Command(BaseCommand):
                 object=obj,
                 counterparty=counterparty,
                 parent_tkp=parent_tkp,
-                mounting_estimate=mounting_estimate,
                 total_amount=Decimal(str(random.randint(1000000, 10000000))),
                 man_hours=Decimal(str(random.randint(100, 1000))),
                 status=random.choice(MountingProposal.Status.choices)[0],
                 created_by=user
             )
+            
+            if mounting_estimates:
+                selected = random.sample(mounting_estimates, min(2, len(mounting_estimates)))
+                mp.mounting_estimates.set(selected)
             
             # Условия
             conditions = list(MountingCondition.objects.all())

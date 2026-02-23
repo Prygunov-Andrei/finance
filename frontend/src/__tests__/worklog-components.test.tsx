@@ -65,7 +65,7 @@ let SupergroupSection: any;
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  const mod = await import('../components/ObjectDetail');
+  const mod = await import('../components/objects/WorkJournalTab');
   WorkJournalTab = mod.WorkJournalTab;
   SummaryCard = mod.SummaryCard;
   OverviewSection = mod.OverviewSection;

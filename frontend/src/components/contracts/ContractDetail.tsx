@@ -2,10 +2,11 @@ import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { CreateContractDialog } from '../CreateContractDialog';
 import { ContractAmendmentsTab } from '../ContractAmendmentsTab';
+import { ContractTextEditor } from './ContractTextEditor';
 import { formatDate, formatAmount, formatCurrency } from '../../lib/utils';
 import { CONSTANTS, COLORS } from '../../constants';
 
-type TabType = 'info' | 'amendments' | 'schedule' | 'acts' | 'cashflow';
+type TabType = 'info' | 'amendments' | 'schedule' | 'acts' | 'cashflow' | 'text';
 
 export function ContractDetail() {
   const { id } = useParams<{ id: string }>();
@@ -245,6 +246,16 @@ export function ContractDetail() {
           >
             Cash-flow
           </button>
+          <button
+            onClick={() => setActiveTab('text')}
+            className={`px-4 py-2 -mb-px transition-colors ${
+              activeTab === 'text'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Текст договора
+          </button>
         </div>
       </div>
 
@@ -254,6 +265,7 @@ export function ContractDetail() {
       {activeTab === 'schedule' && <WorkScheduleTab contractId={contract.id} />}
       {activeTab === 'acts' && <ActsTab contractId={contract.id} />}
       {activeTab === 'cashflow' && <CashFlowTab contractId={contract.id} />}
+      {activeTab === 'text' && <ContractTextEditorTab contractId={contract.id} />}
 
       {/* Диалог редактирования */}
       <CreateContractDialog
@@ -265,7 +277,15 @@ export function ContractDetail() {
   );
 }
 
-// Заглушка для вкладки "Основное"
+function ContractTextEditorTab({ contractId }: { contractId: number }) {
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <h2 className="text-gray-900 mb-4">Текст договора</h2>
+      <ContractTextEditor contractId={contractId} />
+    </div>
+  );
+}
+
 function InfoTab({ contract }: { contract: ContractDetailType }) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

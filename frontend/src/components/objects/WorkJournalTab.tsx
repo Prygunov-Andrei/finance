@@ -240,7 +240,7 @@ export function WorkJournalTab({ objectId }: { objectId: number }) {
 
 // --------------- Summary Card ---------------
 
-function SummaryCard({
+export function SummaryCard({
   icon: Icon,
   label,
   value,
@@ -271,7 +271,7 @@ function SummaryCard({
 
 // --------------- Overview Section ---------------
 
-function OverviewSection({ shifts }: { shifts: WorklogShift[] }) {
+export function OverviewSection({ shifts }: { shifts: WorklogShift[] }) {
   if (!shifts || shifts.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
@@ -415,7 +415,7 @@ function ShiftRow({ shift, onActivate, onClose }: {
 
 // --------------- Shifts Section ---------------
 
-function ShiftsSection({
+export function ShiftsSection({
   objectId,
   data,
   isLoading,
@@ -655,7 +655,7 @@ function ShiftsSection({
 
 // --------------- Media Section ---------------
 
-function MediaSection({
+export function MediaSection({
   data,
   isLoading,
   page,
@@ -732,7 +732,7 @@ function MediaSection({
 
 // --------------- Media Card ---------------
 
-function MediaCard({ media }: { media: WorklogMedia }) {
+export function MediaCard({ media }: { media: WorklogMedia }) {
   const IconComponent = MEDIA_TYPE_ICONS[media.media_type] || FileText;
   const tagStyle = MEDIA_TAG_STYLES[media.tag] || MEDIA_TAG_STYLES.other;
   const isVisual = media.media_type === 'photo' || media.media_type === 'video';
@@ -783,7 +783,7 @@ function MediaCard({ media }: { media: WorklogMedia }) {
 
 // --------------- Reports Section ---------------
 
-function ReportsSection({
+export function ReportsSection({
   data,
   isLoading,
   page,
@@ -892,7 +892,7 @@ function ReportsSection({
 
 // --------------- Pagination Bar ---------------
 
-function PaginationBar({
+export function PaginationBar({
   count,
   page,
   pageSize,
@@ -942,7 +942,7 @@ function PaginationBar({
 
 // --------------- Report Detail Dialog ---------------
 
-function ReportDetailDialog({
+export function ReportDetailDialog({
   reportId,
   open,
   onOpenChange,

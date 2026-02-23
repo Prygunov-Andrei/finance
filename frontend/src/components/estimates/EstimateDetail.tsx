@@ -10,8 +10,9 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
-import { ArrowLeft, Loader2, FileText, Plus, Edit2, Trash2, Info, DollarSign, History, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, Plus, Edit2, Trash2, Info, DollarSign, History, FileSpreadsheet, Table2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { EstimateItemsEditor } from './EstimateItemsEditor';
 
 const STATUS_MAP = {
   draft: 'Черновик',
@@ -462,6 +463,10 @@ export function EstimateDetail() {
             <FileText className="w-4 h-4 mr-2" />
             Разделы
           </TabsTrigger>
+          <TabsTrigger value="items">
+            <Table2 className="w-4 h-4 mr-2" />
+            Строки сметы
+          </TabsTrigger>
           <TabsTrigger value="characteristics">
             <DollarSign className="w-4 h-4 mr-2" />
             Характеристики
@@ -679,6 +684,17 @@ export function EstimateDetail() {
               <p className="text-gray-500">Нет разделов</p>
             </div>
           )}
+        </TabsContent>
+
+        {/* Items Tab */}
+        <TabsContent value="items" className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <EstimateItemsEditor
+              estimateId={Number(id)}
+              sections={estimate?.sections || []}
+              readOnly={estimate?.status === 'approved' || estimate?.status === 'agreed'}
+            />
+          </div>
         </TabsContent>
 
         {/* Characteristics Tab */}

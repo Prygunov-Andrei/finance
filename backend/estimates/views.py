@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
@@ -253,6 +254,59 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
         matcher = EstimateAutoMatcher()
         result = matcher.auto_fill(estimate, price_list_id=price_list_id)
         return Response(result)
+
+    @action(detail=False, methods=['post'], url_path='import',
+            parser_classes=[MultiPartParser])
+    def import_file(self, request):
+        """Импорт строк сметы из Excel или PDF.
+        Если preview=true, возвращает предпросмотр без сохранения."""
+        estimate_id = request.data.get('estimate_id')
+        file = request.FILES.get('file')
+        preview_mode = request.data.get('preview', '').lower() in ('true', '1')
+
+        if not estimate_id or not file:
+            return Response(
+                {'error': 'Необходимы estimate_id и file'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            estimate = Estimate.objects.get(pk=estimate_id)
+        except Estimate.DoesNotExist:
+            return Response(
+                {'error': 'Смета не найдена'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        file_content = file.read()
+        filename = file.name.lower()
+
+        from .services.estimate_import_service import EstimateImportService
+        importer = EstimateImportService()
+
+        if filename.endswith(('.xlsx', '.xls')):
+            parsed = importer.import_from_excel(file_content, file.name)
+        elif filename.endswith('.pdf'):
+            parsed = importer.import_from_pdf(file_content, file.name)
+        else:
+            return Response(
+                {'error': 'Поддерживаются только файлы Excel (.xlsx) и PDF'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if preview_mode:
+            return Response({
+                'rows': [row.model_dump() for row in parsed.rows],
+                'sections': parsed.sections,
+                'total_rows': parsed.total_rows,
+                'confidence': parsed.confidence,
+            })
+
+        created_items = importer.save_imported_items(int(estimate_id), parsed)
+        return Response(
+            EstimateItemSerializer(created_items, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MountingEstimateViewSet(viewsets.ModelViewSet):

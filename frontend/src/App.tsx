@@ -14,6 +14,8 @@ import { ContractsList } from './components/contracts/ContractsList';
 import { ContractDetail } from './components/contracts/ContractDetail';
 import { ActsList } from './components/contracts/ActsList';
 import { ActDetail } from './components/ActDetail';
+import { ContractEstimateDetail } from './components/contracts/ContractEstimateDetail';
+import { ActDetailPage } from './components/contracts/ActDetailPage';
 import { Projects } from './components/estimates/Projects';
 import { ProjectDetail } from './components/estimates/ProjectDetail';
 import { Estimates } from './components/estimates/Estimates';
@@ -375,6 +377,13 @@ export default function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/contracts/estimates/:id" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <ContractEstimateDetail />
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/contracts/acts" element={
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
@@ -385,7 +394,7 @@ export default function App() {
           <Route path="/contracts/acts/:id" element={
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>
-                <ActDetail />
+                <ActDetailPage />
               </Layout>
             </ProtectedRoute>
           } />

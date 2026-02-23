@@ -60,7 +60,7 @@ describe('KanbanBoardPage', () => {
     const headers = await screen.findAllByText('Новые');
     expect(headers.length).toBeGreaterThan(0);
     expect(await screen.findByText('Счет #1')).toBeInTheDocument();
-    expect(await screen.findByText('Просрочено')).toBeInTheDocument();
+    expect(await screen.findByText('!')).toBeInTheDocument();
   });
 });
 

@@ -780,11 +780,174 @@ class ApiClient {
   }
 
   async exportAccumulativeEstimate(contractId: number) {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${(this as any).baseUrl}/contracts/${contractId}/accumulative-estimate/export/`, {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/contracts/${contractId}/accumulative-estimate/export/`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     return response.blob();
+  }
+
+  async getEstimateDeviations(contractId: number) {
+    return this.request<EstimateDeviationRow[]>(
+      `/contracts/${contractId}/estimate-deviations/`
+    );
+  }
+
+  // EstimateItem CRUD
+  async getEstimateItems(estimateId: number) {
+    const response = await this.request<PaginatedResponse<EstimateItem> | EstimateItem[]>(
+      `/estimate-items/?estimate=${estimateId}&ordering=sort_order,item_number`
+    );
+    if (response && typeof response === 'object' && 'results' in response) {
+      return (response as PaginatedResponse<EstimateItem>).results;
+    }
+    return response as EstimateItem[];
+  }
+
+  async createEstimateItem(data: CreateEstimateItemData) {
+    return this.request<EstimateItem>('/estimate-items/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateEstimateItem(id: number, data: Partial<CreateEstimateItemData>) {
+    return this.request<EstimateItem>(`/estimate-items/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEstimateItem(id: number) {
+    return this.request<void>(`/estimate-items/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async bulkCreateEstimateItems(items: CreateEstimateItemData[]) {
+    return this.request<EstimateItem[]>('/estimate-items/bulk-create/', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async bulkUpdateEstimateItems(items: Array<{ id: number } & Partial<CreateEstimateItemData>>) {
+    return this.request<EstimateItem[]>('/estimate-items/bulk-update/', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async autoMatchEstimateItems(estimateId: number, priceListId?: number) {
+    const body: Record<string, number> = { estimate_id: estimateId };
+    if (priceListId) body.price_list_id = priceListId;
+    return this.request<AutoMatchResult[]>('/estimate-items/auto-match/', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async importEstimateFile(estimateId: number, file: File, preview?: boolean) {
+    const formData = new FormData();
+    formData.append('estimate_id', estimateId.toString());
+    formData.append('file', file);
+    if (preview) formData.append('preview', 'true');
+    return this.request<EstimateImportPreview | EstimateItem[]>(
+      '/estimate-items/import/',
+      { method: 'POST', body: formData },
+    );
+  }
+
+  // ContractEstimateItem CRUD
+  async createContractEstimateItem(data: Partial<ContractEstimateItem>) {
+    return this.request<ContractEstimateItem>('/contract-estimate-items/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateContractEstimateItem(id: number, data: Partial<ContractEstimateItem>) {
+    return this.request<ContractEstimateItem>(`/contract-estimate-items/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteContractEstimateItem(id: number) {
+    return this.request<void>(`/contract-estimate-items/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ContractEstimateSection CRUD
+  async createContractEstimateSection(data: { contract_estimate: number; name: string; sort_order?: number }) {
+    return this.request<ContractEstimateSection>('/contract-estimate-sections/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateContractEstimateSection(id: number, data: Partial<{ name: string; sort_order: number }>) {
+    return this.request<ContractEstimateSection>(`/contract-estimate-sections/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteContractEstimateSection(id: number) {
+    return this.request<void>(`/contract-estimate-sections/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ContractEstimate actions
+  async createContractEstimateVersion(id: number, amendmentId?: number) {
+    return this.request<ContractEstimateListItem>(`/contract-estimates/${id}/create-version/`, {
+      method: 'POST',
+      body: JSON.stringify(amendmentId ? { amendment_id: amendmentId } : {}),
+    });
+  }
+
+  async splitContractEstimate(id: number, sectionsMapping: Array<{ section_ids: number[]; contract_id: number }>) {
+    return this.request<ContractEstimateListItem[]>(`/contract-estimates/${id}/split/`, {
+      method: 'POST',
+      body: JSON.stringify({ sections_mapping: sectionsMapping }),
+    });
+  }
+
+  async updateContractEstimate(id: number, data: Partial<ContractEstimateListItem>) {
+    return this.request<ContractEstimateListItem>(`/contract-estimates/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ContractText additional methods
+  async updateContractText(id: number, data: { content_md: string }) {
+    return this.request<ContractText>(`/contract-texts/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteContractText(id: number) {
+    return this.request<void>(`/contract-texts/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Invoice compliance check
+  async checkInvoiceCompliance(invoiceId: number) {
+    return this.request<InvoiceComplianceResult>(
+      `/contracts/check-invoice/${invoiceId}/`
+    );
+  }
+
+  async autoLinkInvoice(invoiceId: number) {
+    return this.request<InvoiceComplianceResult>(
+      `/contracts/auto-link-invoice/${invoiceId}/`,
+      { method: 'POST' },
+    );
   }
 
   // Work Schedule (дополнительные методы)
@@ -3124,6 +3287,115 @@ export interface EstimateRemainderRow {
   estimate_quantity: string;
   remaining_quantity: string;
   remaining_amount: string;
+}
+
+// EstimateItem (Строки сметы)
+export interface EstimateItem {
+  id: number;
+  estimate: number;
+  section: number;
+  subsection: number | null;
+  sort_order: number;
+  item_number: number;
+  name: string;
+  model_name: string;
+  unit: string;
+  quantity: string;
+  material_unit_price: string;
+  work_unit_price: string;
+  material_total: string;
+  work_total: string;
+  line_total: string;
+  product: number | null;
+  product_name?: string;
+  work_item: number | null;
+  work_item_name?: string;
+  is_analog: boolean;
+  analog_reason: string;
+  original_name: string;
+  source_price_history: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateEstimateItemData {
+  estimate: number;
+  section: number;
+  subsection?: number | null;
+  sort_order?: number;
+  item_number?: number;
+  name: string;
+  model_name?: string;
+  unit?: string;
+  quantity: string;
+  material_unit_price?: string;
+  work_unit_price?: string;
+  product?: number | null;
+  work_item?: number | null;
+  is_analog?: boolean;
+  analog_reason?: string;
+  original_name?: string;
+}
+
+export interface AutoMatchResult {
+  item_id: number;
+  name: string;
+  matched_product: { id: number; name: string; price: string } | null;
+  matched_work: { id: number; name: string; cost: string } | null;
+  product_confidence: number;
+  work_confidence: number;
+}
+
+export interface EstimateImportPreview {
+  rows: Array<{
+    item_number: number;
+    name: string;
+    model_name: string;
+    unit: string;
+    quantity: string;
+    material_unit_price: string;
+    work_unit_price: string;
+    section_name: string;
+  }>;
+  sections: string[];
+  total_rows: number;
+}
+
+export interface EstimateDeviationRow {
+  item_id: number;
+  item_number: number;
+  name: string;
+  unit: string;
+  deviation_type: 'analog' | 'price_exceeds' | 'quantity_exceeds' | 'additional';
+  estimate_value: string;
+  actual_value: string;
+  reason: string;
+}
+
+export interface EstimatePurchaseLink {
+  id: number;
+  contract_estimate_item: number;
+  invoice_item: number;
+  match_type: 'exact' | 'analog' | 'manual';
+  quantity_exceeds: boolean;
+  price_exceeds: boolean;
+  reason: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvoiceComplianceResult {
+  invoice_id: number;
+  items: Array<{
+    invoice_item_id: number;
+    invoice_item_name: string;
+    status: 'matched' | 'unmatched' | 'exceeds' | 'analog_candidate';
+    contract_estimate_item_id: number | null;
+    contract_estimate_item_name: string | null;
+    quantity_exceeds: boolean;
+    price_exceeds: boolean;
+    details: string;
+  }>;
 }
 
 // Contract Amendments (Дополнительные соглашения)
