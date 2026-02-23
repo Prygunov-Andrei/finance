@@ -6,19 +6,16 @@ import {
   Briefcase,
   ClipboardList,
 } from 'lucide-react';
+import { ObjectEstimatesList } from './contracts/ObjectEstimatesList';
+import { ObjectContractsList } from './contracts/ObjectContractsList';
+import { ObjectActsList } from './contracts/ObjectActsList';
+import { ObjectReconciliation } from './contracts/ObjectReconciliation';
 
 type ObjectExecutorsTabProps = {
   objectId: number;
 };
 
-const executorsSubTabs = [
-  {
-    value: 'installation-estimates',
-    label: 'Монтажные сметы',
-    icon: FileSpreadsheet,
-    title: 'Монтажные сметы исполнителей',
-    description: 'Монтажные сметы исполнителей для данного объекта.',
-  },
+const PLACEHOLDER_TABS = [
   {
     value: 'mp',
     label: 'МП',
@@ -33,42 +30,43 @@ const executorsSubTabs = [
     title: 'Переписка с исполнителями',
     description: 'Переписка с исполнителями по данному объекту.',
   },
-  {
-    value: 'contracts',
-    label: 'Договоры и ДОП',
-    icon: Briefcase,
-    title: 'Договоры и дополнительные соглашения',
-    description: 'Договоры и дополнительные соглашения с исполнителями.',
-  },
-  {
-    value: 'acts',
-    label: 'Акты',
-    icon: ClipboardList,
-    title: 'Акты выполненных работ',
-    description: 'Акты выполненных работ исполнителей.',
-  },
-  {
-    value: 'reconciliations',
-    label: 'Сверки',
-    icon: FileText,
-    title: 'Акты сверки',
-    description: 'Акты сверки с исполнителями.',
-  },
 ] as const;
 
 export function ObjectExecutorsTab({ objectId }: ObjectExecutorsTabProps) {
   return (
     <Tabs defaultValue="installation-estimates" className="w-full">
       <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
-        {executorsSubTabs.map((tab) => (
+        <TabsTrigger value="installation-estimates" className="gap-1.5">
+          <FileSpreadsheet className="w-4 h-4" />
+          Монтажные сметы
+        </TabsTrigger>
+        {PLACEHOLDER_TABS.map((tab) => (
           <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
             <tab.icon className="w-4 h-4" />
             {tab.label}
           </TabsTrigger>
         ))}
+        <TabsTrigger value="contracts" className="gap-1.5">
+          <Briefcase className="w-4 h-4" />
+          Договоры и ДОП
+        </TabsTrigger>
+        <TabsTrigger value="acts" className="gap-1.5">
+          <ClipboardList className="w-4 h-4" />
+          Акты
+        </TabsTrigger>
+        <TabsTrigger value="reconciliations" className="gap-1.5">
+          <FileText className="w-4 h-4" />
+          Сверки
+        </TabsTrigger>
       </TabsList>
 
-      {executorsSubTabs.map((tab) => (
+      <TabsContent value="installation-estimates">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectEstimatesList objectId={objectId} contractType="expense" />
+        </div>
+      </TabsContent>
+
+      {PLACEHOLDER_TABS.map((tab) => (
         <TabsContent key={tab.value} value={tab.value}>
           <div className="bg-white border border-gray-200 rounded-xl p-8">
             <div className="flex flex-col items-center justify-center text-center">
@@ -83,6 +81,24 @@ export function ObjectExecutorsTab({ objectId }: ObjectExecutorsTabProps) {
           </div>
         </TabsContent>
       ))}
+
+      <TabsContent value="contracts">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectContractsList objectId={objectId} contractType="expense" />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="acts">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectActsList objectId={objectId} contractType="expense" />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="reconciliations">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectReconciliation objectId={objectId} contractType="expense" />
+        </div>
+      </TabsContent>
     </Tabs>
   );
 }

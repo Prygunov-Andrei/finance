@@ -6,19 +6,16 @@ import {
   Briefcase,
   ClipboardList,
 } from 'lucide-react';
+import { ObjectEstimatesList } from './contracts/ObjectEstimatesList';
+import { ObjectContractsList } from './contracts/ObjectContractsList';
+import { ObjectActsList } from './contracts/ObjectActsList';
+import { ObjectReconciliation } from './contracts/ObjectReconciliation';
 
 type ObjectCustomerTabProps = {
   objectId: number;
 };
 
-const customerSubTabs = [
-  {
-    value: 'estimates',
-    label: 'Сметы',
-    icon: FileSpreadsheet,
-    title: 'Сметы заказчика',
-    description: 'Здесь будут отображаться сметы, связанные с данным объектом.',
-  },
+const PLACEHOLDER_TABS = [
   {
     value: 'tkp',
     label: 'ТКП',
@@ -33,42 +30,43 @@ const customerSubTabs = [
     title: 'Переписка с заказчиком',
     description: 'Переписка с заказчиком по данному объекту.',
   },
-  {
-    value: 'contracts',
-    label: 'Договоры и ДОП',
-    icon: Briefcase,
-    title: 'Договоры и дополнительные соглашения',
-    description: 'Договоры и дополнительные соглашения с заказчиком.',
-  },
-  {
-    value: 'acts',
-    label: 'Акты',
-    icon: ClipboardList,
-    title: 'Акты выполненных работ',
-    description: 'Акты выполненных работ для заказчика.',
-  },
-  {
-    value: 'reconciliations',
-    label: 'Сверки',
-    icon: FileText,
-    title: 'Акты сверки',
-    description: 'Акты сверки с заказчиком.',
-  },
 ] as const;
 
 export function ObjectCustomerTab({ objectId }: ObjectCustomerTabProps) {
   return (
     <Tabs defaultValue="estimates" className="w-full">
       <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
-        {customerSubTabs.map((tab) => (
+        <TabsTrigger value="estimates" className="gap-1.5">
+          <FileSpreadsheet className="w-4 h-4" />
+          Сметы
+        </TabsTrigger>
+        {PLACEHOLDER_TABS.map((tab) => (
           <TabsTrigger key={tab.value} value={tab.value} className="gap-1.5">
             <tab.icon className="w-4 h-4" />
             {tab.label}
           </TabsTrigger>
         ))}
+        <TabsTrigger value="contracts" className="gap-1.5">
+          <Briefcase className="w-4 h-4" />
+          Договоры и ДОП
+        </TabsTrigger>
+        <TabsTrigger value="acts" className="gap-1.5">
+          <ClipboardList className="w-4 h-4" />
+          Акты
+        </TabsTrigger>
+        <TabsTrigger value="reconciliations" className="gap-1.5">
+          <FileText className="w-4 h-4" />
+          Сверки
+        </TabsTrigger>
       </TabsList>
 
-      {customerSubTabs.map((tab) => (
+      <TabsContent value="estimates">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectEstimatesList objectId={objectId} contractType="income" />
+        </div>
+      </TabsContent>
+
+      {PLACEHOLDER_TABS.map((tab) => (
         <TabsContent key={tab.value} value={tab.value}>
           <div className="bg-white border border-gray-200 rounded-xl p-8">
             <div className="flex flex-col items-center justify-center text-center">
@@ -83,6 +81,24 @@ export function ObjectCustomerTab({ objectId }: ObjectCustomerTabProps) {
           </div>
         </TabsContent>
       ))}
+
+      <TabsContent value="contracts">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectContractsList objectId={objectId} contractType="income" />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="acts">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectActsList objectId={objectId} contractType="income" />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="reconciliations">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <ObjectReconciliation objectId={objectId} contractType="income" />
+        </div>
+      </TabsContent>
     </Tabs>
   );
 }

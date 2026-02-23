@@ -1,10 +1,13 @@
-from django.test import TestCase
-from django.core.exceptions import ValidationError
-from django.db import IntegrityError
-from catalog.models import Category, Product, ProductAlias, ProductPriceHistory
-from accounting.models import Counterparty
 from datetime import date, timedelta
 from decimal import Decimal
+
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.test import TestCase
+
+from accounting.models import Counterparty
+from catalog.models import Category, Product, ProductAlias, ProductPriceHistory, ProductWorkMapping
+from pricelists.models import WorkerGrade, WorkSection, WorkItem
 
 
 class CategoryModelTest(TestCase):
@@ -213,3 +216,203 @@ class ProductPriceHistoryTest(TestCase):
         prices = list(ProductPriceHistory.objects.filter(product=self.product))
         self.assertEqual(prices[0], new)
         self.assertEqual(prices[1], old)
+
+
+class ProductWorkMappingModelTest(TestCase):
+    """Тесты для модели ProductWorkMapping"""
+
+    def setUp(self):
+        self.section = WorkSection.objects.create(
+            code='VENT',
+            name='Вентиляция'
+        )
+        self.grade = WorkerGrade.objects.create(
+            grade=2,
+            name='Монтажник 2 разряда',
+            default_hourly_rate=Decimal('650.00')
+        )
+        self.work_item = WorkItem.objects.create(
+            article='V-001',
+            section=self.section,
+            name='Монтаж воздуховода',
+            unit=WorkItem.Unit.PIECE,
+            grade=self.grade
+        )
+        self.work_item_2 = WorkItem.objects.create(
+            article='V-002',
+            section=self.section,
+            name='Демонтаж воздуховода',
+            unit=WorkItem.Unit.PIECE,
+            grade=self.grade
+        )
+        self.product = Product.objects.create(name='Воздуховод круглый 100мм')
+        self.product_2 = Product.objects.create(name='Воздуховод прямоугольный 200мм')
+
+    def test_create_product_work_mapping(self):
+        """Тест создания сопоставления товар → работа"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item
+        )
+        self.assertEqual(mapping.product, self.product)
+        self.assertEqual(mapping.work_item, self.work_item)
+        self.assertEqual(mapping.confidence, 1.0)
+        self.assertEqual(mapping.source, ProductWorkMapping.Source.MANUAL)
+        self.assertEqual(mapping.usage_count, 1)
+
+    def test_create_product_work_mapping_with_explicit_values(self):
+        """Тест создания сопоставления с явными значениями"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item,
+            confidence=0.85,
+            source=ProductWorkMapping.Source.LLM,
+            usage_count=5
+        )
+        self.assertEqual(mapping.confidence, 0.85)
+        self.assertEqual(mapping.source, ProductWorkMapping.Source.LLM)
+        self.assertEqual(mapping.usage_count, 5)
+
+    def test_unique_together_constraint_enforcement(self):
+        """Тест ограничения unique_together (product, work_item)"""
+        ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item
+        )
+        with self.assertRaises(IntegrityError):
+            ProductWorkMapping.objects.create(
+                product=self.product,
+                work_item=self.work_item
+            )
+
+    def test_unique_together_allows_different_product_same_work_item(self):
+        """Тест: разные товары могут ссылаться на одну и ту же работу"""
+        ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item
+        )
+        mapping_2 = ProductWorkMapping.objects.create(
+            product=self.product_2,
+            work_item=self.work_item
+        )
+        self.assertEqual(ProductWorkMapping.objects.count(), 2)
+        self.assertEqual(mapping_2.product, self.product_2)
+        self.assertEqual(mapping_2.work_item, self.work_item)
+
+    def test_unique_together_allows_same_product_different_work_item(self):
+        """Тест: один товар может быть сопоставлен с разными работами"""
+        ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item
+        )
+        mapping_2 = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item_2
+        )
+        self.assertEqual(ProductWorkMapping.objects.count(), 2)
+        self.assertEqual(mapping_2.product, self.product)
+        self.assertEqual(mapping_2.work_item, self.work_item_2)
+
+    def test_ordering_by_usage_count_descending(self):
+        """Тест сортировки по usage_count по убыванию"""
+        ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item,
+            usage_count=3
+        )
+        ProductWorkMapping.objects.create(
+            product=self.product_2,
+            work_item=self.work_item,
+            usage_count=10
+        )
+        ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item_2,
+            usage_count=5
+        )
+        ordered = list(ProductWorkMapping.objects.values_list('usage_count', flat=True))
+        self.assertEqual(ordered, [10, 5, 3])
+
+    def test_ordering_by_confidence_descending_when_usage_count_equal(self):
+        """Тест сортировки по confidence по убыванию при равном usage_count"""
+        ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item,
+            usage_count=1,
+            confidence=0.5
+        )
+        ProductWorkMapping.objects.create(
+            product=self.product_2,
+            work_item=self.work_item,
+            usage_count=1,
+            confidence=1.0
+        )
+        ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item_2,
+            usage_count=1,
+            confidence=0.8
+        )
+        ordered = list(ProductWorkMapping.objects.values_list('confidence', flat=True))
+        self.assertEqual(ordered, [1.0, 0.8, 0.5])
+
+    def test_source_choices_manual(self):
+        """Тест выбора источника: manual"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item,
+            source=ProductWorkMapping.Source.MANUAL
+        )
+        self.assertEqual(mapping.source, 'manual')
+
+    def test_source_choices_rule(self):
+        """Тест выбора источника: rule"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item,
+            source=ProductWorkMapping.Source.RULE
+        )
+        self.assertEqual(mapping.source, 'rule')
+
+    def test_source_choices_llm(self):
+        """Тест выбора источника: llm"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item,
+            source=ProductWorkMapping.Source.LLM
+        )
+        self.assertEqual(mapping.source, 'llm')
+
+    def test_default_confidence(self):
+        """Тест значения по умолчанию: confidence=1.0"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item
+        )
+        self.assertEqual(mapping.confidence, 1.0)
+
+    def test_default_usage_count(self):
+        """Тест значения по умолчанию: usage_count=1"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item
+        )
+        self.assertEqual(mapping.usage_count, 1)
+
+    def test_default_source(self):
+        """Тест значения по умолчанию: source=manual"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item
+        )
+        self.assertEqual(mapping.source, ProductWorkMapping.Source.MANUAL)
+
+    def test_str_representation(self):
+        """Тест строкового представления модели"""
+        mapping = ProductWorkMapping.objects.create(
+            product=self.product,
+            work_item=self.work_item,
+            usage_count=7
+        )
+        expected = f"{self.product.name} → {self.work_item.name} (7x)"
+        self.assertEqual(str(mapping), expected)

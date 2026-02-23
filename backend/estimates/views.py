@@ -7,13 +7,15 @@ from django.utils import timezone
 from core.version_mixin import VersioningMixin
 from .models import (
     Project, ProjectNote, Estimate, EstimateSection,
-    EstimateSubsection, EstimateCharacteristic, MountingEstimate
+    EstimateSubsection, EstimateCharacteristic, EstimateItem,
+    MountingEstimate
 )
 from .serializers import (
     ProjectSerializer, ProjectListSerializer, ProjectNoteSerializer,
     EstimateSerializer, EstimateCreateSerializer,
     EstimateSectionSerializer, EstimateSubsectionSerializer,
     EstimateCharacteristicSerializer,
+    EstimateItemSerializer, EstimateItemBulkCreateSerializer,
     MountingEstimateSerializer, MountingEstimateCreateFromEstimateSerializer
 )
 
@@ -161,6 +163,96 @@ class EstimateCharacteristicViewSet(viewsets.ModelViewSet):
     serializer_class = EstimateCharacteristicSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['estimate']
+
+
+class EstimateItemViewSet(viewsets.ModelViewSet):
+    """ViewSet для строк сметы"""
+    
+    queryset = EstimateItem.objects.select_related(
+        'estimate', 'section', 'subsection',
+        'product', 'work_item', 'source_price_history',
+    )
+    serializer_class = EstimateItemSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = [
+        'estimate', 'section', 'subsection', 'product',
+        'work_item', 'is_analog',
+    ]
+    search_fields = ['name', 'model_name', 'original_name']
+    ordering_fields = ['sort_order', 'item_number', 'name', 'material_unit_price', 'work_unit_price']
+    ordering = ['sort_order', 'item_number']
+
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request):
+        """Создать множество строк сметы за одну операцию"""
+        serializer = EstimateItemBulkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        items = serializer.save()
+        return Response(
+            EstimateItemSerializer(items, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=['post'], url_path='bulk-update')
+    def bulk_update_items(self, request):
+        """Обновить множество строк сметы за одну операцию.
+        Ожидает массив объектов с обязательным полем 'id'."""
+        items_data = request.data
+        if not isinstance(items_data, list):
+            return Response(
+                {'error': 'Ожидается массив объектов'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ids = [item.get('id') for item in items_data if item.get('id')]
+        existing = {item.id: item for item in EstimateItem.objects.filter(id__in=ids)}
+        updated = []
+
+        for item_data in items_data:
+            item_id = item_data.get('id')
+            if not item_id or item_id not in existing:
+                continue
+            obj = existing[item_id]
+            for field, value in item_data.items():
+                if field == 'id':
+                    continue
+                setattr(obj, field, value)
+            updated.append(obj)
+
+        if updated:
+            update_fields = [
+                k for k in items_data[0].keys() if k != 'id'
+            ]
+            EstimateItem.objects.bulk_update(updated, update_fields)
+
+        return Response(
+            EstimateItemSerializer(updated, many=True).data,
+        )
+
+    @action(detail=False, methods=['post'], url_path='auto-match')
+    def auto_match(self, request):
+        """Автоматический подбор цен и работ для строк сметы"""
+        estimate_id = request.data.get('estimate_id')
+        price_list_id = request.data.get('price_list_id')
+
+        if not estimate_id:
+            return Response(
+                {'error': 'Не указан estimate_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            estimate = Estimate.objects.get(pk=estimate_id)
+        except Estimate.DoesNotExist:
+            return Response(
+                {'error': 'Смета не найдена'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from .services.estimate_auto_matcher import EstimateAutoMatcher
+        matcher = EstimateAutoMatcher()
+        result = matcher.auto_fill(estimate, price_list_id=price_list_id)
+        return Response(result)
 
 
 class MountingEstimateViewSet(viewsets.ModelViewSet):

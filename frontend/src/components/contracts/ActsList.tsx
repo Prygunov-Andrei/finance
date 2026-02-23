@@ -33,6 +33,7 @@ export function ActsList() {
   const getStatusBadge = (status: string) => {
     const config = {
       draft: { label: 'Черновик', className: 'bg-gray-100 text-gray-800' },
+      agreed: { label: 'Согласован', className: 'bg-yellow-100 text-yellow-800' },
       signed: { label: 'Подписан', className: 'bg-green-100 text-green-800' },
       cancelled: { label: 'Отменен', className: 'bg-red-100 text-red-800' },
     };
@@ -137,6 +138,7 @@ export function ActsList() {
               >
                 <option value="">Все</option>
                 <option value="draft">Черновик</option>
+                <option value="agreed">Согласован</option>
                 <option value="signed">Подписан</option>
                 <option value="cancelled">Отменен</option>
               </select>

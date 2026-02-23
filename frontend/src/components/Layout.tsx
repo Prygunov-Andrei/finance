@@ -94,6 +94,7 @@ const menuItems: MenuItem[] = [
       { id: 'mounting-estimates', label: 'Монтажные сметы', icon: <Wrench className="w-4 h-4" />, path: '/estimates/mounting-estimates' },
       { id: 'acts', label: 'Акты', icon: <FileText className="w-4 h-4" />, path: '/contracts/acts' },
       { id: 'household-contracts', label: 'Хозяйственные Договора', icon: <FileText className="w-4 h-4" />, path: '/contracts/household' },
+      { id: 'contracts-instructions', label: 'Инструкции', icon: <FileText className="w-4 h-4" />, path: '/contracts/instructions' },
     ],
   },
 

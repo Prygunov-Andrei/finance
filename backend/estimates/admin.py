@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
     Project, ProjectNote, Estimate, EstimateSection,
-    EstimateSubsection, EstimateCharacteristic, MountingEstimate
+    EstimateSubsection, EstimateCharacteristic, EstimateItem,
+    MountingEstimate
 )
 
 
@@ -96,6 +97,30 @@ class EstimateCharacteristicAdmin(admin.ModelAdmin):
     ]
     list_filter = ['estimate', 'is_auto_calculated', 'source_type']
     search_fields = ['name', 'estimate__number']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+class EstimateItemInline(admin.TabularInline):
+    model = EstimateItem
+    extra = 0
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['product', 'work_item', 'source_price_history']
+    fields = [
+        'item_number', 'name', 'model_name', 'unit', 'quantity',
+        'material_unit_price', 'work_unit_price', 'product',
+        'work_item', 'is_analog', 'sort_order',
+    ]
+
+
+@admin.register(EstimateItem)
+class EstimateItemAdmin(admin.ModelAdmin):
+    list_display = [
+        'item_number', 'name', 'estimate', 'section', 'unit',
+        'quantity', 'material_unit_price', 'work_unit_price', 'is_analog',
+    ]
+    list_filter = ['estimate', 'section', 'is_analog']
+    search_fields = ['name', 'model_name', 'original_name']
+    raw_id_fields = ['product', 'work_item', 'source_price_history']
     readonly_fields = ['created_at', 'updated_at']
 
 

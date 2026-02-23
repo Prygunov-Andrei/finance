@@ -239,3 +239,54 @@ class ProductPriceHistory(TimestampedModel):
 
     def __str__(self):
         return f"{self.product.name} @ {self.price} {self.unit} ({self.counterparty.name})"
+
+
+class ProductWorkMapping(TimestampedModel):
+    """Историческое сопоставление товара с работой из прайс-листа.
+    Система обучается на решениях сметчика — каждое ручное сопоставление
+    увеличивает usage_count, повышая приоритет при автоподборе."""
+    
+    class Source(models.TextChoices):
+        MANUAL = 'manual', 'Ручное сопоставление'
+        RULE = 'rule', 'По правилам категорий'
+        LLM = 'llm', 'Подобрано LLM'
+    
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='work_mappings',
+        verbose_name='Товар'
+    )
+    work_item = models.ForeignKey(
+        'pricelists.WorkItem',
+        on_delete=models.CASCADE,
+        related_name='product_mappings',
+        verbose_name='Работа из прайс-листа'
+    )
+    confidence = models.FloatField(
+        default=1.0,
+        verbose_name='Уверенность',
+        help_text='1.0 = ручное сопоставление, 0.x = автоматическое'
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+        verbose_name='Источник'
+    )
+    usage_count = models.PositiveIntegerField(
+        default=1,
+        verbose_name='Количество использований'
+    )
+
+    class Meta:
+        verbose_name = 'Сопоставление товар → работа'
+        verbose_name_plural = 'Сопоставления товар → работа'
+        unique_together = ('product', 'work_item')
+        ordering = ['-usage_count', '-confidence']
+        indexes = [
+            models.Index(fields=['product', '-usage_count']),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name} → {self.work_item.name} ({self.usage_count}x)"

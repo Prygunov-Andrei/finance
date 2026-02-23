@@ -3,7 +3,12 @@ from objects.models import Object
 from accounting.models import Counterparty, LegalEntity
 from accounting.serializers import LegalEntitySerializer, CounterpartySerializer
 from pricelists.serializers import PriceListSerializer
-from .models import Contract, ContractAmendment, WorkScheduleItem, Act, ActPaymentAllocation, FrameworkContract
+from .models import (
+    Contract, ContractAmendment, WorkScheduleItem, Act,
+    ActPaymentAllocation, FrameworkContract,
+    ContractEstimate, ContractEstimateSection, ContractEstimateItem,
+    ContractText, EstimatePurchaseLink, ActItem,
+)
 
 
 class FrameworkContractListSerializer(serializers.ModelSerializer):
@@ -77,20 +82,36 @@ class ActPaymentAllocationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'payment_description', 'payment_date']
 
 
+class ActItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActItem
+        fields = [
+            'id', 'act', 'contract_estimate_item',
+            'name', 'unit', 'quantity', 'unit_price', 'amount',
+            'sort_order', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class ActSerializer(serializers.ModelSerializer):
     contract_number = serializers.CharField(source='contract.number', read_only=True)
     allocations = ActPaymentAllocationSerializer(source='payment_allocations', many=True, read_only=True)
+    act_items = ActItemSerializer(many=True, read_only=True)
     unpaid_amount = serializers.SerializerMethodField()
+    act_type_display = serializers.CharField(source='get_act_type_display', read_only=True)
 
     class Meta:
         model = Act
         fields = [
-            'id', 'contract', 'contract_number', 'number', 'date',
+            'id', 'contract', 'contract_number',
+            'act_type', 'act_type_display', 'contract_estimate',
+            'number', 'date',
             'period_start', 'period_end', 'amount_gross', 'amount_net', 'vat_amount',
-            'status', 'file', 'description', 'due_date', 'allocations', 'unpaid_amount',
+            'status', 'file', 'description', 'due_date',
+            'allocations', 'act_items', 'unpaid_amount',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'contract_number', 'allocations', 'unpaid_amount']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'contract_number', 'allocations', 'act_items', 'unpaid_amount']
 
     def get_unpaid_amount(self, obj) -> str:
         """
@@ -111,6 +132,98 @@ class ActSerializer(serializers.ModelSerializer):
             )
         
         return str(obj.amount_gross - paid)
+
+
+class ContractTextSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(
+        source='created_by.get_full_name', read_only=True,
+    )
+    amendment_number = serializers.CharField(
+        source='amendment.number', read_only=True, allow_null=True,
+    )
+
+    class Meta:
+        model = ContractText
+        fields = [
+            'id', 'contract', 'amendment', 'amendment_number',
+            'content_md', 'version', 'created_by', 'created_by_name',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'version', 'created_at', 'updated_at']
+
+
+class ContractEstimateItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True, allow_null=True)
+    work_item_name = serializers.CharField(source='work_item.name', read_only=True, allow_null=True)
+    material_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    work_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    line_total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = ContractEstimateItem
+        fields = [
+            'id', 'contract_estimate', 'section', 'source_item',
+            'item_number', 'name', 'model_name', 'unit', 'quantity',
+            'material_unit_price', 'work_unit_price',
+            'product', 'product_name', 'work_item', 'work_item_name',
+            'is_analog', 'analog_reason', 'original_name',
+            'item_type', 'sort_order',
+            'material_total', 'work_total', 'line_total',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ContractEstimateSectionSerializer(serializers.ModelSerializer):
+    items = ContractEstimateItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ContractEstimateSection
+        fields = [
+            'id', 'contract_estimate', 'name', 'sort_order',
+            'items', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ContractEstimateSerializer(serializers.ModelSerializer):
+    sections = ContractEstimateSectionSerializer(many=True, read_only=True)
+    total_materials = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    total_works = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    total_amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    source_estimate_number = serializers.CharField(
+        source='source_estimate.number', read_only=True, allow_null=True,
+    )
+    contract_number = serializers.CharField(
+        source='contract.number', read_only=True,
+    )
+
+    class Meta:
+        model = ContractEstimate
+        fields = [
+            'id', 'contract', 'contract_number',
+            'source_estimate', 'source_estimate_number',
+            'number', 'name', 'status', 'signed_date', 'file',
+            'version_number', 'parent_version', 'amendment', 'notes',
+            'sections', 'total_materials', 'total_works', 'total_amount',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'version_number', 'parent_version',
+            'created_at', 'updated_at',
+        ]
+
+
+class ContractEstimateListSerializer(serializers.ModelSerializer):
+    total_amount = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    contract_number = serializers.CharField(source='contract.number', read_only=True)
+
+    class Meta:
+        model = ContractEstimate
+        fields = [
+            'id', 'contract', 'contract_number', 'number', 'name',
+            'status', 'version_number', 'total_amount', 'created_at',
+        ]
 
 
 class ContractSerializer(serializers.ModelSerializer):
@@ -199,3 +312,26 @@ class ContractListSerializer(serializers.ModelSerializer):
             'contract_date',
         ]
         read_only_fields = ['id', 'object_name']
+
+
+class EstimatePurchaseLinkSerializer(serializers.ModelSerializer):
+    estimate_item_name = serializers.CharField(
+        source='contract_estimate_item.name', read_only=True,
+    )
+    invoice_item_name = serializers.CharField(
+        source='invoice_item.raw_name', read_only=True,
+    )
+
+    class Meta:
+        model = EstimatePurchaseLink
+        fields = [
+            'id', 'contract_estimate_item', 'estimate_item_name',
+            'invoice_item', 'invoice_item_name',
+            'quantity_matched', 'match_type', 'match_reason',
+            'price_exceeds', 'quantity_exceeds',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'price_exceeds', 'quantity_exceeds',
+            'created_at', 'updated_at',
+        ]

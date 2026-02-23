@@ -654,8 +654,11 @@ class ApiClient {
   }
 
   // Acts
-  async getActs(contractId: number) {
-    const response = await this.request<PaginatedResponse<Act> | Act[]>(`/acts/?contract=${contractId}`);
+  async getActs(params: number | { contract?: number; status?: string; act_type?: string; search?: string }) {
+    const queryStr = typeof params === 'number'
+      ? `contract=${params}`
+      : Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join('&');
+    const response = await this.request<PaginatedResponse<Act> | Act[]>(`/acts/?${queryStr}`);
     if (response && typeof response === 'object' && 'results' in response) {
       return response.results;
     }
@@ -690,6 +693,98 @@ class ApiClient {
     return this.request<void>(`/acts/${id}/`, {
       method: 'DELETE',
     });
+  }
+
+  async agreeAct(id: number) {
+    return this.request<{ status: string }>(`/acts/${id}/agree/`, {
+      method: 'POST',
+    });
+  }
+
+  async createActFromAccumulative(data: {
+    contract_estimate_id: number;
+    number: string;
+    date: string;
+    period_start?: string;
+    period_end?: string;
+    items: Array<{
+      contract_estimate_item_id: number;
+      quantity?: string;
+      unit_price?: string;
+    }>;
+  }) {
+    return this.request<Act>('/acts/from-accumulative/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Contract Estimates (Сметы к договорам)
+  async getContractEstimates(contractId?: number) {
+    const params = contractId ? `?contract=${contractId}` : '';
+    const response = await this.request<PaginatedResponse<ContractEstimateListItem>>(`/contract-estimates/${params}`);
+    return response.results;
+  }
+
+  async getContractEstimateDetail(id: number) {
+    return this.request<ContractEstimateListItem>(`/contract-estimates/${id}/`);
+  }
+
+  async createContractEstimateFromEstimate(estimateId: number, contractId: number) {
+    return this.request<ContractEstimateListItem>('/contract-estimates/from-estimate/', {
+      method: 'POST',
+      body: JSON.stringify({ estimate_id: estimateId, contract_id: contractId }),
+    });
+  }
+
+  async getContractEstimateItems(contractEstimateId: number) {
+    const response = await this.request<PaginatedResponse<ContractEstimateItem>>(
+      `/contract-estimate-items/?contract_estimate=${contractEstimateId}`
+    );
+    return response.results;
+  }
+
+  async getContractEstimateSections(contractEstimateId: number) {
+    const response = await this.request<PaginatedResponse<ContractEstimateSection>>(
+      `/contract-estimate-sections/?contract_estimate=${contractEstimateId}`
+    );
+    return response.results;
+  }
+
+  // Contract Texts (Тексты договоров в md)
+  async getContractTexts(contractId: number) {
+    const response = await this.request<PaginatedResponse<ContractText>>(
+      `/contract-texts/?contract=${contractId}`
+    );
+    return response.results;
+  }
+
+  async createContractText(data: { contract: number; content_md: string; amendment?: number }) {
+    return this.request<ContractText>('/contract-texts/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Accumulative Estimate (Накопительная смета)
+  async getAccumulativeEstimate(contractId: number) {
+    return this.request<AccumulativeEstimateRow[]>(
+      `/contracts/${contractId}/accumulative-estimate/`
+    );
+  }
+
+  async getEstimateRemainder(contractId: number) {
+    return this.request<EstimateRemainderRow[]>(
+      `/contracts/${contractId}/estimate-remainder/`
+    );
+  }
+
+  async exportAccumulativeEstimate(contractId: number) {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${(this as any).baseUrl}/contracts/${contractId}/accumulative-estimate/export/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return response.blob();
   }
 
   // Work Schedule (дополнительные методы)
@@ -2889,9 +2984,27 @@ export interface CreateWorkScheduleItemData {
   workers_count: number;
 }
 
+export interface ActItem {
+  id: number;
+  act: number;
+  contract_estimate_item: number | null;
+  name: string;
+  unit: string;
+  quantity: string;
+  unit_price: string;
+  amount: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Act {
   id: number;
   contract: number;
+  contract_number?: string;
+  act_type: 'ks2' | 'ks3' | 'simple';
+  act_type_display?: string;
+  contract_estimate?: number | null;
   number: string;
   date: string;
   period_start: string;
@@ -2899,9 +3012,12 @@ export interface Act {
   amount_gross: string;
   amount_net: string;
   vat_amount: string;
-  status: 'draft' | 'signed' | 'cancelled';
+  status: 'draft' | 'agreed' | 'signed' | 'cancelled';
   unpaid_amount?: string;
   description?: string;
+  act_items?: ActItem[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CreateActData {
@@ -2913,7 +3029,101 @@ export interface CreateActData {
   amount_gross: string;
   amount_net: string;
   vat_amount: string;
+  act_type?: 'ks2' | 'ks3' | 'simple';
+  contract_estimate?: number;
   description?: string;
+}
+
+export interface ContractEstimateListItem {
+  id: number;
+  contract: number;
+  source_estimate: number | null;
+  number: string;
+  name: string;
+  status: 'draft' | 'agreed' | 'signed';
+  signed_date: string | null;
+  version_number: number;
+  parent_version: number | null;
+  amendment: number | null;
+  file: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractEstimateSection {
+  id: number;
+  contract_estimate: number;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractEstimateItem {
+  id: number;
+  contract_estimate: number;
+  section: number;
+  source_item: number | null;
+  item_number: number;
+  name: string;
+  model_name: string;
+  unit: string;
+  quantity: string;
+  material_unit_price: string;
+  work_unit_price: string;
+  material_total: string;
+  work_total: string;
+  line_total: string;
+  product: number | null;
+  work_item: number | null;
+  is_analog: boolean;
+  analog_reason: string;
+  original_name: string;
+  item_type: 'regular' | 'consumable' | 'additional';
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractText {
+  id: number;
+  contract: number;
+  amendment: number | null;
+  content_md: string;
+  version: number;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccumulativeEstimateRow {
+  item_id: number;
+  item_number: number;
+  name: string;
+  unit: string;
+  estimate_quantity: string;
+  estimate_material_price: string;
+  estimate_work_price: string;
+  estimate_total: string;
+  purchased_quantity: string;
+  purchased_amount: string;
+  purchase_links: Array<{
+    invoice_item_id: number;
+    quantity: string;
+    price: string;
+    match_type: string;
+  }>;
+}
+
+export interface EstimateRemainderRow {
+  item_id: number;
+  item_number: number;
+  name: string;
+  unit: string;
+  estimate_quantity: string;
+  remaining_quantity: string;
+  remaining_amount: string;
 }
 
 // Contract Amendments (Дополнительные соглашения)

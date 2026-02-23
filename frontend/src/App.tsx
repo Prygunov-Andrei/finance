@@ -389,6 +389,13 @@ export default function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/contracts/instructions" element={
+            <ProtectedRoute>
+              <Layout onLogout={handleLogout} user={user}>
+                <MarkdownPage filePath="contracts/instructions.md" />
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/contracts/:id" element={
             <ProtectedRoute>
               <Layout onLogout={handleLogout} user={user}>

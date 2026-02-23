@@ -4,12 +4,21 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from core.mixins import CashFlowMixin
-from .models import Contract, ContractAmendment, WorkScheduleItem, Act, ActPaymentAllocation, FrameworkContract
+from .models import (
+    Contract, ContractAmendment, WorkScheduleItem, Act,
+    ActPaymentAllocation, FrameworkContract,
+    ContractEstimate, ContractEstimateSection, ContractEstimateItem,
+    ContractText, EstimatePurchaseLink,
+)
 from .serializers import (
     ContractSerializer, ContractListSerializer, 
     ContractAmendmentSerializer, WorkScheduleItemSerializer, 
     ActSerializer, ActPaymentAllocationSerializer,
-    FrameworkContractSerializer, FrameworkContractListSerializer
+    FrameworkContractSerializer, FrameworkContractListSerializer,
+    ContractEstimateSerializer, ContractEstimateListSerializer,
+    ContractEstimateSectionSerializer, ContractEstimateItemSerializer,
+    ContractTextSerializer, EstimatePurchaseLinkSerializer,
+    ActItemSerializer,
 )
 from communications.models import Correspondence
 from communications.serializers import CorrespondenceSerializer
@@ -51,6 +60,88 @@ class ContractViewSet(CashFlowMixin, viewsets.ModelViewSet):
             'entity_id_key': 'contract_id',
             'entity_name_key': 'contract_name',
         }
+
+    @action(detail=True, methods=['get'], url_path='accumulative-estimate')
+    def accumulative_estimate(self, request, pk=None):
+        """Накопительная смета по договору"""
+        contract = self.get_object()
+        ce = ContractEstimate.objects.filter(
+            contract=contract,
+            status__in=[ContractEstimate.Status.AGREED, ContractEstimate.Status.SIGNED],
+        ).order_by('-version_number').first()
+        if not ce:
+            return Response({'error': 'Нет подписанной сметы'}, status=status.HTTP_404_NOT_FOUND)
+        from .services.accumulative_estimate import AccumulativeEstimateService
+        data = AccumulativeEstimateService.get_accumulative(ce.id)
+        return Response(data)
+
+    @action(detail=True, methods=['get'], url_path='estimate-remainder')
+    def estimate_remainder(self, request, pk=None):
+        """Остатки по смете (смета минус закуплено)"""
+        contract = self.get_object()
+        ce = ContractEstimate.objects.filter(
+            contract=contract,
+            status__in=[ContractEstimate.Status.AGREED, ContractEstimate.Status.SIGNED],
+        ).order_by('-version_number').first()
+        if not ce:
+            return Response({'error': 'Нет подписанной сметы'}, status=status.HTTP_404_NOT_FOUND)
+        from .services.accumulative_estimate import AccumulativeEstimateService
+        data = AccumulativeEstimateService.get_remainder(ce.id)
+        return Response(data)
+
+    @action(detail=True, methods=['get'], url_path='estimate-deviations')
+    def estimate_deviations(self, request, pk=None):
+        """Отклонения от сметы (аналоги, допработы, превышения)"""
+        contract = self.get_object()
+        ce = ContractEstimate.objects.filter(
+            contract=contract,
+            status__in=[ContractEstimate.Status.AGREED, ContractEstimate.Status.SIGNED],
+        ).order_by('-version_number').first()
+        if not ce:
+            return Response({'error': 'Нет подписанной сметы'}, status=status.HTTP_404_NOT_FOUND)
+        from .services.accumulative_estimate import AccumulativeEstimateService
+        data = AccumulativeEstimateService.get_deviations(ce.id)
+        return Response(data)
+
+    @action(detail=True, methods=['get'], url_path='accumulative-estimate/export')
+    def accumulative_estimate_export(self, request, pk=None):
+        """Экспорт накопительной сметы в Excel"""
+        contract = self.get_object()
+        ce = ContractEstimate.objects.filter(
+            contract=contract,
+            status__in=[ContractEstimate.Status.AGREED, ContractEstimate.Status.SIGNED],
+        ).order_by('-version_number').first()
+        if not ce:
+            return Response({'error': 'Нет подписанной сметы'}, status=status.HTTP_404_NOT_FOUND)
+        from .services.accumulative_estimate import AccumulativeEstimateService
+        data = AccumulativeEstimateService.export_accumulative_data(ce.id)
+        
+        import openpyxl
+        from django.http import HttpResponse
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Накопительная смета'
+        headers = [
+            '№', 'Раздел', 'Наименование', 'Модель', 'Ед.', 
+            'Кол-во (смета)', 'Цена мат.', 'Цена работ',
+            'Закуплено кол.', 'Закуплено сумма', 'Остаток кол.',
+        ]
+        ws.append(headers)
+        for row in data:
+            ws.append([
+                row['item_number'], row['section_name'], row['name'],
+                row['model_name'], row['unit'],
+                row['estimate_quantity'], row['estimate_material_price'],
+                row['estimate_work_price'], row['purchased_quantity'],
+                row['purchased_amount'], row['remaining_quantity'],
+            ])
+        
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="accumulative_{contract.number}.xlsx"'
+        wb.save(response)
+        return response
 
     @extend_schema(summary='Получить текущий баланс договора')
     @action(detail=True, methods=['get'])
@@ -136,11 +227,13 @@ class WorkScheduleItemViewSet(viewsets.ModelViewSet):
 
 class ActViewSet(viewsets.ModelViewSet):
     """ViewSet для Актов выполненных работ"""
-    queryset = Act.objects.select_related('contract').prefetch_related('payment_allocations')
+    queryset = Act.objects.select_related(
+        'contract', 'contract_estimate',
+    ).prefetch_related('payment_allocations', 'act_items')
     serializer_class = ActSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['contract', 'status']
+    filterset_fields = ['contract', 'status', 'act_type']
     search_fields = ['number', 'description']
     
     def get_queryset(self):
@@ -158,12 +251,58 @@ class ActViewSet(viewsets.ModelViewSet):
     def sign(self, request, pk=None):
         """Перевод акта в статус 'Подписан'"""
         act = self.get_object()
-        if act.status != Act.Status.DRAFT:
-            return Response({'detail': 'Акт уже не в черновике'}, status=status.HTTP_400_BAD_REQUEST)
-        
+        if act.status not in [Act.Status.DRAFT, Act.Status.AGREED]:
+            return Response(
+                {'detail': 'Акт должен быть в статусе "Черновик" или "Согласован"'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         act.status = Act.Status.SIGNED
         act.save()
         return Response({'status': 'signed'})
+
+    @action(detail=True, methods=['post'])
+    def agree(self, request, pk=None):
+        """Перевод акта в статус 'Согласован'"""
+        act = self.get_object()
+        if act.status != Act.Status.DRAFT:
+            return Response(
+                {'detail': 'Только черновик можно согласовать'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        act.status = Act.Status.AGREED
+        act.save()
+        return Response({'status': 'agreed'})
+
+    @action(detail=False, methods=['post'], url_path='from-accumulative')
+    def from_accumulative(self, request):
+        """Сформировать акт КС-2 из накопительной сметы"""
+        contract_estimate_id = request.data.get('contract_estimate_id')
+        items_data = request.data.get('items', [])
+        act_kwargs = {
+            'number': request.data.get('number', ''),
+            'date': request.data.get('date'),
+        }
+        if request.data.get('period_start'):
+            act_kwargs['period_start'] = request.data['period_start']
+        if request.data.get('period_end'):
+            act_kwargs['period_end'] = request.data['period_end']
+
+        if not contract_estimate_id or not items_data:
+            return Response(
+                {'error': 'Укажите contract_estimate_id и items'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            ce = ContractEstimate.objects.get(pk=contract_estimate_id)
+        except ContractEstimate.DoesNotExist:
+            return Response(
+                {'error': 'Смета к договору не найдена'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        act = Act.create_from_accumulative(ce, items_data, **act_kwargs)
+        return Response(ActSerializer(act).data, status=status.HTTP_201_CREATED)
 
 
 class ActPaymentAllocationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -173,6 +312,129 @@ class ActPaymentAllocationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['act', 'payment']
+
+
+class ContractTextViewSet(viewsets.ModelViewSet):
+    """ViewSet для текстов договоров (md)"""
+    queryset = ContractText.objects.select_related(
+        'contract', 'amendment', 'created_by',
+    )
+    serializer_class = ContractTextSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['contract', 'amendment']
+    search_fields = ['content_md']
+
+    def perform_create(self, serializer):
+        contract = serializer.validated_data['contract']
+        amendment = serializer.validated_data.get('amendment')
+        last_version = ContractText.objects.filter(
+            contract=contract, amendment=amendment,
+        ).order_by('-version').first()
+        next_version = (last_version.version + 1) if last_version else 1
+        serializer.save(
+            created_by=self.request.user,
+            version=next_version,
+        )
+
+
+class ContractEstimateViewSet(viewsets.ModelViewSet):
+    """ViewSet для смет к договорам"""
+    queryset = ContractEstimate.objects.select_related(
+        'contract', 'source_estimate', 'parent_version', 'amendment',
+    ).prefetch_related('sections', 'items')
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['contract', 'status']
+    search_fields = ['number', 'name']
+    ordering = ['-version_number', '-created_at']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ContractEstimateListSerializer
+        return ContractEstimateSerializer
+
+    @action(detail=False, methods=['post'], url_path='from-estimate')
+    def from_estimate(self, request):
+        """Создать смету к договору из estimates.Estimate."""
+        estimate_id = request.data.get('estimate_id')
+        contract_id = request.data.get('contract_id')
+        if not estimate_id or not contract_id:
+            return Response(
+                {'error': 'Укажите estimate_id и contract_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from estimates.models import Estimate
+        try:
+            estimate = Estimate.objects.get(pk=estimate_id)
+            contract = Contract.objects.get(pk=contract_id)
+        except (Estimate.DoesNotExist, Contract.DoesNotExist):
+            return Response(
+                {'error': 'Смета или договор не найдены'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        ce = ContractEstimate.create_from_estimate(estimate, contract)
+        return Response(
+            ContractEstimateSerializer(ce).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['post'], url_path='create-version')
+    def create_version(self, request, pk=None):
+        """Создать новую версию сметы (при ДОП)."""
+        ce = self.get_object()
+        amendment_id = request.data.get('amendment_id')
+        amendment = None
+        if amendment_id:
+            amendment = ContractAmendment.objects.filter(pk=amendment_id).first()
+        new_ce = ce.create_new_version(amendment=amendment)
+        return Response(
+            ContractEstimateSerializer(new_ce).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['post'], url_path='split')
+    def split(self, request, pk=None):
+        """Разбить смету на несколько для разных Исполнителей."""
+        ce = self.get_object()
+        sections_mapping = request.data.get('sections_mapping', {})
+        if not sections_mapping:
+            return Response(
+                {'error': 'Укажите sections_mapping: {contract_id: [section_id, ...]}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            new_estimates = ce.split_by_sections(sections_mapping)
+            return Response(
+                ContractEstimateSerializer(new_estimates, many=True).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except Contract.DoesNotExist:
+            return Response(
+                {'error': 'Один из указанных договоров не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+
+class ContractEstimateSectionViewSet(viewsets.ModelViewSet):
+    """ViewSet для разделов смет к договорам"""
+    queryset = ContractEstimateSection.objects.select_related('contract_estimate').prefetch_related('items')
+    serializer_class = ContractEstimateSectionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['contract_estimate']
+
+
+class ContractEstimateItemViewSet(viewsets.ModelViewSet):
+    """ViewSet для строк смет к договорам"""
+    queryset = ContractEstimateItem.objects.select_related(
+        'contract_estimate', 'section', 'product', 'work_item', 'source_item',
+    )
+    serializer_class = ContractEstimateItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['contract_estimate', 'section', 'product', 'item_type', 'is_analog']
+    search_fields = ['name', 'model_name']
 
 
 @extend_schema_view(
@@ -273,3 +535,59 @@ class FrameworkContractViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+class EstimatePurchaseLinkViewSet(viewsets.ModelViewSet):
+    """ViewSet для сопоставлений закупок со сметами"""
+    queryset = EstimatePurchaseLink.objects.select_related(
+        'contract_estimate_item', 'invoice_item',
+    )
+    serializer_class = EstimatePurchaseLinkSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = [
+        'contract_estimate_item', 'invoice_item',
+        'match_type', 'price_exceeds', 'quantity_exceeds',
+    ]
+
+    @action(detail=False, methods=['post'], url_path='check-invoice')
+    def check_invoice(self, request):
+        """Проверить счёт на соответствие смете"""
+        invoice_id = request.data.get('invoice_id')
+        if not invoice_id:
+            return Response(
+                {'error': 'Укажите invoice_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from payments.models import Invoice
+        try:
+            invoice = Invoice.objects.get(pk=invoice_id)
+        except Invoice.DoesNotExist:
+            return Response(
+                {'error': 'Счёт не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        from .services.estimate_compliance_checker import EstimateComplianceChecker
+        checker = EstimateComplianceChecker()
+        result = checker.check_invoice(invoice)
+        return Response(result)
+
+    @action(detail=False, methods=['post'], url_path='auto-link')
+    def auto_link(self, request):
+        """Автоматически сопоставить позиции счёта со сметой"""
+        invoice_id = request.data.get('invoice_id')
+        if not invoice_id:
+            return Response(
+                {'error': 'Укажите invoice_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from payments.models import Invoice
+        try:
+            invoice = Invoice.objects.get(pk=invoice_id)
+        except Invoice.DoesNotExist:
+            return Response(
+                {'error': 'Счёт не найден'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        from .services.estimate_compliance_checker import EstimateComplianceChecker
+        checker = EstimateComplianceChecker()
+        result = checker.auto_link_invoice(invoice)
+        return Response(result, status=status.HTTP_201_CREATED)

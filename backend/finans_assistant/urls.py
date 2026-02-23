@@ -19,7 +19,10 @@ from objects.views import ObjectViewSet
 from contracts.views import (
     ContractViewSet, ContractAmendmentViewSet, 
     WorkScheduleItemViewSet, ActViewSet, ActPaymentAllocationViewSet,
-    FrameworkContractViewSet
+    FrameworkContractViewSet,
+    ContractEstimateViewSet, ContractEstimateSectionViewSet,
+    ContractEstimateItemViewSet, ContractTextViewSet,
+    EstimatePurchaseLinkViewSet,
 )
 from payments.views import (
     PaymentViewSet, PaymentRegistryViewSet, ExpenseCategoryViewSet,
@@ -40,6 +43,11 @@ router.register(r'contract-amendments', ContractAmendmentViewSet, basename='cont
 router.register(r'work-schedule', WorkScheduleItemViewSet, basename='work-schedule')
 router.register(r'acts', ActViewSet, basename='act')
 router.register(r'act-allocations', ActPaymentAllocationViewSet, basename='act-allocation')
+router.register(r'contract-estimates', ContractEstimateViewSet, basename='contract-estimate')
+router.register(r'contract-estimate-sections', ContractEstimateSectionViewSet, basename='contract-estimate-section')
+router.register(r'contract-estimate-items', ContractEstimateItemViewSet, basename='contract-estimate-item')
+router.register(r'contract-texts', ContractTextViewSet, basename='contract-text')
+router.register(r'estimate-purchase-links', EstimatePurchaseLinkViewSet, basename='estimate-purchase-link')
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'payment-registry', PaymentRegistryViewSet, basename='payment-registry')
 router.register(r'expense-categories', ExpenseCategoryViewSet, basename='expense-category')

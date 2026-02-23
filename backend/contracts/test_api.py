@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -319,7 +320,8 @@ class ContractAPITests(BaseAPITestCase):
             amount=Decimal('20000.00'),
             payment_date=date.today(),
             payment_type='expense',
-            status='paid'
+            status='paid',
+            scan_file=SimpleUploadedFile('scan.pdf', b'%PDF-1.4', content_type='application/pdf'),
         )
         
         response = self.client.get(f'/api/v1/contracts/{contract.id}/balance/')

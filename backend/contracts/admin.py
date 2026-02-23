@@ -1,5 +1,10 @@
 from django.contrib import admin
-from .models import Contract, FrameworkContract
+from .models import (
+    Contract, FrameworkContract, ContractAmendment,
+    WorkScheduleItem, Act, ActPaymentAllocation, ActItem,
+    ContractEstimate, ContractEstimateSection, ContractEstimateItem,
+    ContractText, EstimatePurchaseLink,
+)
 
 
 @admin.register(FrameworkContract)
@@ -108,3 +113,82 @@ class ContractAdmin(admin.ModelAdmin):
             'fields': ('file', 'notes')
         }),
     )
+
+
+@admin.register(ContractText)
+class ContractTextAdmin(admin.ModelAdmin):
+    list_display = ['contract', 'amendment', 'version', 'created_by', 'created_at']
+    list_filter = ['contract']
+    search_fields = ['content_md', 'contract__number']
+    readonly_fields = ['version', 'created_by', 'created_at', 'updated_at']
+
+
+class ContractEstimateItemInline(admin.TabularInline):
+    model = ContractEstimateItem
+    extra = 0
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['product', 'work_item', 'source_item']
+    fields = [
+        'item_number', 'name', 'unit', 'quantity',
+        'material_unit_price', 'work_unit_price',
+        'product', 'item_type', 'sort_order',
+    ]
+
+
+@admin.register(ContractEstimate)
+class ContractEstimateAdmin(admin.ModelAdmin):
+    list_display = [
+        'number', 'name', 'contract', 'status',
+        'version_number', 'signed_date',
+    ]
+    list_filter = ['status', 'contract']
+    search_fields = ['number', 'name']
+    readonly_fields = ['version_number', 'parent_version', 'created_at', 'updated_at']
+
+
+@admin.register(ContractEstimateSection)
+class ContractEstimateSectionAdmin(admin.ModelAdmin):
+    list_display = ['name', 'contract_estimate', 'sort_order']
+    list_filter = ['contract_estimate']
+    inlines = [ContractEstimateItemInline]
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(ContractEstimateItem)
+class ContractEstimateItemAdmin(admin.ModelAdmin):
+    list_display = [
+        'item_number', 'name', 'contract_estimate', 'section',
+        'unit', 'quantity', 'material_unit_price', 'work_unit_price',
+        'item_type', 'is_analog',
+    ]
+    list_filter = ['contract_estimate', 'item_type', 'is_analog']
+    search_fields = ['name', 'model_name']
+    raw_id_fields = ['product', 'work_item', 'source_item']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+class ActItemInline(admin.TabularInline):
+    model = ActItem
+    extra = 0
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields = ['contract_estimate_item']
+
+
+@admin.register(ActItem)
+class ActItemAdmin(admin.ModelAdmin):
+    list_display = ['name', 'act', 'unit', 'quantity', 'unit_price', 'amount']
+    list_filter = ['act']
+    search_fields = ['name']
+    raw_id_fields = ['contract_estimate_item']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(EstimatePurchaseLink)
+class EstimatePurchaseLinkAdmin(admin.ModelAdmin):
+    list_display = [
+        'contract_estimate_item', 'invoice_item', 'quantity_matched',
+        'match_type', 'price_exceeds', 'quantity_exceeds',
+    ]
+    list_filter = ['match_type', 'price_exceeds', 'quantity_exceeds']
+    raw_id_fields = ['contract_estimate_item', 'invoice_item']
+    readonly_fields = ['created_at', 'updated_at']

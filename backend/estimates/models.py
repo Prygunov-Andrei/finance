@@ -709,6 +709,172 @@ def update_estimate_characteristics(sender, instance, **kwargs):
     estimate.update_auto_characteristics()
 
 
+class EstimateItem(TimestampedModel):
+    """Строка сметы — конкретный товар/работа с количеством и ценами"""
+    
+    estimate = models.ForeignKey(
+        Estimate,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='Смета'
+    )
+    section = models.ForeignKey(
+        EstimateSection,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='Раздел'
+    )
+    subsection = models.ForeignKey(
+        EstimateSubsection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='items',
+        verbose_name='Подраздел'
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Порядок сортировки'
+    )
+    item_number = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Номер по порядку'
+    )
+    name = models.CharField(
+        max_length=500,
+        verbose_name='Наименование товара / работы'
+    )
+    model_name = models.CharField(
+        max_length=300,
+        blank=True,
+        verbose_name='Модель / артикул'
+    )
+    unit = models.CharField(
+        max_length=50,
+        default='шт',
+        verbose_name='Единица измерения'
+    )
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        default=0,
+        verbose_name='Количество'
+    )
+    material_unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Цена материала за ед.'
+    )
+    work_unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name='Цена работы за ед.'
+    )
+    
+    product = models.ForeignKey(
+        'catalog.Product',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='estimate_items',
+        verbose_name='Товар из каталога'
+    )
+    work_item = models.ForeignKey(
+        'pricelists.WorkItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='estimate_items',
+        verbose_name='Работа из прайс-листа'
+    )
+    
+    is_analog = models.BooleanField(
+        default=False,
+        verbose_name='Применён аналог'
+    )
+    analog_reason = models.TextField(
+        blank=True,
+        verbose_name='Обоснование применения аналога'
+    )
+    original_name = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name='Оригинальное наименование из спецификации'
+    )
+    
+    source_price_history = models.ForeignKey(
+        'catalog.ProductPriceHistory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='estimate_items',
+        verbose_name='Источник цены (из истории)'
+    )
+
+    class Meta:
+        ordering = ['section__sort_order', 'sort_order', 'item_number']
+        verbose_name = 'Строка сметы'
+        verbose_name_plural = 'Строки сметы'
+        indexes = [
+            models.Index(fields=['estimate', 'section']),
+            models.Index(fields=['product']),
+            models.Index(fields=['work_item']),
+            models.Index(fields=['is_analog']),
+        ]
+
+    def __str__(self):
+        return f"#{self.item_number} {self.name[:80]}"
+
+    def clean(self):
+        if self.is_analog and not self.analog_reason:
+            raise ValidationError({
+                'analog_reason': 'При применении аналога необходимо указать обоснование'
+            })
+        if self.subsection and self.subsection.section != self.section:
+            raise ValidationError({
+                'subsection': 'Подраздел должен принадлежать выбранному разделу'
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def material_total(self) -> Decimal:
+        return (self.quantity * self.material_unit_price).quantize(Decimal('0.01'))
+
+    @property
+    def work_total(self) -> Decimal:
+        return (self.quantity * self.work_unit_price).quantize(Decimal('0.01'))
+
+    @property
+    def line_total(self) -> Decimal:
+        return self.material_total + self.work_total
+
+
+@receiver(post_save, sender=EstimateItem)
+@receiver(post_delete, sender=EstimateItem)
+def update_subsection_from_items(sender, instance, **kwargs):
+    """При изменении строки сметы пересчитываем агрегаты подраздела"""
+    subsection = instance.subsection
+    if not subsection:
+        return
+    
+    from django.db.models import Sum, F
+    aggregates = EstimateItem.objects.filter(
+        subsection=subsection
+    ).aggregate(
+        materials=Sum(F('quantity') * F('material_unit_price')),
+        works=Sum(F('quantity') * F('work_unit_price')),
+    )
+    
+    subsection.materials_sale = aggregates['materials'] or Decimal('0')
+    subsection.works_sale = aggregates['works'] or Decimal('0')
+    subsection.save(update_fields=['materials_sale', 'works_sale'])
+
+
 class EstimateCharacteristic(TimestampedModel):
     """Внутренняя характеристика сметы"""
     

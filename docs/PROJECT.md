@@ -1,7 +1,7 @@
 # Проект Finans Assistant — Полная документация
 
-**Версия:** 3.1  
-**Дата:** 15.02.2026  
+**Версия:** 3.2  
+**Дата:** 23.02.2026  
 **Статус:** Бекенд полностью реализован ✅
 
 ---
@@ -368,6 +368,25 @@ unique: (cipher, date)
 - sort_order
 ```
 
+#### EstimateItem (Строка сметы)
+```
+- estimate: FK → Estimate
+- section: FK → EstimateSection
+- subsection: FK → EstimateSubsection (nullable)
+- sort_order, item_number
+- name, model_name, unit, quantity
+- material_unit_price, work_unit_price
+- product: FK → Product (nullable)
+- work_item: FK → WorkItem (nullable)
+- is_analog, analog_reason, original_name
+- source_price_history: FK → ProductPriceHistory (nullable)
+```
+
+**Вычисляемые свойства:**
+- `material_total` = quantity × material_unit_price
+- `work_total` = quantity × work_unit_price
+- `line_total` = material_total + work_total
+
 #### MountingEstimate (Монтажная смета) — с версионированием
 ```
 - number, name
@@ -556,9 +575,22 @@ unique: (tkp, front_item)
 - number, date
 - period_start, period_end
 - amount_gross, amount_net, vat_amount
-- status: draft / signed / cancelled
+- act_type: ks2 / ks3 / simple
+- contract_estimate: FK → ContractEstimate (nullable)
+- status: draft / agreed / signed / cancelled
 - due_date
 - file, description
+```
+
+**Методы:**
+- `create_from_accumulative()` — создание акта из накопительной ведомости
+
+#### ActItem (Строка акта для КС-2/КС-3)
+```
+- act: FK → Act
+- contract_estimate_item: FK → ContractEstimateItem (nullable)
+- name, unit, quantity, unit_price, amount
+- sort_order
 ```
 
 #### ActPaymentAllocation (Распределение оплат)
@@ -566,6 +598,70 @@ unique: (tkp, front_item)
 - act: FK → Act
 - payment: FK → Payment
 - amount
+```
+
+#### ContractEstimate (Смета как приложение к договору)
+```
+- contract: FK → Contract
+- source_estimate: FK → Estimate (nullable)
+- number, name
+- status: draft / agreed / signed
+- signed_date (nullable)
+- file: FileField (nullable)
+- version_number: default 1
+- parent_version: FK → self (nullable)
+- amendment: FK → ContractAmendment (nullable)
+- notes
+```
+
+**Методы:**
+- `create_from_estimate()` — создание из сметы
+- `split()` — разделение сметы
+- `create_new_version()` — создание новой версии
+
+#### ContractEstimateSection (Раздел сметы к договору)
+```
+- contract_estimate: FK → ContractEstimate
+- name
+- sort_order
+```
+
+#### ContractEstimateItem (Строка сметы к договору)
+```
+- contract_estimate: FK → ContractEstimate
+- section: FK → ContractEstimateSection
+- source_item: FK → EstimateItem (nullable)
+- item_number, name, model_name, unit, quantity
+- material_unit_price, work_unit_price
+- product: FK → Product (nullable)
+- work_item: FK → WorkItem (nullable)
+- is_analog, analog_reason, original_name
+- item_type: regular / consumable / additional
+- sort_order
+```
+
+**Вычисляемые свойства:**
+- `material_total` = quantity × material_unit_price
+- `work_total` = quantity × work_unit_price
+- `line_total` = material_total + work_total
+
+#### ContractText (Текст договора в Markdown)
+```
+- contract: FK → Contract
+- amendment: FK → ContractAmendment (nullable)
+- content_md: TextField
+- version: default 1
+- created_by: FK → User
+```
+
+#### EstimatePurchaseLink (Связь строки сметы с позицией счёта)
+```
+- contract_estimate_item: FK → ContractEstimateItem
+- invoice_item: FK → InvoiceItem
+- quantity_matched
+- match_type: exact / analog / substitute
+- match_reason
+- price_exceeds, quantity_exceeds: BooleanFields
 ```
 
 ---
@@ -707,17 +803,27 @@ unique: (tkp, front_item)
 Object (Объект)
 ├── Project[] (Проекты)
 │   └── Estimate[] (Сметы)
+│       ├── EstimateItem[] (Строки сметы)
 │       ├── MountingEstimate[] (Монтажные сметы)
 │       └── TechnicalProposal[] (ТКП)
 │           ├── MountingProposal[] (МП)
 │           └── Contract (Договор с Заказчиком)
 ├── Contract[] (Договоры)
+│   ├── ContractEstimate[] (Сметы к договору)
+│   │   ├── ContractEstimateSection[] (Разделы)
+│   │   └── ContractEstimateItem[] (Строки)
+│   │       └── EstimatePurchaseLink[] (Связи с позициями счетов)
+│   ├── ContractText[] (Тексты договора в MD)
 │   ├── Act[] (Акты)
+│   │   └── ActItem[] (Строки акта)
 │   ├── Payment[] (Платежи)
 │   ├── Correspondence[] (Переписка)
 │   └── WorkScheduleItem[] (График работ)
 └── MountingProposal[] (МП)
     └── Contract (Договор с Исполнителем)
+
+Product (Товар)
+└── ProductWorkMapping[] → WorkItem (Сопоставления с работами)
 
 LegalEntity (Наша компания)
 ├── TaxSystem (Налоговая система)
@@ -837,6 +943,16 @@ Notification (Уведомления)
 - alias_name: unique
 ```
 
+#### ProductWorkMapping (Сопоставление товара с работой)
+```
+- product: FK → Product
+- work_item: FK → WorkItem
+- confidence: float (1.0 = manual)
+- source: manual / rule / llm
+- usage_count: default 1
+unique: (product, work_item)
+```
+
 #### ProductMatcher (Сервис сопоставления)
 ```
 Двухуровневое сопоставление:
@@ -914,6 +1030,10 @@ Notification (Уведомления)
 | `/api/v1/estimate-sections/` | CRUD | Разделы смет |
 | `/api/v1/estimate-subsections/` | CRUD | Подразделы смет |
 | `/api/v1/estimate-characteristics/` | CRUD | Характеристики |
+| `/api/v1/estimate-items/` | CRUD | Строки сметы |
+| `/api/v1/estimate-items/bulk-create/` | POST | Массовое создание строк |
+| `/api/v1/estimate-items/bulk-update/` | PATCH | Массовое обновление строк |
+| `/api/v1/estimate-items/auto-match/` | POST | Автосопоставление с каталогом |
 | `/api/v1/mounting-estimates/` | CRUD | Монтажные сметы |
 | `/api/v1/mounting-estimates/{id}/agree/` | POST | Согласовать с Исполнителем |
 
@@ -955,6 +1075,22 @@ Notification (Уведомления)
 | `/api/v1/contracts/{id}/amendments/` | POST | Доп. соглашения |
 | `/api/v1/acts/` | CRUD | Акты |
 | `/api/v1/acts/{id}/sign/` | POST | Подписать акт |
+| `/api/v1/acts/{id}/agree/` | POST | Согласовать акт |
+| `/api/v1/acts/from-accumulative/` | POST | Создать акт из накопительной ведомости |
+| `/api/v1/contract-estimates/` | CRUD | Сметы к договору |
+| `/api/v1/contract-estimates/from-estimate/` | POST | Создать из сметы |
+| `/api/v1/contract-estimates/{id}/create-version/` | POST | Новая версия |
+| `/api/v1/contract-estimates/{id}/split/` | POST | Разделить смету |
+| `/api/v1/contract-estimate-sections/` | CRUD | Разделы смет к договору |
+| `/api/v1/contract-estimate-items/` | CRUD | Строки смет к договору |
+| `/api/v1/contract-texts/` | CRUD | Тексты договоров (MD) |
+| `/api/v1/estimate-purchase-links/` | CRUD | Связи строк сметы со счетами |
+| `/api/v1/estimate-purchase-links/check-invoice/` | POST | Проверить счёт по смете |
+| `/api/v1/estimate-purchase-links/auto-link/` | POST | Автосвязывание позиций |
+| `/api/v1/contracts/{id}/accumulative-estimate/` | GET | Накопительная ведомость |
+| `/api/v1/contracts/{id}/accumulative-estimate/export/` | GET | Экспорт в Excel |
+| `/api/v1/contracts/{id}/estimate-remainder/` | GET | Остаток по смете |
+| `/api/v1/contracts/{id}/estimate-deviations/` | GET | Отклонения по смете |
 
 ### 4.6. Payments
 
@@ -1098,6 +1234,34 @@ Bitrix24 CRM (Канбан) → Webhook → SupplyRequest → Invoice (recogniti
 1. Fuzzy matching (fuzzywuzzy) — быстрый поиск по названию и алиасам
 2. LLM matching — семантическое сравнение для неоднозначных случаев
 3. Результат: автоматическое сопоставление позиций счёта с каталогом
+
+### 5.10. AccumulativeEstimateService — Накопительная ведомость
+
+**Файл:** `contracts/services/accumulative_estimate.py`
+
+Сервис формирования накопительной ведомости по договору:
+- Агрегация выполненных объёмов по всем подписанным/согласованным актам
+- Расчёт остатков по каждой позиции сметы к договору
+- Экспорт в Excel (формат КС-6а)
+
+### 5.11. EstimateComplianceChecker — Проверка соответствия смете
+
+**Файл:** `contracts/services/estimate_compliance_checker.py`
+
+Сервис проверки соответствия закупок смете к договору:
+- Контроль превышения цен (price_exceeds)
+- Контроль превышения объёмов (quantity_exceeds)
+- Выявление отклонений (замены, аналоги, дополнительные позиции)
+- Формирование отчёта об отклонениях
+
+### 5.12. EstimateAutoMatcher — Автосопоставление позиций сметы
+
+**Файл:** `estimates/services/estimate_auto_matcher.py`
+
+Сервис автоматического сопоставления строк сметы с каталогом товаров и работ:
+- Fuzzy-matching по названию с каталогом Product
+- Сопоставление с WorkItem через ProductWorkMapping
+- Учёт алиасов (ProductAlias) и истории цен (ProductPriceHistory)
 
 ---
 
@@ -1249,4 +1413,4 @@ COMMERCIAL_PROPOSAL_START_NUMBER = 210  # Начальный номер ТКП
 
 ---
 
-*Документация обновлена: 15.02.2026*
+*Документация обновлена: 23.02.2026*

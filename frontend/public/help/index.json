@@ -8,6 +8,12 @@
       "path": "/finance/instructions"
     },
     {
+      "id": "contracts-instructions",
+      "title": "Договоры",
+      "description": "Сметы, договоры и допсоглашения, акты КС-2/КС-3, накопительная смета, контроль закупок.",
+      "path": "/contracts/instructions"
+    },
+    {
       "id": "commercial-instructions",
       "title": "Коммерческие предложения",
       "description": "Инструкции по работе с канбаном КП, созданию ТКП и МП, выбору смет и фронта работ.",

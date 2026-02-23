@@ -4,6 +4,7 @@ from .views import (
     ProjectViewSet, ProjectNoteViewSet,
     EstimateViewSet, EstimateSectionViewSet,
     EstimateSubsectionViewSet, EstimateCharacteristicViewSet,
+    EstimateItemViewSet,
     MountingEstimateViewSet
 )
 
@@ -14,6 +15,7 @@ router.register(r'estimates', EstimateViewSet, basename='estimate')
 router.register(r'estimate-sections', EstimateSectionViewSet, basename='estimate-section')
 router.register(r'estimate-subsections', EstimateSubsectionViewSet, basename='estimate-subsection')
 router.register(r'estimate-characteristics', EstimateCharacteristicViewSet, basename='estimate-characteristic')
+router.register(r'estimate-items', EstimateItemViewSet, basename='estimate-item')
 router.register(r'mounting-estimates', MountingEstimateViewSet, basename='mounting-estimate')
 
 urlpatterns = [

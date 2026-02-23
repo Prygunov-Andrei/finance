@@ -3,12 +3,15 @@ from django.db import IntegrityError
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
+from django.core.files.uploadedfile import SimpleUploadedFile
 from datetime import date, timedelta
 
 from objects.models import Object
 from accounting.models import Counterparty, LegalEntity, TaxSystem
 from payments.models import Payment, ExpenseCategory
 from .models import Contract, ContractAmendment, WorkScheduleItem, Act, ActPaymentAllocation
+
+DUMMY_PDF = SimpleUploadedFile('test.pdf', b'%PDF-1.4 dummy', content_type='application/pdf')
 
 
 class ContractModelTests(TestCase):
@@ -53,10 +56,11 @@ class ContractModelTests(TestCase):
         self.assertEqual(contract.object, self.object)
         self.assertEqual(contract.contract_type, Contract.Type.EXPENSE)
 
-    def test_unique_number_per_object(self) -> None:
-        self._create_contract()
-        with self.assertRaises(ValidationError):
-            self._create_contract() # Same number, same object
+    def test_duplicate_number_allowed(self) -> None:
+        """unique_together снят: допускаем одинаковые номера (рамочные договоры без объекта)"""
+        c1 = self._create_contract()
+        c2 = self._create_contract()
+        self.assertEqual(Contract.objects.filter(number='ДГ-001').count(), 2)
 
     def test_amendment_updates_contract(self) -> None:
         """Тест обновления договора через Доп. соглашение"""
@@ -147,7 +151,8 @@ class ContractModelTests(TestCase):
             amount=Decimal('20000.00'),
             payment_date=date(2023, 2, 5),
             payment_type='expense',
-            status='paid'
+            status='paid',
+            scan_file=SimpleUploadedFile('scan1.pdf', b'%PDF-1.4', content_type='application/pdf'),
         )
         
         # Платеж в обработке (PENDING) - не должен влиять
@@ -157,7 +162,8 @@ class ContractModelTests(TestCase):
             amount=Decimal('10000.00'),
             payment_date=date(2023, 2, 6),
             payment_type='expense',
-            status='pending'
+            status='pending',
+            scan_file=SimpleUploadedFile('scan2.pdf', b'%PDF-1.4', content_type='application/pdf'),
         )
         
         # Баланс = Акты (50000) - Оплаченные Платежи (20000) = 30000

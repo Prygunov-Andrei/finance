@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import User
 from datetime import date, timedelta
 
@@ -356,7 +357,8 @@ class ActSerializerTests(TestCase):
             amount=Decimal('20000.00'),
             payment_date=date.today(),
             payment_type='expense',
-            status='paid'
+            status='paid',
+            scan_file=SimpleUploadedFile('scan.pdf', b'%PDF-1.4', content_type='application/pdf'),
         )
         
         from .models import ActPaymentAllocation

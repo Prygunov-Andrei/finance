@@ -4,7 +4,8 @@ from django.contrib.auth.models import User
 
 from .models import (
     Project, ProjectNote, Estimate, EstimateSection,
-    EstimateSubsection, EstimateCharacteristic, MountingEstimate
+    EstimateSubsection, EstimateCharacteristic, EstimateItem,
+    MountingEstimate
 )
 from accounting.serializers import CounterpartySerializer
 
@@ -176,6 +177,64 @@ class EstimateCharacteristicSerializer(serializers.ModelSerializer):
         if 'purchase_amount' in validated_data or 'sale_amount' in validated_data:
             validated_data['is_auto_calculated'] = False
         return super().update(instance, validated_data)
+
+
+class EstimateItemSerializer(serializers.ModelSerializer):
+    """Сериализатор для строки сметы"""
+    
+    product_name = serializers.CharField(
+        source='product.name', read_only=True, allow_null=True
+    )
+    work_item_name = serializers.CharField(
+        source='work_item.name', read_only=True, allow_null=True
+    )
+    material_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True
+    )
+    work_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True
+    )
+    line_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True
+    )
+    
+    class Meta:
+        model = EstimateItem
+        fields = [
+            'id', 'estimate', 'section', 'subsection', 'sort_order',
+            'item_number', 'name', 'model_name', 'unit', 'quantity',
+            'material_unit_price', 'work_unit_price',
+            'product', 'product_name', 'work_item', 'work_item_name',
+            'is_analog', 'analog_reason', 'original_name',
+            'source_price_history',
+            'material_total', 'work_total', 'line_total',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        if data.get('is_analog') and not data.get('analog_reason'):
+            raise serializers.ValidationError({
+                'analog_reason': 'При применении аналога необходимо указать обоснование'
+            })
+        subsection = data.get('subsection')
+        section = data.get('section')
+        if subsection and section and subsection.section != section:
+            raise serializers.ValidationError({
+                'subsection': 'Подраздел должен принадлежать выбранному разделу'
+            })
+        return data
+
+
+class EstimateItemBulkCreateSerializer(serializers.Serializer):
+    """Сериализатор для bulk-создания строк сметы"""
+    
+    items = EstimateItemSerializer(many=True)
+
+    def create(self, validated_data):
+        items_data = validated_data['items']
+        items = [EstimateItem(**item_data) for item_data in items_data]
+        return EstimateItem.objects.bulk_create(items)
 
 
 class EstimateSerializer(serializers.ModelSerializer):
