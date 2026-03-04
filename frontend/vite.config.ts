@@ -68,6 +68,14 @@
           target: 'http://localhost:8000',
           changeOrigin: true,
         },
+        '/admin/': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        '/static/': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
         '/kanban-api/': {
           target: 'http://localhost:8010',
           changeOrigin: true,

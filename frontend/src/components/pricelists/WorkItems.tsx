@@ -8,7 +8,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Plus, Loader2, FileText, MessageSquare, Edit2, Info } from 'lucide-react';
+import { Plus, Loader2, MessageSquare, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { CONSTANTS } from '../../constants';
 
@@ -295,15 +295,12 @@ export function WorkItems() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Коэфф.
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Действия
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12">
+                  <td colSpan={6} className="px-6 py-12">
                     <div className="flex items-center justify-center">
                       <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
                     </div>
@@ -311,14 +308,32 @@ export function WorkItems() {
                 </tr>
               ) : filteredItems && filteredItems.length > 0 ? (
                 filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                  <tr
+                    key={item.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => navigate(`/work-items/${item.id}`)}
+                  >
                     <td className="px-6 py-4">
                       <span className="inline-flex px-2 py-1 text-xs font-mono font-medium rounded bg-gray-100 text-gray-700">
                         {item.article}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="font-medium text-gray-900">{item.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">{item.name}</span>
+                        {item.comment && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <MessageSquare className="w-4 h-4 text-blue-500 shrink-0" />
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p className="text-xs">{item.comment.length > 100 ? `${item.comment.slice(0, 100)}...` : item.comment}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm text-gray-600">{item.unit}</span>
@@ -334,43 +349,11 @@ export function WorkItems() {
                     <td className="px-6 py-4">
                       <span className="text-sm text-gray-900">{item.coefficient}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {item.comment && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <MessageSquare className="w-4 h-4 text-blue-500" />
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-xs">
-                                <p className="text-xs">{item.comment.length > 100 ? `${item.comment.slice(0, 100)}...` : item.comment}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/work-items/${item.id}`)}
-                        >
-                          <FileText className="w-4 h-4" />
-                        </Button>
-                        {item.is_current && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenDialog(item)}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                     Работы не найдены
                   </td>
                 </tr>

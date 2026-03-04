@@ -96,7 +96,7 @@ class WorkItemViewSet(VersioningMixin, viewsets.ModelViewSet):
 
     queryset = WorkItem.objects.select_related('section', 'grade', 'parent_version')
     pagination_class = None
-    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['section', 'grade', 'is_current']
     search_fields = ['article', 'name']

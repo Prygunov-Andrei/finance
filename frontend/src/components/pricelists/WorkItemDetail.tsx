@@ -1,16 +1,36 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api, CreateWorkItemData, WorkSection } from '../../lib/api';
 import { Button } from '../ui/button';
-import { ArrowLeft, FileText, Calendar, Clock, Users, Loader2, Star, Hash } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { ArrowLeft, FileText, Clock, Users, Loader2, Star, Hash, Edit2, Trash2, Info } from 'lucide-react';
+import { toast } from 'sonner';
 import { formatDateTime } from '../../lib/utils';
 import { CONSTANTS } from '../../constants';
 
 export function WorkItemDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [showVersions, setShowVersions] = useState(false);
+  const [isEditDialogOpen, setEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const [formData, setFormData] = useState<CreateWorkItemData>({
+    section: 0,
+    name: '',
+    unit: 'шт',
+    hours: '',
+    grade: '',
+    coefficient: '1.00',
+    composition: '',
+    comment: '',
+  });
 
   const { data: workItem, isLoading, error } = useQuery({
     queryKey: ['work-item', id],
@@ -19,13 +39,103 @@ export function WorkItemDetail() {
     staleTime: CONSTANTS.REFERENCE_STALE_TIME_MS,
   });
 
-  // Запрос истории версий
+  const { data: sections } = useQuery({
+    queryKey: ['work-sections-active'],
+    queryFn: () => api.getWorkSections(false).then((sections) => sections.filter((s: WorkSection) => s.is_active)),
+    staleTime: CONSTANTS.REFERENCE_STALE_TIME_MS,
+    enabled: isEditDialogOpen,
+  });
+
   const { data: versions, isLoading: versionsLoading } = useQuery({
     queryKey: ['work-item-versions', id],
     queryFn: () => api.getWorkItemVersions(Number(id)),
     enabled: !!id && showVersions,
     staleTime: CONSTANTS.REFERENCE_STALE_TIME_MS,
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ itemId, data }: { itemId: number; data: Partial<CreateWorkItemData> }) =>
+      api.updateWorkItem(itemId, data),
+    onSuccess: (updatedItem) => {
+      queryClient.invalidateQueries({ queryKey: ['work-items'] });
+      queryClient.invalidateQueries({ queryKey: ['work-item'] });
+      setEditDialogOpen(false);
+      toast.success(`Создана новая версия: ${updatedItem.article}`);
+      navigate(`/work-items/${updatedItem.id}`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Ошибка: ${error.message}`);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (itemId: number) => api.deleteWorkItem(itemId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['work-items'] });
+      toast.success('Работа удалена');
+      navigate('/work-items');
+    },
+    onError: (error: Error) => {
+      toast.error(`Ошибка удаления: ${error.message}`);
+    },
+  });
+
+  const handleOpenEdit = () => {
+    if (!workItem) return;
+    setFormData({
+      section: workItem.section_detail.id,
+      name: workItem.name,
+      unit: workItem.unit,
+      hours: workItem.hours,
+      grade: workItem.required_grade,
+      coefficient: workItem.coefficient,
+      composition: workItem.composition || '',
+      comment: workItem.comment || '',
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSubmitEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workItem) return;
+
+    if (!formData.section || !formData.name.trim() || !formData.grade) {
+      toast.error('Заполните все обязательные поля');
+      return;
+    }
+
+    if (formData.hours && parseFloat(formData.hours) < 0) {
+      toast.error('Часы должны быть >= 0');
+      return;
+    }
+
+    if (parseFloat(formData.coefficient) <= 0) {
+      toast.error('Коэффициент должен быть больше нуля');
+      return;
+    }
+
+    updateMutation.mutate({ itemId: workItem.id, data: formData });
+  };
+
+  const unitOptions = [
+    { value: 'шт', label: 'Штука' },
+    { value: 'м.п.', label: 'Метр погонный' },
+    { value: 'м²', label: 'Квадратный метр' },
+    { value: 'м³', label: 'Кубический метр' },
+    { value: 'компл', label: 'Комплект' },
+    { value: 'ед', label: 'Единица' },
+    { value: 'ч', label: 'Час' },
+    { value: 'кг', label: 'Килограмм' },
+    { value: 'т', label: 'Тонна' },
+  ];
+
+  const formatGrade = (requiredGrade: string | undefined): string => {
+    if (!requiredGrade) return '-';
+    const gradeNum = parseFloat(requiredGrade);
+    if (isNaN(gradeNum)) return '-';
+    if (Number.isInteger(gradeNum)) return gradeNum.toString();
+    return gradeNum.toFixed(2).replace(/\.?0+$/, '');
+  };
 
   if (isLoading) {
     return (
@@ -55,27 +165,6 @@ export function WorkItemDetail() {
       </div>
     );
   }
-
-  // Форматирование разряда
-  const formatGrade = (requiredGrade: string | undefined): string => {
-    if (!requiredGrade) {
-      return '-';
-    }
-    
-    const gradeNum = parseFloat(requiredGrade);
-    if (isNaN(gradeNum)) {
-      return '-';
-    }
-    
-    // Если целое число, показываем без десятичных
-    if (Number.isInteger(gradeNum)) {
-      return gradeNum.toString();
-    }
-    
-    // Для дробных - показываем с нужной точностью
-    // Убираем лишние нули справа
-    return gradeNum.toFixed(2).replace(/\.?0+$/, '');
-  };
 
   return (
     <div className="p-8 space-y-6">
@@ -109,12 +198,30 @@ export function WorkItemDetail() {
             </h1>
           </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setShowVersions(!showVersions)}
-        >
-          {showVersions ? 'Скрыть историю' : 'Показать историю версий'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {workItem.is_current && (
+            <>
+              <Button variant="outline" onClick={handleOpenEdit}>
+                <Edit2 className="w-4 h-4 mr-2" />
+                Редактировать
+              </Button>
+              <Button
+                variant="outline"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Удалить
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => setShowVersions(!showVersions)}
+          >
+            {showVersions ? 'Скрыть историю' : 'История версий'}
+          </Button>
+        </div>
       </div>
 
       {/* Main Info */}
@@ -251,14 +358,15 @@ export function WorkItemDetail() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Актуальная
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Действия
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {versions.map((version) => (
-                    <tr key={version.id} className="hover:bg-gray-50">
+                    <tr
+                      key={version.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => navigate(`/work-items/${version.id}`)}
+                    >
                       <td className="px-4 py-3">
                         <span className="text-xs font-mono text-gray-700">
                           {version.article}
@@ -285,16 +393,6 @@ export function WorkItemDetail() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/work-items/${version.id}`)}
-                        >
-                          <FileText className="w-4 h-4 mr-2" />
-                          Открыть
-                        </Button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -307,6 +405,209 @@ export function WorkItemDetail() {
           )}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Редактировать работу</DialogTitle>
+            <DialogDescription>
+              При сохранении будет создана новая версия работы
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmitEdit} className="space-y-4">
+            <div>
+              <Label htmlFor="section">Раздел *</Label>
+              <select
+                id="section"
+                value={formData.section}
+                onChange={(e) => setFormData({ ...formData, section: Number(e.target.value) })}
+                className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value={0}>Выберите раздел</option>
+                {sections?.map((section) => (
+                  <option key={section.id} value={section.id}>
+                    {section.code} - {section.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="name">Наименование *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="mt-1.5"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="unit">Единица измерения *</Label>
+                <select
+                  id="unit"
+                  value={formData.unit}
+                  onChange={(e) => setFormData({ ...formData, unit: e.target.value as any })}
+                  className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  {unitOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="hours">Часы (опционально)</Label>
+                <Input
+                  id="hours"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.hours || ''}
+                  onChange={(e) => setFormData({ ...formData, hours: e.target.value || null })}
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="grade" className="flex items-center gap-2">
+                  Разряд *
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger type="button">
+                        <Info className="w-3.5 h-3.5 text-gray-400" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">
+                          Можно указать целый (1-5) или дробный разряд (2.5, 3.65).
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </Label>
+                <Input
+                  id="grade"
+                  type="number"
+                  step="0.01"
+                  min="1.00"
+                  max="5.00"
+                  value={formData.grade}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value && (parseFloat(value) < 1 || parseFloat(value) > 5)) {
+                      toast.error('Разряд должен быть от 1.00 до 5.00');
+                      return;
+                    }
+                    setFormData({ ...formData, grade: value });
+                  }}
+                  required
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="coefficient">Коэффициент *</Label>
+                <Input
+                  id="coefficient"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={formData.coefficient}
+                  onChange={(e) => setFormData({ ...formData, coefficient: e.target.value })}
+                  required
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="composition">Состав работы (опционально)</Label>
+              <textarea
+                id="composition"
+                value={formData.composition}
+                onChange={(e) => setFormData({ ...formData, composition: e.target.value })}
+                rows={3}
+                className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="comment">Комментарий (опционально)</Label>
+              <textarea
+                id="comment"
+                value={formData.comment}
+                onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
+                rows={2}
+                className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+                disabled={updateMutation.isPending}
+              >
+                Отмена
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {updateMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Сохранение...
+                  </>
+                ) : (
+                  'Создать новую версию'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить работу?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Работа <strong>{workItem.article}</strong> — «{workItem.name}» будет удалена. Это действие необратимо.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate(workItem.id)}
+              disabled={deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Удаление...
+                </>
+              ) : (
+                'Удалить'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

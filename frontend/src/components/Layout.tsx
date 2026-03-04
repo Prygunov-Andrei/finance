@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from './ui/dropdown-menu';
-import { Avatar, AvatarFallback } from './ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { GlobalSearch } from './GlobalSearch';
 import { NotificationBadge } from './NotificationBadge';
 import { usePermissions } from '../hooks/usePermissions';
@@ -28,7 +28,7 @@ import logo from '../assets/logo.png';
 interface LayoutProps {
   children: ReactNode;
   onLogout: () => void;
-  user?: { username: string };
+  user?: { username: string; photo_url?: string };
 }
 
 interface MenuItem {
@@ -548,6 +548,7 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
               <DropdownMenuTrigger asChild>
                 <button className="w-full flex items-center gap-3 hover:bg-gray-50 rounded-lg p-2 transition-colors">
                   <Avatar className="w-10 h-10">
+                    {user?.photo_url && <AvatarImage src={user.photo_url} alt={user.username} />}
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                       {getUserInitials(user?.username)}
                     </AvatarFallback>
@@ -576,6 +577,7 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
               <DropdownMenuTrigger asChild>
                 <button className="w-full flex justify-center">
                   <Avatar className="w-10 h-10">
+                    {user?.photo_url && <AvatarImage src={user.photo_url} alt={user?.username} />}
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                       {getUserInitials(user?.username)}
                     </AvatarFallback>

@@ -1,20 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api, WorkerGradeSkills, CreateWorkerGradeSkillsData } from '../../lib/api';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../ui/alert-dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Label } from '../ui/label';
-import { Plus, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Loader2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { CONSTANTS } from '../../constants';
 import { useWorkerGrades, useWorkSections } from '../../hooks';
@@ -22,10 +15,12 @@ import { useWorkerGrades, useWorkSections } from '../../hooks';
 export function WorkerGradeSkillsComponent() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setDialogOpen] = useState(false);
+  const [editingSkill, setEditingSkill] = useState<WorkerGradeSkills | null>(null);
   const [selectedGrade, setSelectedGrade] = useState<number | undefined>();
   const [selectedSection, setSelectedSection] = useState<number | undefined>();
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingSkill, setDeletingSkill] = useState<WorkerGradeSkills | null>(null);
+  const [openCards, setOpenCards] = useState<Set<number>>(new Set());
 
   const [formData, setFormData] = useState<CreateWorkerGradeSkillsData>({
     grade: 0,
@@ -42,15 +37,31 @@ export function WorkerGradeSkillsComponent() {
   const { data: grades } = useWorkerGrades(true);
 
   const { data: allSections } = useWorkSections(false);
-  const sections = allSections?.filter((s) => s.is_active);
+  const sections = allSections?.filter((s) => s.is_active && s.parent === null);
 
   const createMutation = useMutation({
     mutationFn: (data: CreateWorkerGradeSkillsData) => api.createWorkerGradeSkills(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['worker-grade-skills'] });
       setDialogOpen(false);
+      setEditingSkill(null);
       resetForm();
       toast.success('Навык успешно создан');
+    },
+    onError: (error: Error) => {
+      toast.error(`Ошибка: ${error.message}`);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<CreateWorkerGradeSkillsData> }) =>
+      api.updateWorkerGradeSkills(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['worker-grade-skills'] });
+      setDialogOpen(false);
+      setEditingSkill(null);
+      resetForm();
+      toast.success('Навык успешно обновлен');
     },
     onError: (error: Error) => {
       toast.error(`Ошибка: ${error.message}`);
@@ -78,8 +89,19 @@ export function WorkerGradeSkillsComponent() {
     });
   };
 
-  const handleOpenDialog = () => {
+  const handleOpenCreate = () => {
+    setEditingSkill(null);
     resetForm();
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (skill: WorkerGradeSkills) => {
+    setEditingSkill(skill);
+    setFormData({
+      grade: skill.grade,
+      section: skill.section,
+      description: skill.description,
+    });
     setDialogOpen(true);
   };
 
@@ -91,7 +113,11 @@ export function WorkerGradeSkillsComponent() {
       return;
     }
 
-    createMutation.mutate(formData);
+    if (editingSkill) {
+      updateMutation.mutate({ id: editingSkill.id, data: formData });
+    } else {
+      createMutation.mutate(formData);
+    }
   };
 
   const handleDelete = (skill: WorkerGradeSkills) => {
@@ -105,6 +131,20 @@ export function WorkerGradeSkillsComponent() {
     }
   };
 
+  const toggleCard = (id: number) => {
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const isMutating = createMutation.isPending || updateMutation.isPending;
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
@@ -115,7 +155,7 @@ export function WorkerGradeSkillsComponent() {
             Описание навыков по разделам для каждого разряда
           </p>
         </div>
-        <Button onClick={handleOpenDialog} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={handleOpenCreate} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="w-4 h-4 mr-2" />
           Добавить навык
         </Button>
@@ -156,7 +196,7 @@ export function WorkerGradeSkillsComponent() {
               <option value="">Все разделы</option>
               {sections?.map((section) => (
                 <option key={section.id} value={section.id}>
-                  {section.code} - {section.name}
+                  {section.name}
                 </option>
               ))}
             </select>
@@ -164,90 +204,95 @@ export function WorkerGradeSkillsComponent() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Разряд
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Раздел
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Описание
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Действия
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {isLoading ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12">
-                  <div className="flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-                  </div>
-                </td>
-              </tr>
-            ) : skills && skills.length > 0 ? (
-              skills.map((skill) => (
-                <tr key={skill.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-semibold text-sm">
+      {/* Cards */}
+      <div className="space-y-4">
+        {isLoading ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+            <div className="flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+            </div>
+          </div>
+        ) : skills && skills.length > 0 ? (
+          skills.map((skill) => (
+            <Collapsible
+              key={skill.id}
+              open={openCards.has(skill.id)}
+              onOpenChange={() => toggleCard(skill.id)}
+            >
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-semibold text-sm">
                         {skill.grade_detail?.grade}
                       </span>
-                      <span className="font-medium text-gray-900">
-                        {skill.grade_detail?.name}
-                      </span>
+                      <div>
+                        <span className="font-medium text-gray-900">
+                          {skill.grade_detail?.name}
+                        </span>
+                        <span className="mx-2 text-gray-300">&middot;</span>
+                        <span className="text-sm text-gray-600">
+                          {skill.section_detail?.name}
+                        </span>
+                      </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex px-2 py-1 text-xs font-mono font-medium rounded bg-gray-100 text-gray-700">
-                        {skill.section_detail?.code}
-                      </span>
-                      <span className="text-sm text-gray-900">
-                        {skill.section_detail?.name}
-                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(skill);
+                        }}
+                        className="text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(skill);
+                        }}
+                        className="text-gray-500 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <ChevronDown
+                        className={`w-5 h-5 text-gray-400 transition-transform ${
+                          openCards.has(skill.id) ? 'rotate-180' : ''
+                        }`}
+                      />
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-700 max-w-md">{skill.description}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(skill)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
-                  Навыки не найдены
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-6 pb-6 border-t border-gray-100">
+                    <article className="prose prose-sm prose-slate max-w-none pt-4">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {skill.description}
+                      </ReactMarkdown>
+                    </article>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          ))
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
+            Навыки не найдены
+          </div>
+        )}
       </div>
 
-      {/* Create Dialog */}
+      {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Добавить навык</DialogTitle>
+            <DialogTitle>{editingSkill ? 'Редактировать навык' : 'Добавить навык'}</DialogTitle>
             <DialogDescription>
-              Добавьте новый навык для разряда
+              {editingSkill ? 'Измените данные навыка' : 'Добавьте новый навык для разряда'}
             </DialogDescription>
           </DialogHeader>
 
@@ -284,22 +329,22 @@ export function WorkerGradeSkillsComponent() {
                 <option value={0}>Выберите раздел</option>
                 {sections?.map((section) => (
                   <option key={section.id} value={section.id}>
-                    {section.code} - {section.name}
+                    {section.name}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <Label htmlFor="description">Описание *</Label>
+              <Label htmlFor="description">Описание * (поддерживается Markdown)</Label>
               <textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Опишите навыки, которыми должен обладать рабочий данного разряда для работы в этом разделе"
+                placeholder="Опишите навыки (поддерживается Markdown разметка)"
                 required
-                rows={4}
-                className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={12}
+                className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
               />
             </div>
 
@@ -309,24 +354,25 @@ export function WorkerGradeSkillsComponent() {
                 variant="outline"
                 onClick={() => {
                   setDialogOpen(false);
+                  setEditingSkill(null);
                   resetForm();
                 }}
-                disabled={createMutation.isPending}
+                disabled={isMutating}
               >
                 Отмена
               </Button>
               <Button
                 type="submit"
-                disabled={createMutation.isPending}
+                disabled={isMutating}
                 className="bg-blue-600 hover:bg-blue-700"
               >
-                {createMutation.isPending ? (
+                {isMutating ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Создание...
+                    {editingSkill ? 'Сохранение...' : 'Создание...'}
                   </>
                 ) : (
-                  'Создать'
+                  editingSkill ? 'Сохранить' : 'Создать'
                 )}
               </Button>
             </DialogFooter>
@@ -345,7 +391,9 @@ export function WorkerGradeSkillsComponent() {
           </DialogHeader>
 
           <p className="text-sm text-gray-600">
-            Вы уверены, что хотите удалить этот навык? Это действие нельзя отменить.
+            Вы уверены, что хотите удалить навык{' '}
+            <strong>{deletingSkill?.grade_detail?.name}</strong> для раздела{' '}
+            <strong>{deletingSkill?.section_detail?.name}</strong>? Это действие нельзя отменить.
           </p>
 
           <DialogFooter>
