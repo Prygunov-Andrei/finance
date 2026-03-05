@@ -15,22 +15,58 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
-import { Plus, Trash2, ClipboardPaste, Loader2, Upload, Wand2 } from 'lucide-react';
+import { Plus, Trash2, ClipboardPaste, Loader2, Upload, Wand2, Hammer, FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { EstimateImportDialog } from './EstimateImportDialog';
 import { AutoMatchDialog } from './AutoMatchDialog';
+import { AutoMatchWorksDialog } from './AutoMatchWorksDialog';
 
 type EstimateItemsEditorProps = {
   estimateId: number;
-  sections: EstimateSection[];
   readOnly?: boolean;
+};
+
+// Union type for mixed table rows (sections as virtual header rows + real items)
+type TableRow = EstimateItem & {
+  _isSection?: boolean;
+  _sectionId?: number;
 };
 
 const DEBOUNCE_MS = 600;
 
+// Empty section row factory
+function makeSectionRow(section: EstimateSection): TableRow {
+  return {
+    id: -(section.id),
+    estimate: section.estimate,
+    section: 0,
+    subsection: null,
+    sort_order: section.sort_order,
+    item_number: 0,
+    name: section.name,
+    model_name: '',
+    unit: '',
+    quantity: '',
+    material_unit_price: '',
+    work_unit_price: '',
+    material_total: '',
+    work_total: '',
+    line_total: '',
+    product: null,
+    work_item: null,
+    is_analog: false,
+    analog_reason: '',
+    original_name: '',
+    source_price_history: null,
+    created_at: '',
+    updated_at: '',
+    _isSection: true,
+    _sectionId: section.id,
+  };
+}
+
 export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
   estimateId,
-  sections,
   readOnly = false,
 }) => {
   const queryClient = useQueryClient();
@@ -40,12 +76,20 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
   const [isPasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [isImportDialogOpen, setImportDialogOpen] = useState(false);
   const [isAutoMatchOpen, setAutoMatchOpen] = useState(false);
+  const [isAutoMatchWorksOpen, setAutoMatchWorksOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['estimate-items', estimateId],
     queryFn: () => api.getEstimateItems(estimateId),
+    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  });
+
+  // Fetch sections internally so promote/demote updates are reflected
+  const { data: sections = [] } = useQuery({
+    queryKey: ['estimate-sections', estimateId],
+    queryFn: () => api.getEstimateSections(estimateId),
     staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
   });
 
@@ -58,6 +102,31 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
     material_unit_price: '0',
     work_unit_price: '0',
   });
+
+  // Build mixed display rows: section headers (if 2+ sections exist) + items
+  const displayRows = useMemo<TableRow[]>(() => {
+    const rows: TableRow[] = [];
+    const sortedSections = [...sections].sort((a, b) => a.sort_order - b.sort_order);
+    // Show headers when there are 2+ sections (even if some are empty)
+    const showHeaders = sortedSections.length > 1;
+
+    for (const section of sortedSections) {
+      const sectionItems = items
+        .filter((i) => i.section === section.id)
+        .sort((a, b) => a.sort_order - b.sort_order || a.item_number - b.item_number);
+      if (showHeaders) {
+        rows.push(makeSectionRow(section));
+      }
+      rows.push(...sectionItems);
+    }
+    // Items without a section (orphans)
+    const sectionIds = new Set(sections.map((s) => s.id));
+    const orphans = items.filter((i) => !sectionIds.has(i.section));
+    if (orphans.length > 0) {
+      rows.push(...orphans);
+    }
+    return rows;
+  }, [sections, items]);
 
   const updateItemMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<CreateEstimateItemData> }) =>
@@ -115,33 +184,64 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
     },
   });
 
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
+    queryClient.invalidateQueries({ queryKey: ['estimate-sections', estimateId] });
+    // Also invalidate parent's estimate query so sections stay in sync
+    queryClient.invalidateQueries({ queryKey: ['estimate', String(estimateId)] });
+  }, [queryClient, estimateId]);
+
+  // Promote item → section
+  const promoteMutation = useMutation({
+    mutationFn: (itemId: number) => api.promoteItemToSection(itemId),
+    onSuccess: () => {
+      invalidateAll();
+      toast.success('Строка назначена разделом');
+    },
+    onError: () => {
+      toast.error('Ошибка назначения раздела');
+    },
+  });
+
+  // Demote section → item
+  const demoteMutation = useMutation({
+    mutationFn: (sectionId: number) => api.demoteSectionToItem(sectionId),
+    onSuccess: () => {
+      invalidateAll();
+      toast.success('Раздел снят');
+    },
+    onError: () => {
+      toast.error('Ошибка снятия раздела');
+    },
+  });
+
   const handleCellEdit = useCallback(
     (rowIndex: number, columnId: string, value: unknown) => {
       if (readOnly) return;
-      const item = items[rowIndex];
-      if (!item) return;
+      const row = displayRows[rowIndex];
+      if (!row || row._isSection) return;
 
-      const key = `${item.id}-${columnId}`;
+      const key = `${row.id}-${columnId}`;
       if (debounceTimers.current[key]) {
         clearTimeout(debounceTimers.current[key]);
       }
 
       debounceTimers.current[key] = setTimeout(() => {
         updateItemMutation.mutate({
-          id: item.id,
+          id: row.id,
           data: { [columnId]: value },
         });
         delete debounceTimers.current[key];
       }, DEBOUNCE_MS);
     },
-    [items, readOnly, updateItemMutation],
+    [displayRows, readOnly, updateItemMutation],
   );
 
   const handleDeleteSelected = useCallback(() => {
     const selectedIds = Object.keys(rowSelection)
       .filter((key) => rowSelection[key])
-      .map((key) => items[Number(key)]?.id)
-      .filter(Boolean) as number[];
+      .map((key) => Number(key))
+      .filter((id) => id > 0); // exclude virtual section rows (negative IDs)
 
     if (selectedIds.length === 0) return;
 
@@ -150,7 +250,7 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
       setRowSelection({});
       toast.success(`Удалено ${selectedIds.length} строк`);
     });
-  }, [rowSelection, items, queryClient, estimateId]);
+  }, [rowSelection, queryClient, estimateId]);
 
   const handlePasteFromExcel = useCallback(() => {
     if (!pasteText.trim()) return;
@@ -197,17 +297,47 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
     });
   }, [newItemForm, estimateId, sections, createItemMutation]);
 
-  const sectionMap = useMemo(() => {
-    const map: Record<number, string> = {};
-    sections.forEach((s) => (map[s.id] = s.name));
-    return map;
-  }, [sections]);
-
-  const columns = useMemo<ColumnDef<EstimateItem, any>[]>(() => {
-    const cols: ColumnDef<EstimateItem, any>[] = [];
+  const columns = useMemo<ColumnDef<TableRow, any>[]>(() => {
+    const cols: ColumnDef<TableRow, any>[] = [];
 
     if (!readOnly) {
-      cols.push(createSelectColumn<EstimateItem>());
+      cols.push(createSelectColumn<TableRow>());
+
+      // Section toggle column (promote/demote)
+      cols.push({
+        id: 'section_toggle',
+        header: '',
+        size: 36,
+        enableResizing: false,
+        cell: ({ row }) => {
+          const isSection = row.original._isSection;
+          const sectionId = row.original._sectionId;
+
+          if (isSection) {
+            return (
+              <button
+                onClick={() => demoteMutation.mutate(sectionId!)}
+                className="p-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                title="Снять раздел"
+                disabled={demoteMutation.isPending}
+              >
+                <FolderOpen className="h-4 w-4" />
+              </button>
+            );
+          }
+
+          return (
+            <button
+              onClick={() => promoteMutation.mutate(row.original.id)}
+              className="p-1 rounded text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              title="Назначить разделом"
+              disabled={promoteMutation.isPending}
+            >
+              <FolderOpen className="h-4 w-4" />
+            </button>
+          );
+        },
+      });
     }
 
     cols.push(
@@ -216,31 +346,54 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
         header: '№',
         size: 50,
         enableSorting: true,
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return getValue();
+        },
       },
       {
         accessorKey: 'name',
         header: 'Наименование',
         size: 250,
         meta: readOnly ? undefined : { editable: true, type: 'text' as const },
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) {
+            return (
+              <span className="font-semibold text-blue-700 text-sm">
+                {getValue() as string}
+              </span>
+            );
+          }
+          return getValue() as string;
+        },
       },
       {
         accessorKey: 'model_name',
         header: 'Модель',
         size: 150,
         meta: readOnly ? undefined : { editable: true, type: 'text' as const },
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return getValue() as string;
+        },
       },
       {
         accessorKey: 'unit',
         header: 'Ед.',
         size: 60,
         meta: readOnly ? undefined : { editable: true, type: 'text' as const },
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return getValue() as string;
+        },
       },
       {
         accessorKey: 'quantity',
         header: 'Кол-во',
         size: 80,
         meta: readOnly ? undefined : { editable: true, type: 'number' as const },
-        cell: ({ getValue }) => {
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
           const v = getValue();
           return typeof v === 'string' ? parseFloat(v).toLocaleString('ru-RU') : v;
         },
@@ -250,42 +403,49 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
         header: 'Цена мат.',
         size: 100,
         meta: readOnly ? undefined : { editable: true, type: 'number' as const },
-        cell: ({ getValue }) => formatCurrency(getValue() as string),
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return formatCurrency(getValue() as string);
+        },
       },
       {
         accessorKey: 'work_unit_price',
         header: 'Цена раб.',
         size: 100,
         meta: readOnly ? undefined : { editable: true, type: 'number' as const },
-        cell: ({ getValue }) => formatCurrency(getValue() as string),
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return formatCurrency(getValue() as string);
+        },
       },
       {
         accessorKey: 'material_total',
         header: 'Итого мат.',
         size: 110,
         enableSorting: true,
-        cell: ({ getValue }) => formatCurrency(getValue() as string),
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return formatCurrency(getValue() as string);
+        },
       },
       {
         accessorKey: 'work_total',
         header: 'Итого раб.',
         size: 110,
-        cell: ({ getValue }) => formatCurrency(getValue() as string),
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return formatCurrency(getValue() as string);
+        },
       },
       {
         accessorKey: 'line_total',
         header: 'Итого',
         size: 120,
         enableSorting: true,
-        cell: ({ getValue }) => (
-          <span className="font-medium">{formatCurrency(getValue() as string)}</span>
-        ),
-      },
-      {
-        accessorKey: 'section',
-        header: 'Раздел',
-        size: 140,
-        cell: ({ getValue }) => sectionMap[getValue() as number] || '—',
+        cell: ({ row, getValue }) => {
+          if (row.original._isSection) return null;
+          return <span className="font-medium">{formatCurrency(getValue() as string)}</span>;
+        },
       },
     );
 
@@ -294,21 +454,25 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
         id: 'actions',
         header: '',
         size: 40,
-        cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => deleteItemMutation.mutate(row.original.id)}
-            aria-label="Удалить строку"
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
-        ),
+        enableResizing: false,
+        cell: ({ row }) => {
+          if (row.original._isSection) return null;
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => deleteItemMutation.mutate(row.original.id)}
+              aria-label="Удалить строку"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          );
+        },
       });
     }
 
     return cols;
-  }, [readOnly, sectionMap, deleteItemMutation]);
+  }, [readOnly, deleteItemMutation, promoteMutation, demoteMutation]);
 
   const totals = useMemo(() => {
     let materials = 0;
@@ -349,10 +513,16 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
             Импорт файла
           </Button>
           {items.length > 0 && (
-            <Button size="sm" variant="outline" onClick={() => setAutoMatchOpen(true)}>
-              <Wand2 className="h-4 w-4 mr-1" />
-              Подобрать цены
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={() => setAutoMatchOpen(true)}>
+                <Wand2 className="h-4 w-4 mr-1" />
+                Подобрать цены
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setAutoMatchWorksOpen(true)}>
+                <Hammer className="h-4 w-4 mr-1" />
+                Подобрать работы
+              </Button>
+            </>
           )}
           {selectedCount > 0 && (
             <Button size="sm" variant="destructive" onClick={handleDeleteSelected}>
@@ -368,19 +538,24 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
 
       <DataTable
         columns={columns}
-        data={items}
+        data={displayRows}
         enableSorting
         enableFiltering
         enableRowSelection={!readOnly}
-        enableVirtualization={items.length > 200}
+        enableVirtualization
+        enableColumnResizing
         globalFilter={globalFilter}
         onGlobalFilterChange={setGlobalFilter}
         onRowSelectionChange={setRowSelection}
         onCellEdit={handleCellEdit}
-        getRowId={(row) => String(row.id)}
-        rowClassName={(row) =>
-          row.original.is_analog ? 'bg-amber-50' : undefined
-        }
+        getRowId={(row) => String((row as TableRow).id)}
+        rowClassName={(row) => {
+          const original = row.original as TableRow;
+          if (original._isSection) {
+            return 'bg-blue-50 font-semibold';
+          }
+          return original.is_analog ? 'bg-amber-50' : undefined;
+        }}
         estimatedRowHeight={40}
         footerContent={
           <div className="flex items-center gap-6 py-2 font-medium">
@@ -485,6 +660,13 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
       <AutoMatchDialog
         open={isAutoMatchOpen}
         onOpenChange={setAutoMatchOpen}
+        estimateId={estimateId}
+      />
+
+      {/* AutoMatch Works Dialog */}
+      <AutoMatchWorksDialog
+        open={isAutoMatchWorksOpen}
+        onOpenChange={setAutoMatchWorksOpen}
         estimateId={estimateId}
       />
 

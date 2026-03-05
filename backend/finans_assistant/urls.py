@@ -29,7 +29,7 @@ from payments.views import (
     InvoiceViewSet, RecurringPaymentViewSet, IncomeRecordViewSet,
     JournalEntryViewSet, InvoiceItemViewSet,
 )
-from core.views import UserViewSet, NotificationViewSet
+from core.views import UserViewSet, NotificationViewSet, cbr_rates
 from core.views import SystemNotificationCreateView
 from core.auth_views import ERPTokenObtainPairView
 
@@ -118,6 +118,7 @@ urlpatterns = [
     path('api/v1/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
     # API endpoints
+    path('api/v1/cbr-rates/', cbr_rates, name='cbr-rates'),
     # Важно: должен матчиться раньше router (иначе попадет в /notifications/{pk}/).
     path('api/v1/notifications/system_create/', SystemNotificationCreateView.as_view(), name='system-notification-create'),
     path('api/v1/', include(router.urls)),

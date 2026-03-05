@@ -30,7 +30,7 @@ export function ObjectSettingsTab({ objectId, objectName }: ObjectSettingsTabPro
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteConstructionObject(objectId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['construction-objects'] });
+      queryClient.invalidateQueries({ queryKey: ['objects'] });
       toast.success('Объект успешно удалён');
       navigate('/objects');
     },

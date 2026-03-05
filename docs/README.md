@@ -58,6 +58,13 @@
 | [work_logging/DEPLOYMENT.md](./work_logging/DEPLOYMENT.md) | Развёртывание и настройка |
 | [work_logging/IMPLEMENTATION_PLAN.md](./work_logging/IMPLEMENTATION_PLAN.md) | План реализации с прогрессом |
 
+### 📋 Сметы (Estimates)
+
+| Документ | Описание |
+|----------|----------|
+| [estimates/README.md](./estimates/README.md) | Архитектура модуля, модели, API, сервисы |
+| [estimates/USER_GUIDE.md](./estimates/USER_GUIDE.md) | Руководство пользователя: импорт, разделы, редактирование |
+
 ### 📄 [schema.yaml](./schema.yaml)
 OpenAPI схема API в формате YAML для интеграции и документации эндпоинтов.
 

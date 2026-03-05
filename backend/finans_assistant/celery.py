@@ -43,4 +43,8 @@ app.conf.beat_schedule = {
         'task': 'supply.tasks.generate_recurring_invoices',
         'schedule': 86400.0,  # Каждые 24 часа (в 06:00 через crontab в settings)
     },
+    'recover-stuck-recognition': {
+        'task': 'supply.tasks.recover_stuck_recognition',
+        'schedule': 300.0,  # Каждые 5 минут
+    },
 }

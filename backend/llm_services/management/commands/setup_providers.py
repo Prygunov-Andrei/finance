@@ -25,7 +25,7 @@ class Command(BaseCommand):
             },
             {
                 'provider_type': LLMProvider.ProviderType.GROK,
-                'model_name': 'grok-2-vision-1212',
+                'model_name': 'grok-4-fast-non-reasoning',
                 'env_key_name': 'GROK_API_KEY',
                 'is_default': False
             }

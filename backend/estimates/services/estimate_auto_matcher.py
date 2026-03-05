@@ -113,9 +113,10 @@ class EstimateAutoMatcher:
         }
 
     def _match_work_for_item(
-        self, item, price_list: Optional[PriceList]
+        self, item, price_list: Optional[PriceList], record: bool = True,
     ) -> Optional[Dict]:
-        """Подбирает WorkItem для одной строки сметы."""
+        """Подбирает WorkItem для одной строки сметы.
+        record=False — preview-режим без записи в ProductWorkMapping."""
 
         # 1. История — ProductWorkMapping
         mapping = ProductWorkMapping.objects.filter(
@@ -139,9 +140,10 @@ class EstimateAutoMatcher:
             if work_items_qs.exists():
                 best = self._fuzzy_match_work(item.name, work_items_qs[:20])
                 if best:
-                    self._record_mapping(
-                        item.product, best, ProductWorkMapping.Source.RULE, confidence=0.7,
-                    )
+                    if record:
+                        self._record_mapping(
+                            item.product, best, ProductWorkMapping.Source.RULE, confidence=0.7,
+                        )
                     result = {'work_item': best, '_source': 'rule'}
                     price = self._get_work_price(best, price_list)
                     if price is not None:
@@ -153,9 +155,10 @@ class EstimateAutoMatcher:
             candidates = WorkItem.objects.filter(is_current=True)[:20]
             best = self._fuzzy_match_work(item.name, candidates)
             if best:
-                self._record_mapping(
-                    item.product, best, ProductWorkMapping.Source.LLM, confidence=0.5,
-                )
+                if record:
+                    self._record_mapping(
+                        item.product, best, ProductWorkMapping.Source.LLM, confidence=0.5,
+                    )
                 result = {'work_item': best, '_source': 'llm'}
                 price = self._get_work_price(best, price_list)
                 if price is not None:
@@ -301,6 +304,60 @@ class EstimateAutoMatcher:
                     'invoice_info': invoice_info,
                     'source_price_history_id': source_price_history_id,
                 })
+
+        return results
+
+    # ------------------------------------------------------------------
+    # Confidence по источнику совпадения
+    # ------------------------------------------------------------------
+    _SOURCE_CONFIDENCE = {'history': 0.9, 'rule': 0.7, 'llm': 0.5}
+
+    def preview_works(
+        self, estimate, price_list_id: Optional[int] = None,
+    ) -> List[Dict]:
+        """Preview-подбор работ БЕЗ сохранения в БД.
+
+        Возвращает per-item результаты для review сметчиком.
+        """
+        from estimates.models import EstimateItem
+
+        items = EstimateItem.objects.filter(
+            estimate=estimate,
+            product__isnull=False,
+            work_item__isnull=True,
+        ).select_related('product', 'product__category')
+
+        price_list = None
+        if price_list_id:
+            try:
+                price_list = PriceList.objects.get(pk=price_list_id)
+            except PriceList.DoesNotExist:
+                pass
+
+        results: List[Dict] = []
+        for item in items:
+            match = self._match_work_for_item(item, price_list, record=False)
+            if not match:
+                continue
+
+            wi = match['work_item']
+            source = match.get('_source', 'unknown')
+            results.append({
+                'item_id': item.id,
+                'name': item.name,
+                'matched_work': {
+                    'id': wi.id,
+                    'name': wi.name,
+                    'article': wi.article,
+                    'section_name': wi.section.name if wi.section_id else '',
+                    'hours': str(wi.hours) if wi.hours is not None else '0',
+                    'required_grade': str(wi.required_grade),
+                    'unit': wi.unit,
+                },
+                'work_price': str(match['price']) if 'price' in match else None,
+                'work_confidence': self._SOURCE_CONFIDENCE.get(source, 0.5),
+                'source': source,
+            })
 
         return results
 

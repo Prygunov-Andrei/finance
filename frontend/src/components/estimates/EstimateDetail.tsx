@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, EstimateSection, EstimateSubsection, EstimateCharacteristic } from '../../lib/api';
 import { formatDate, formatCurrency } from '../../lib/utils';
@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
-import { ArrowLeft, Loader2, FileText, Plus, Edit2, Trash2, Info, DollarSign, History, FileSpreadsheet, Table2, Receipt } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, Plus, Edit2, Trash2, Info, DollarSign, History, FileSpreadsheet, Table2, Receipt, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { EstimateItemsEditor } from './EstimateItemsEditor';
 import { EstimateSupplierInvoices } from './EstimateSupplierInvoices';
@@ -38,6 +38,8 @@ const STATUS_MAP = {
 export function EstimateDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'info';
   const queryClient = useQueryClient();
 
   const [isSectionDialogOpen, setSectionDialogOpen] = useState(false);
@@ -100,6 +102,26 @@ export function EstimateDetail() {
     },
     onError: (error) => {
       toast.error(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+    },
+  });
+
+  // Подбор курсов ЦБ РФ
+  const fetchCBRMutation = useMutation({
+    mutationFn: async () => {
+      const rates = await api.getCBRRates();
+      await api.updateEstimate(Number(id), {
+        usd_rate: rates.usd,
+        eur_rate: rates.eur,
+        cny_rate: rates.cny,
+      } as any);
+      return rates;
+    },
+    onSuccess: (rates) => {
+      queryClient.invalidateQueries({ queryKey: ['estimate', id] });
+      toast.success(`Курсы ЦБ на ${rates.date} загружены`);
+    },
+    onError: (error) => {
+      toast.error(`Ошибка загрузки курсов: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     },
   });
 
@@ -471,7 +493,7 @@ export function EstimateDetail() {
         </div>
       </div>
 
-      <Tabs defaultValue="info" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(val) => setSearchParams({ tab: val }, { replace: true })} className="space-y-6">
         <TabsList>
           <TabsTrigger value="info">
             <Info className="w-4 h-4 mr-2" />
@@ -550,14 +572,22 @@ export function EstimateDetail() {
               <div className="mt-4 pt-4 border-t">
                 <div className="text-sm text-gray-500 mb-2">Проекты-основания</div>
                 <div className="space-y-1">
-                  {estimate.projects.map((project) => (
+                  {estimate.projects.map((project: any) => (
                     <div key={project.id} className="text-sm">
-                      <button
-                        onClick={() => navigate(`/estimates/projects/${project.id}`)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {project.cipher} - {project.name}
-                      </button>
+                      {project.file ? (
+                        <a
+                          href={project.file}
+                          download
+                          className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          {project.cipher} - {project.name}
+                        </a>
+                      ) : (
+                        <span className="text-gray-500">
+                          {project.cipher} - {project.name} (файл отсутствует)
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -609,7 +639,19 @@ export function EstimateDetail() {
             </div>
 
             <div className="mt-4 pt-4 border-t">
-              <Label className="text-sm text-gray-500">Курсы валют</Label>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-gray-500">Курсы валют</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs gap-1"
+                  onClick={() => fetchCBRMutation.mutate()}
+                  disabled={fetchCBRMutation.isPending}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${fetchCBRMutation.isPending ? 'animate-spin' : ''}`} />
+                  {fetchCBRMutation.isPending ? 'Загрузка...' : 'Курсы ЦБ'}
+                </Button>
+              </div>
               <div className="grid grid-cols-3 gap-3 mt-1 max-w-[500px]">
                 <div>
                   <Label htmlFor="detail-usd" className="text-xs text-gray-400">USD</Label>
@@ -809,7 +851,6 @@ export function EstimateDetail() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <EstimateItemsEditor
               estimateId={Number(id)}
-              sections={estimate?.sections || []}
               readOnly={estimate?.status === 'approved' || estimate?.status === 'agreed'}
             />
           </div>

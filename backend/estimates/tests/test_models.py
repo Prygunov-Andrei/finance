@@ -8,7 +8,8 @@ import uuid
 
 from estimates.models import (
     Project, ProjectNote, Estimate, EstimateSection,
-    EstimateSubsection, EstimateCharacteristic, MountingEstimate
+    EstimateSubsection, EstimateCharacteristic, MountingEstimate,
+    EstimateItem,
 )
 from objects.models import Object
 from accounting.models import LegalEntity, TaxSystem, Counterparty
@@ -984,3 +985,112 @@ class EstimateCharacteristicTests(TestCase):
         
         self.assertEqual(char_sections.source_type, EstimateCharacteristic.SourceType.SECTIONS)
         self.assertEqual(char_manual.source_type, EstimateCharacteristic.SourceType.MANUAL)
+
+
+class EstimateItemPromotionServiceTests(TestCase):
+    """Unit-тесты для promote_item_to_section / demote_section_to_item"""
+
+    def setUp(self):
+        unique_id = str(uuid.uuid4())[:8]
+        self.object = Object.objects.create(
+            name=f'Тестовый объект {unique_id}',
+            address='Тестовый адрес'
+        )
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+        self.tax_system, _ = TaxSystem.objects.get_or_create(
+            code='osn_vat_20',
+            defaults={
+                'name': 'ОСН с НДС 20%',
+                'vat_rate': Decimal('20.00'),
+                'has_vat': True
+            }
+        )
+        self.legal_entity, _ = LegalEntity.objects.get_or_create(
+            inn='1234567890',
+            defaults={
+                'name': 'ООО Тест',
+                'short_name': 'Тест',
+                'tax_system': self.tax_system
+            }
+        )
+        self.estimate = Estimate.objects.create(
+            name='Тестовая смета',
+            object=self.object,
+            legal_entity=self.legal_entity,
+            created_by=self.user,
+        )
+        self.section = EstimateSection.objects.create(
+            estimate=self.estimate, name='Основной раздел', sort_order=0,
+        )
+        self.items = [
+            EstimateItem.objects.create(
+                estimate=self.estimate, section=self.section,
+                name=f'Позиция {i}', sort_order=i, item_number=i,
+                quantity=1, material_unit_price=100, work_unit_price=50,
+            ) for i in range(1, 6)
+        ]
+
+    def _get_service(self):
+        from estimates.services.estimate_import_service import EstimateImportService
+        return EstimateImportService()
+
+    def test_promote_preserves_sort_order(self):
+        """sort_order секций не ломается после promote"""
+        service = self._get_service()
+        service.promote_item_to_section(self.items[2].id)
+
+        sections = list(
+            EstimateSection.objects.filter(estimate=self.estimate)
+            .order_by('sort_order')
+        )
+        self.assertEqual(len(sections), 2)
+        # sort_order должен быть строго возрастающим
+        self.assertLess(sections[0].sort_order, sections[1].sort_order)
+
+    def test_demote_preserves_item_numbers(self):
+        """item_number корректен после demote"""
+        service = self._get_service()
+        result = service.promote_item_to_section(self.items[2].id)
+        section_id = result['section_id']
+        service.demote_section_to_item(section_id)
+
+        item_numbers = list(
+            EstimateItem.objects.filter(estimate=self.estimate)
+            .values_list('item_number', flat=True)
+            .order_by('item_number')
+        )
+        # Все item_number уникальны
+        self.assertEqual(len(item_numbers), len(set(item_numbers)))
+
+    def test_promote_demote_roundtrip(self):
+        """promote → demote → количество сущностей восстанавливается"""
+        service = self._get_service()
+        result = service.promote_item_to_section(self.items[1].id)
+        section_id = result['section_id']
+        service.demote_section_to_item(section_id)
+
+        self.assertEqual(
+            EstimateSection.objects.filter(estimate=self.estimate).count(), 1,
+        )
+        # 5 items: 4 исходных + 1 созданный из секции (item #2 удалён при promote, потом восстановлен как новый)
+        self.assertEqual(
+            EstimateItem.objects.filter(estimate=self.estimate).count(), 5,
+        )
+
+    def test_multiple_promotes_sort_order(self):
+        """Несколько promote подряд → sort_order секций корректен"""
+        service = self._get_service()
+        service.promote_item_to_section(self.items[1].id)
+        service.promote_item_to_section(self.items[3].id)
+
+        sections = list(
+            EstimateSection.objects.filter(estimate=self.estimate)
+            .order_by('sort_order')
+        )
+        self.assertEqual(len(sections), 3)
+        # sort_order строго возрастающий
+        for i in range(len(sections) - 1):
+            self.assertLess(sections[i].sort_order, sections[i + 1].sort_order)

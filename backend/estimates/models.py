@@ -65,7 +65,7 @@ class Project(TimestampedModel):
     )
     file = models.FileField(
         upload_to=project_file_path,
-        verbose_name='ZIP-архив проекта'
+        verbose_name='Файл проекта'
     )
     notes = models.TextField(
         blank=True,

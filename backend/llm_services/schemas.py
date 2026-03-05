@@ -26,15 +26,15 @@ class InvoiceInfo(BaseModel):
 class TotalsInfo(BaseModel):
     """Итоговые суммы"""
     amount_gross: Decimal = Field(..., description="Сумма с НДС")
-    vat_amount: Decimal = Field(..., description="Сумма НДС")
+    vat_amount: Optional[Decimal] = Field(None, description="Сумма НДС (null если без НДС)")
 
 
 class InvoiceItem(BaseModel):
     """Позиция счёта"""
     name: str = Field(..., description="Наименование товара/услуги")
-    quantity: Decimal = Field(..., description="Количество")
-    unit: str = Field(..., description="Единица измерения")
-    price_per_unit: Decimal = Field(..., description="Цена за единицу")
+    quantity: Optional[Decimal] = Field(None, description="Количество")
+    unit: Optional[str] = Field(None, description="Единица измерения")
+    price_per_unit: Optional[Decimal] = Field(None, description="Цена за единицу")
 
 
 class FutureFields(BaseModel):

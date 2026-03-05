@@ -9,7 +9,8 @@ from datetime import date
 
 from estimates.models import (
     Project, ProjectNote, Estimate, EstimateSection,
-    EstimateSubsection, EstimateCharacteristic, MountingEstimate
+    EstimateSubsection, EstimateCharacteristic, MountingEstimate,
+    EstimateItem,
 )
 from objects.models import Object
 from accounting.models import LegalEntity, TaxSystem, Counterparty
@@ -1048,3 +1049,171 @@ class MountingEstimateAPITests(BaseAPITestCase):
             data
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class EstimateItemSectionPromotionTests(BaseAPITestCase):
+    """Тесты promote/demote строк в разделы"""
+
+    def setUp(self):
+        super().setUp()
+        self.estimate = Estimate.objects.create(
+            name='Тестовая смета',
+            object=self.object,
+            legal_entity=self.legal_entity,
+            created_by=self.user,
+        )
+        self.section = EstimateSection.objects.create(
+            estimate=self.estimate, name='Основной раздел', sort_order=0,
+        )
+        # 5 items в одной секции
+        self.items = [
+            EstimateItem.objects.create(
+                estimate=self.estimate, section=self.section,
+                name=f'Позиция {i}', sort_order=i, item_number=i,
+                quantity=1, material_unit_price=100, work_unit_price=50,
+            ) for i in range(1, 6)
+        ]
+
+    def test_promote_item_to_section(self):
+        """Promote item #3 → section 'Позиция 3', items #4,#5 переходят в неё"""
+        item3 = self.items[2]
+        response = self.client.post(f'/api/v1/estimate-items/{item3.id}/promote-to-section/')
+        self.assertEqual(response.status_code, 200)
+
+        # Item #3 удалён
+        self.assertFalse(EstimateItem.objects.filter(id=item3.id).exists())
+
+        # Новая секция создана
+        new_section = EstimateSection.objects.get(
+            estimate=self.estimate, name='Позиция 3',
+        )
+        self.assertIsNotNone(new_section)
+
+        # Items #4, #5 переехали в новую секцию
+        self.assertEqual(
+            EstimateItem.objects.filter(section=new_section).count(), 2,
+        )
+        # Items #1, #2 остались в старой секции
+        self.assertEqual(
+            EstimateItem.objects.filter(section=self.section).count(), 2,
+        )
+
+    def test_promote_last_item(self):
+        """Promote последнего item → секция без дочерних items"""
+        item5 = self.items[4]
+        response = self.client.post(f'/api/v1/estimate-items/{item5.id}/promote-to-section/')
+        self.assertEqual(response.status_code, 200)
+        new_section = EstimateSection.objects.get(name='Позиция 5')
+        self.assertEqual(new_section.items.count(), 0)
+
+    def test_promote_first_item(self):
+        """Promote первого item → items #2-#5 переезжают"""
+        item1 = self.items[0]
+        response = self.client.post(f'/api/v1/estimate-items/{item1.id}/promote-to-section/')
+        self.assertEqual(response.status_code, 200)
+        new_section = EstimateSection.objects.get(name='Позиция 1')
+        self.assertEqual(new_section.items.count(), 4)
+
+    def test_demote_section_to_item(self):
+        """Demote section → item, items переезжают в предыдущую секцию"""
+        # Сначала promote чтобы создать вторую секцию
+        item3 = self.items[2]
+        self.client.post(f'/api/v1/estimate-items/{item3.id}/promote-to-section/')
+        new_section = EstimateSection.objects.get(name='Позиция 3')
+
+        # Теперь demote
+        response = self.client.post(f'/api/v1/estimate-sections/{new_section.id}/demote-to-item/')
+        self.assertEqual(response.status_code, 200)
+
+        # Секция удалена
+        self.assertFalse(EstimateSection.objects.filter(id=new_section.id).exists())
+
+        # Новый item создан
+        new_item = EstimateItem.objects.get(name='Позиция 3')
+        self.assertEqual(new_item.section, self.section)
+        self.assertEqual(new_item.quantity, 0)
+        self.assertEqual(new_item.unit, 'шт')
+
+        # Все items вернулись в основную секцию
+        self.assertEqual(
+            EstimateItem.objects.filter(section=self.section).count(), 5,
+        )
+
+    def test_demote_only_section_creates_default(self):
+        """Demote единственной секции → создаётся 'Основной раздел'"""
+        response = self.client.post(f'/api/v1/estimate-sections/{self.section.id}/demote-to-item/')
+        self.assertEqual(response.status_code, 200)
+        # Должен быть создан 'Основной раздел' + items перенесены
+        default = EstimateSection.objects.filter(
+            estimate=self.estimate, name='Основной раздел'
+        ).first()
+        self.assertIsNotNone(default)
+
+    def test_promote_nonexistent_item(self):
+        """Promote несуществующего item → 404"""
+        response = self.client.post('/api/v1/estimate-items/99999/promote-to-section/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_demote_nonexistent_section(self):
+        """Demote несуществующей секции → 404"""
+        response = self.client.post('/api/v1/estimate-sections/99999/demote-to-item/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_promote_demote_roundtrip(self):
+        """promote → demote → данные восстанавливаются"""
+        item3 = self.items[2]
+        # Promote
+        resp1 = self.client.post(f'/api/v1/estimate-items/{item3.id}/promote-to-section/')
+        self.assertEqual(resp1.status_code, 200)
+        new_section_id = resp1.data['section_id']
+
+        # Demote
+        resp2 = self.client.post(f'/api/v1/estimate-sections/{new_section_id}/demote-to-item/')
+        self.assertEqual(resp2.status_code, 200)
+
+        # Должна остаться только исходная секция + все items в ней
+        self.assertEqual(
+            EstimateSection.objects.filter(estimate=self.estimate).count(), 1,
+        )
+        self.assertEqual(
+            EstimateItem.objects.filter(estimate=self.estimate).count(), 5,
+        )
+
+    def test_multiple_promotes_in_sequence(self):
+        """Несколько promote подряд → корректная иерархия секций"""
+        # Promote item #2
+        self.client.post(f'/api/v1/estimate-items/{self.items[1].id}/promote-to-section/')
+        # Promote item #4
+        self.client.post(f'/api/v1/estimate-items/{self.items[3].id}/promote-to-section/')
+
+        # Должно быть 3 секции
+        self.assertEqual(
+            EstimateSection.objects.filter(estimate=self.estimate).count(), 3,
+        )
+        # 3 items (удалены #2 и #4)
+        self.assertEqual(
+            EstimateItem.objects.filter(estimate=self.estimate).count(), 3,
+        )
+
+    def test_demote_preserves_visual_order(self):
+        """Demote: новая строка встаёт на место заголовка, items идут после неё"""
+        # Promote item #3 → создаёт секцию 'Позиция 3' с items #4, #5
+        resp = self.client.post(f'/api/v1/estimate-items/{self.items[2].id}/promote-to-section/')
+        new_section = EstimateSection.objects.get(pk=resp.data['section_id'])
+
+        # Demote секцию обратно
+        resp2 = self.client.post(f'/api/v1/estimate-sections/{new_section.id}/demote-to-item/')
+        self.assertEqual(resp2.status_code, 200)
+
+        # Проверяем порядок: все items одной секции, отсортированы по sort_order
+        ordered = list(
+            EstimateItem.objects.filter(estimate=self.estimate)
+            .order_by('sort_order', 'item_number')
+            .values_list('name', flat=True)
+        )
+        # Позиция 1, Позиция 2 — были в первой секции
+        # Позиция 3 — бывший заголовок, должен идти третьим
+        # Позиция 4, Позиция 5 — были в демотированной секции, идут после
+        self.assertEqual(ordered, [
+            'Позиция 1', 'Позиция 2', 'Позиция 3', 'Позиция 4', 'Позиция 5',
+        ])

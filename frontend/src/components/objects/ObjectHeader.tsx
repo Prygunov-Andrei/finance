@@ -70,7 +70,7 @@ export function ObjectHeader({ object, objectId }: ObjectHeaderProps) {
 
   const invalidateObject = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['construction-object', objectId] });
-    queryClient.invalidateQueries({ queryKey: ['construction-objects'] });
+    queryClient.invalidateQueries({ queryKey: ['objects'] });
   }, [queryClient, objectId]);
 
   const fieldMutation = useMutation({

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { api, ProjectList, ConstructionObject } from '../../lib/api';
 import { formatDate } from '../../lib/utils';
 import { CONSTANTS } from '../../constants';
+import { useObjects } from '../../hooks/useReferenceData';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -42,17 +43,16 @@ export function Projects() {
     staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
   });
 
-  const { data: objects } = useQuery({
-    queryKey: ['construction-objects'],
-    queryFn: () => api.getConstructionObjects(),
-    staleTime: CONSTANTS.REFERENCE_STALE_TIME_MS,
-  });
+  const { data: objectsData } = useObjects();
+  const objects = Array.isArray(objectsData)
+    ? objectsData
+    : (objectsData as any)?.results ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.file) {
-      toast.error('Необходимо загрузить ZIP-архив проекта');
+      toast.error('Необходимо загрузить файл проекта');
       return;
     }
 
@@ -177,7 +177,7 @@ export function Projects() {
                 className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Все объекты</option>
-                {objects?.map((obj) => (
+                {objects.map((obj) => (
                   <option key={obj.id} value={obj.id}>{obj.name}</option>
                 ))}
               </select>
@@ -388,7 +388,7 @@ export function Projects() {
                   required
                 >
                   <option value={0}>Выберите объект</option>
-                  {objects?.map((obj) => (
+                  {objects.map((obj) => (
                     <option key={obj.id} value={obj.id}>{obj.name}</option>
                   ))}
                 </select>
@@ -396,17 +396,16 @@ export function Projects() {
             </div>
 
             <div>
-              <Label htmlFor="file">ZIP-архив проекта *</Label>
+              <Label htmlFor="file">Файл проекта *</Label>
               <Input
                 id="file"
                 type="file"
-                accept=".zip"
                 onChange={(e) => setFormData({ ...formData, file: e.target.files?.[0] || null })}
                 required
                 className="mt-1.5"
               />
               <p className="text-xs text-gray-500 mt-1.5">
-                Загрузите ZIP-архив с проектной документацией
+                Загрузите файл проектной документации (PDF, ZIP, DWG и др.)
               </p>
             </div>
 

@@ -114,7 +114,7 @@ export const EstimateSupplierInvoices = ({ estimateId }: EstimateSupplierInvoice
                 <tr
                   key={invoice.id}
                   className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/supply/invoices/${invoice.id}`)}
+                  onClick={() => navigate(`/estimates/invoices/${invoice.id}`)}
                 >
                   <td className="px-4 py-3">{statusBadge(invoice.status)}</td>
                   <td className="px-4 py-3 font-medium">

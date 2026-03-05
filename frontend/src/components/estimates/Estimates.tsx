@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { api, EstimateList } from '../../lib/api';
 import { CONSTANTS } from '../../constants';
+import { useObjects } from '../../hooks/useReferenceData';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -48,11 +49,10 @@ export function Estimates() {
     staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
   });
 
-  const { data: objects } = useQuery({
-    queryKey: ['construction-objects'],
-    queryFn: () => api.getConstructionObjects(),
-    staleTime: CONSTANTS.REFERENCE_STALE_TIME_MS,
-  });
+  const { data: objectsData, error: objectsError } = useObjects();
+  const objects = Array.isArray(objectsData)
+    ? objectsData
+    : (objectsData as any)?.results ?? [];
 
   const { data: legalEntities } = useQuery({
     queryKey: ['legal-entities'],
@@ -192,7 +192,7 @@ export function Estimates() {
                 className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Все объекты</option>
-                {objects?.map((obj) => (
+                {objects.map((obj) => (
                   <option key={obj.id} value={obj.id}>{obj.name}</option>
                 ))}
               </select>
@@ -347,10 +347,13 @@ export function Estimates() {
                   required
                 >
                   <option value={0}>Выберите объект</option>
-                  {objects?.map((obj) => (
+                  {objects.map((obj) => (
                     <option key={obj.id} value={obj.id}>{obj.name}</option>
                   ))}
                 </select>
+                {objectsError && (
+                  <p className="text-xs text-red-500 mt-1">Ошибка загрузки объектов</p>
+                )}
               </div>
 
               <div>

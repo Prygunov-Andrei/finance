@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 import openpyxl
 from django.db import transaction
+from django.db.models import F, Max
 
 from estimates.models import Estimate, EstimateSection, EstimateItem
 from .estimate_import_schemas import EstimateImportRow, ParsedEstimate
@@ -128,21 +129,12 @@ class EstimateImportService:
         data_rows = all_rows[header_row_idx + 1:] if header_row_idx is not None else all_rows
 
         parsed_rows: List[EstimateImportRow] = []
-        sections: List[str] = []
-        current_section = ''
         item_counter = 0
 
         for row in data_rows:
             row_list = list(row)
 
             if _is_totals_row(row_list):
-                continue
-
-            is_section, section_name = _is_section_row(row_list)
-            if is_section:
-                current_section = section_name
-                if current_section not in sections:
-                    sections.append(current_section)
                 continue
 
             name_idx = col_mapping.get('name', 0)
@@ -165,7 +157,7 @@ class EstimateImportService:
                 quantity=_safe_decimal(row_list[qty_idx]) if qty_idx and qty_idx < len(row_list) else Decimal('1'),
                 material_unit_price=_safe_decimal(row_list[mat_price_idx]) if mat_price_idx and mat_price_idx < len(row_list) else Decimal('0'),
                 work_unit_price=_safe_decimal(row_list[work_price_idx]) if work_price_idx and work_price_idx < len(row_list) else Decimal('0'),
-                section_name=current_section,
+                section_name='',
             ))
 
         wb.close()
@@ -174,7 +166,7 @@ class EstimateImportService:
 
         return ParsedEstimate(
             rows=parsed_rows,
-            sections=sections,
+            sections=[],
             total_rows=len(parsed_rows),
             confidence=confidence,
         )
@@ -298,3 +290,190 @@ class EstimateImportService:
             created_items.append(item)
 
         return created_items
+
+    @transaction.atomic
+    def save_rows_from_preview(
+        self,
+        estimate_id: int,
+        rows: List[Dict[str, Any]],
+    ) -> List[EstimateItem]:
+        """Сохраняет строки из предпросмотра (JSON) с назначенными разделами.
+
+        Строки с is_section=True становятся разделами (EstimateSection).
+        Остальные строки привязываются к ближайшему разделу сверху.
+        """
+        estimate = Estimate.objects.get(pk=estimate_id)
+
+        existing_max = (
+            EstimateItem.objects.filter(estimate=estimate)
+            .order_by('-item_number')
+            .values_list('item_number', flat=True)
+            .first()
+        ) or 0
+
+        # Первый проход: создаём разделы
+        section_map: Dict[str, EstimateSection] = {}
+        sort_order = 0
+        for row_data in rows:
+            if row_data.get('is_section'):
+                name = row_data.get('name', '').strip()
+                if name and name not in section_map:
+                    section, _ = EstimateSection.objects.get_or_create(
+                        estimate=estimate,
+                        name=name,
+                        defaults={'sort_order': sort_order},
+                    )
+                    section_map[name] = section
+                    sort_order += 1
+
+        # Дефолтный раздел, если разделов нет
+        default_section = None
+        if not section_map:
+            default_section, _ = EstimateSection.objects.get_or_create(
+                estimate=estimate,
+                name='Основной раздел',
+                defaults={'sort_order': 0},
+            )
+
+        # Второй проход: создаём строки
+        current_section = default_section
+        created_items = []
+        item_counter = 0
+
+        for row_data in rows:
+            if row_data.get('is_section'):
+                name = row_data.get('name', '').strip()
+                current_section = section_map.get(name, default_section)
+                continue
+
+            item_counter += 1
+            section = current_section or default_section or next(iter(section_map.values()))
+
+            item = EstimateItem.objects.create(
+                estimate=estimate,
+                section=section,
+                item_number=existing_max + item_counter,
+                sort_order=existing_max + item_counter,
+                name=row_data.get('name', ''),
+                model_name=row_data.get('model_name', ''),
+                unit=row_data.get('unit', 'шт') or 'шт',
+                quantity=_safe_decimal(row_data.get('quantity', 1)),
+                material_unit_price=_safe_decimal(row_data.get('material_unit_price', 0)),
+                work_unit_price=_safe_decimal(row_data.get('work_unit_price', 0)),
+            )
+            created_items.append(item)
+
+        return created_items
+
+    @staticmethod
+    def _renumber_items(estimate):
+        """Перенумерует все строки сметы последовательно (1, 2, 3, ...)."""
+        items = list(
+            EstimateItem.objects.filter(estimate=estimate)
+            .order_by('section__sort_order', 'sort_order', 'item_number')
+            .values_list('pk', flat=True)
+        )
+        for i, pk in enumerate(items, 1):
+            EstimateItem.objects.filter(pk=pk).update(item_number=i)
+
+    @transaction.atomic
+    def promote_item_to_section(self, item_id: int) -> Dict[str, Any]:
+        """Превращает строку сметы в раздел (секцию).
+
+        Все строки ниже в той же секции переезжают в новую секцию.
+        Исходная строка удаляется.
+        """
+        item = EstimateItem.objects.select_related('section').get(pk=item_id)
+        estimate = item.estimate
+        old_section = item.section
+
+        # Сдвигаем sort_order секций после текущей
+        EstimateSection.objects.filter(
+            estimate=estimate,
+            sort_order__gt=old_section.sort_order,
+        ).update(sort_order=F('sort_order') + 1)
+
+        # Создаём новую секцию
+        new_section = EstimateSection.objects.create(
+            estimate=estimate,
+            name=item.name,
+            sort_order=old_section.sort_order + 1,
+        )
+
+        # Items ниже в той же секции → переезжают в новую
+        EstimateItem.objects.filter(
+            section=old_section,
+            sort_order__gt=item.sort_order,
+        ).update(section=new_section)
+
+        # Удаляем исходный item
+        item.delete()
+
+        # Если старая секция осталась пустой и есть другие секции — удалить
+        total_sections = EstimateSection.objects.filter(estimate=estimate).count()
+        if total_sections > 1 and not old_section.items.exists():
+            old_section.delete()
+
+        self._renumber_items(estimate)
+        return {'section_id': new_section.id}
+
+    @transaction.atomic
+    def demote_section_to_item(self, section_id: int) -> Dict[str, Any]:
+        """Превращает раздел обратно в обычную строку.
+
+        Новая строка встаёт на место заголовка раздела,
+        затем идут все строки бывшего раздела — порядок сохраняется.
+        """
+        section = EstimateSection.objects.get(pk=section_id)
+        estimate = section.estimate
+
+        prev_section = EstimateSection.objects.filter(
+            estimate=estimate,
+            sort_order__lt=section.sort_order,
+        ).order_by('-sort_order').first()
+
+        if not prev_section:
+            prev_section = EstimateSection.objects.filter(
+                estimate=estimate,
+            ).exclude(pk=section_id).order_by('sort_order').first()
+            if not prev_section:
+                prev_section = EstimateSection.objects.create(
+                    estimate=estimate,
+                    name='Основной раздел',
+                    sort_order=0,
+                )
+
+        max_sort = (
+            EstimateItem.objects.filter(section=prev_section)
+            .aggregate(m=Max('sort_order'))['m'] or 0
+        )
+
+        # Строки бывшего раздела — в порядке отображения
+        demoted_item_pks = list(
+            section.items.order_by('sort_order', 'item_number')
+            .values_list('pk', flat=True)
+        )
+
+        # Новая строка встаёт сразу после последнего item предыдущей секции
+        new_item = EstimateItem.objects.create(
+            estimate=estimate,
+            section=prev_section,
+            name=section.name,
+            sort_order=max_sort + 1,
+            item_number=0,
+            unit='шт',
+            quantity=0,
+            material_unit_price=0,
+            work_unit_price=0,
+        )
+
+        # Бывшие items раздела идут сразу после новой строки (sort_order не пересекается)
+        for offset, pk in enumerate(demoted_item_pks, start=2):
+            EstimateItem.objects.filter(pk=pk).update(
+                section=prev_section,
+                sort_order=max_sort + offset,
+            )
+
+        section.delete()
+        self._renumber_items(estimate)
+        return {'item_id': new_item.id}

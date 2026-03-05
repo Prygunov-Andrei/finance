@@ -63,7 +63,21 @@ class ExcelInvoiceParser:
 
     @staticmethod
     def _extract_text(file_content: bytes, filename: str) -> str:
-        """Извлекает текст из Excel через openpyxl → форматирует как таблицу."""
+        """Извлекает текст из Excel → форматирует как таблицу.
+
+        Поддерживает .xlsx (openpyxl) и .xls (xlrd).
+        """
+        from pathlib import Path
+
+        ext = Path(filename).suffix.lower()
+
+        if ext == '.xls':
+            return ExcelInvoiceParser._extract_text_xls(file_content, filename)
+        return ExcelInvoiceParser._extract_text_xlsx(file_content, filename)
+
+    @staticmethod
+    def _extract_text_xlsx(file_content: bytes, filename: str) -> str:
+        """Извлекает текст из .xlsx через openpyxl."""
         from io import BytesIO
 
         try:
@@ -85,7 +99,6 @@ class ExcelInvoiceParser:
                     else:
                         cells.append('')
 
-                # Пропускаем полностью пустые строки
                 if not any(cells):
                     continue
 
@@ -97,6 +110,49 @@ class ExcelInvoiceParser:
                 all_text_parts.extend(rows_text)
 
         wb.close()
+        return '\n'.join(all_text_parts)
+
+    @staticmethod
+    def _extract_text_xls(file_content: bytes, filename: str) -> str:
+        """Извлекает текст из .xls (бинарный формат) через xlrd."""
+        try:
+            import xlrd
+        except ImportError:
+            raise ValueError(
+                f'Для обработки .xls файлов необходима библиотека xlrd. '
+                f'Установите: pip install xlrd'
+            )
+
+        try:
+            wb = xlrd.open_workbook(file_contents=file_content)
+        except Exception as exc:
+            raise ValueError(f'Не удалось открыть .xls файл {filename}: {exc}')
+
+        all_text_parts = []
+
+        for sheet_idx in range(wb.nsheets):
+            ws = wb.sheet_by_index(sheet_idx)
+            rows_text = []
+
+            for row_idx in range(min(ws.nrows, MAX_ROWS)):
+                cells = []
+                for col_idx in range(min(ws.ncols, MAX_COLS)):
+                    cell = ws.cell(row_idx, col_idx)
+                    if cell.value is not None and str(cell.value).strip():
+                        cells.append(str(cell.value).strip())
+                    else:
+                        cells.append('')
+
+                if not any(cells):
+                    continue
+
+                rows_text.append(' | '.join(cells))
+
+            if rows_text:
+                if wb.nsheets > 1:
+                    all_text_parts.append(f'=== Лист: {ws.name} ===')
+                all_text_parts.extend(rows_text)
+
         return '\n'.join(all_text_parts)
 
     def _send_to_llm(self, text: str) -> ParsedInvoice:
@@ -172,13 +228,19 @@ class ExcelInvoiceParser:
                     return resp.json()['choices'][0]['message']['content'].strip()
 
             elif provider_type == 'gemini':
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content(
-                    f'{system_prompt}\n\n{user_prompt}'
+                import httpx as _httpx
+                url = (
+                    f'https://generativelanguage.googleapis.com/v1beta'
+                    f'/models/{model_name}:generateContent?key={api_key}'
                 )
-                return response.text.strip()
+                payload = {
+                    'contents': [{'parts': [{'text': f'{system_prompt}\n\n{user_prompt}'}]}],
+                    'generationConfig': {'temperature': 0.1},
+                }
+                with _httpx.Client(timeout=120) as _client:
+                    resp = _client.post(url, json=payload)
+                    resp.raise_for_status()
+                    return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
 
             else:
                 raise RuntimeError(f'Unsupported provider: {provider_type}')

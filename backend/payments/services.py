@@ -838,7 +838,7 @@ class InvoiceService:
 
     @staticmethod
     def _update_bulk_session(session, success: bool, error: str = ''):
-        """Атомарно обновляет счётчики BulkImportSession."""
+        """Атомарно обновляет счётчики BulkImportSession и финализирует при завершении."""
         from django.db.models import F
         from .models import BulkImportSession
 
@@ -856,6 +856,15 @@ class InvoiceService:
             errors.append(error)
             session.errors = errors
             session.save(update_fields=['errors'])
+
+        # Финализация: если все файлы обработаны — ставим статус
+        session.refresh_from_db()
+        if session.processed_files >= session.total_files and session.status == BulkImportSession.Status.PROCESSING:
+            if session.failed > 0:
+                session.status = BulkImportSession.Status.COMPLETED_WITH_ERRORS
+            else:
+                session.status = BulkImportSession.Status.COMPLETED
+            session.save(update_fields=['status', 'updated_at'])
 
     @staticmethod
     def _create_bank_payment_order(invoice: Invoice, user):

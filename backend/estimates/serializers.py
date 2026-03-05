@@ -347,11 +347,13 @@ class EstimateSerializer(serializers.ModelSerializer):
     
     def get_projects(self, obj):
         """Возвращает краткую информацию о проектах"""
+        request = self.context.get('request')
         return [
             {
                 'id': p.id,
                 'cipher': p.cipher,
-                'name': p.name
+                'name': p.name,
+                'file': request.build_absolute_uri(p.file.url) if p.file and request else (p.file.url if p.file else None),
             }
             for p in obj.projects.all()
         ]

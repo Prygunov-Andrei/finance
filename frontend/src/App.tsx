@@ -320,6 +320,13 @@ export default function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/estimates/invoices/:id" element={
+            <ProtectedRoute requiredSection="commercial.estimates">
+              <Layout onLogout={handleLogout} user={user}>
+                <InvoiceDetailPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/estimates/mounting-estimates" element={
             <Navigate to="/estimates/estimates?tab=mounting" replace />
           } />

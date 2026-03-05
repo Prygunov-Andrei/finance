@@ -1,7 +1,25 @@
 import logging
 from celery import shared_task
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _fail_invoice_to_review(invoice_id: int):
+    """Переводит счёт из RECOGNITION в REVIEW при ошибке распознавания."""
+    from payments.models import Invoice, InvoiceEvent
+    try:
+        invoice = Invoice.objects.get(id=invoice_id)
+        if invoice.status == Invoice.Status.RECOGNITION:
+            invoice.status = Invoice.Status.REVIEW
+            invoice.save(update_fields=['status'])
+            InvoiceEvent.objects.create(
+                invoice=invoice,
+                event_type=InvoiceEvent.EventType.COMMENT,
+                comment='Ошибка распознавания. Заполните данные вручную.',
+            )
+    except Exception:
+        logger.exception('_fail_invoice_to_review: error for invoice %s', invoice_id)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
@@ -41,6 +59,9 @@ def recognize_invoice(
     Единый pipeline для single и batch upload.
     Вызывает InvoiceService.recognize() для перевода
     Invoice из RECOGNITION в REVIEW.
+
+    При crash воркера (SIGSEGV) — recover_stuck_recognition
+    подберёт застрявший счёт через 10 минут.
     """
     from payments.services import InvoiceService
     from llm_services.services.exceptions import RateLimitError
@@ -56,6 +77,8 @@ def recognize_invoice(
         logger.exception(
             'recognize_invoice: error for invoice %s', invoice_id,
         )
+        # Переводим в REVIEW, чтобы оператор мог заполнить вручную
+        _fail_invoice_to_review(invoice_id)
 
 
 @shared_task
@@ -91,6 +114,35 @@ def finalize_bulk_import(session_id: int):
         'finalize_bulk_import: session %s → %s',
         session_id, new_status,
     )
+
+
+@shared_task
+def recover_stuck_recognition():
+    """
+    Находит счета, застрявшие в RECOGNITION дольше 10 минут,
+    и переводит их в REVIEW.
+    """
+    from payments.models import Invoice, InvoiceEvent
+
+    threshold = timezone.now() - timezone.timedelta(minutes=10)
+    stuck = Invoice.objects.filter(
+        status=Invoice.Status.RECOGNITION,
+        created_at__lt=threshold,
+    )
+    count = 0
+    for invoice in stuck:
+        invoice.status = Invoice.Status.REVIEW
+        invoice.save(update_fields=['status'])
+        InvoiceEvent.objects.create(
+            invoice=invoice,
+            event_type=InvoiceEvent.EventType.COMMENT,
+            comment='Распознавание не завершилось. Заполните данные вручную.',
+        )
+        count += 1
+        logger.info('recover_stuck_recognition: invoice #%d → REVIEW', invoice.id)
+
+    if count:
+        logger.info('recover_stuck_recognition: recovered %d invoices', count)
 
 
 @shared_task

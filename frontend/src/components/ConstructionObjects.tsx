@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ConstructionObject, CreateConstructionObjectData } from '../lib/api';
 import { CONSTANTS } from '../constants';
 import { formatDate } from '../lib/utils';
+import { useObjects } from '../hooks/useReferenceData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -34,21 +35,18 @@ export function ConstructionObjects({ defaultStatusFilter, defaultCreateStatus, 
     if (defaultStatusFilter !== undefined) setStatusFilter(defaultStatusFilter);
   }, [defaultStatusFilter]);
 
-  const { data: objectsData, isLoading, error } = useQuery({
-    queryKey: ['construction-objects', statusFilter, searchQuery],
-    queryFn: () => api.getConstructionObjects({ 
-      status: statusFilter || undefined, 
-      search: searchQuery || undefined 
-    }),
-    staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
+  const { data: objectsData, isLoading, error } = useObjects({
+    status: statusFilter || undefined,
+    search: searchQuery || undefined,
   });
-
-  const objects = (objectsData as any)?.results || objectsData || [];
+  const objects = Array.isArray(objectsData)
+    ? objectsData
+    : (objectsData as any)?.results ?? [];
 
   const createMutation = useMutation({
     mutationFn: (data: CreateConstructionObjectData) => api.createConstructionObject(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['construction-objects'] });
+      queryClient.invalidateQueries({ queryKey: ['objects'] });
       setIsDialogOpen(false);
       toast.success('Объект успешно создан');
     },

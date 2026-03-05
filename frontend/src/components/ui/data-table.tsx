@@ -13,6 +13,7 @@ import {
   type RowSelectionState,
   type GroupingState,
   type ExpandedState,
+  type ColumnSizingState,
   type Row,
   type Table as TanstackTable,
   type CellContext,
@@ -46,15 +47,18 @@ export type DataTableProps<TData> = {
   enableRowSelection?: boolean;
   enableGrouping?: boolean;
   enableVirtualization?: boolean;
+  enableColumnResizing?: boolean;
   grouping?: string[];
   globalFilter?: string;
   onGlobalFilterChange?: (value: string) => void;
   onRowSelectionChange?: (selection: RowSelectionState) => void;
   onCellEdit?: (rowIndex: number, columnId: string, value: unknown) => void;
   rowClassName?: (row: Row<TData>) => string | undefined;
+  onRowContextMenu?: (e: React.MouseEvent, row: Row<TData>) => void;
   footerContent?: React.ReactNode;
   estimatedRowHeight?: number;
   overscan?: number;
+  maxHeight?: string;
   getRowId?: (row: TData) => string;
   className?: string;
   tableInstance?: React.MutableRefObject<TanstackTable<TData> | null>;
@@ -175,6 +179,7 @@ export function createSelectColumn<TData>(): ColumnDef<TData, unknown> {
     size: 40,
     enableSorting: false,
     enableGrouping: false,
+    enableResizing: false,
   };
 }
 
@@ -186,15 +191,18 @@ export function DataTable<TData>({
   enableRowSelection = false,
   enableGrouping = false,
   enableVirtualization = false,
+  enableColumnResizing = false,
   grouping: initialGrouping = [],
   globalFilter: externalGlobalFilter,
   onGlobalFilterChange,
   onRowSelectionChange,
   onCellEdit,
   rowClassName,
+  onRowContextMenu,
   footerContent,
   estimatedRowHeight = 40,
   overscan = 10,
+  maxHeight,
   getRowId,
   className,
   tableInstance,
@@ -203,6 +211,7 @@ export function DataTable<TData>({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [internalGlobalFilter, setInternalGlobalFilter] = useState('');
   const [groupingState, setGroupingState] = useState<GroupingState>(initialGrouping);
   const [expanded, setExpanded] = useState<ExpandedState>(true);
@@ -229,6 +238,7 @@ export function DataTable<TData>({
       rowSelection,
       grouping: groupingState,
       expanded,
+      ...(enableColumnResizing ? { columnSizing } : {}),
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -236,6 +246,11 @@ export function DataTable<TData>({
     onRowSelectionChange: handleRowSelectionChange,
     onGroupingChange: setGroupingState,
     onExpandedChange: setExpanded,
+    ...(enableColumnResizing ? {
+      onColumnSizingChange: setColumnSizing,
+      columnResizeMode: 'onChange' as const,
+      enableColumnResizing: true,
+    } : {}),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: enableSorting ? getSortedRowModel() : undefined,
     getFilteredRowModel: enableFiltering ? getFilteredRowModel() : undefined,
@@ -272,6 +287,11 @@ export function DataTable<TData>({
     return virtualRows?.map((vr) => rows[vr.index]) ?? [];
   }, [enableVirtualization, rows, virtualRows]);
 
+  // Compute scroll container styles
+  const scrollContainerStyle: React.CSSProperties | undefined = maxHeight
+    ? { maxHeight }
+    : undefined;
+
   return (
     <div className={cn('space-y-2', className)}>
       {enableFiltering && (
@@ -304,17 +324,18 @@ export function DataTable<TData>({
         ref={parentRef}
         className={cn(
           'rounded-md border overflow-auto',
-          enableVirtualization && 'max-h-[70vh]',
+          enableVirtualization && !maxHeight && 'max-h-[70vh]',
         )}
+        style={scrollContainerStyle}
       >
-        <Table>
+        <Table style={enableColumnResizing ? { width: table.getCenterTotalSize() } : undefined}>
           <TableHeader className="sticky top-0 z-10 bg-background">
             {headerGroups.map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    style={{ width: header.getSize() }}
+                    style={{ width: header.getSize(), position: 'relative' }}
                     className={cn(
                       enableSorting && header.column.getCanSort() && 'cursor-pointer select-none',
                     )}
@@ -355,6 +376,18 @@ export function DataTable<TData>({
                         )}
                       </div>
                     )}
+                    {enableColumnResizing && header.column.getCanResize() && (
+                      <div
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                        className={cn(
+                          'absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none',
+                          'hover:bg-primary/50',
+                          header.column.getIsResizing() && 'bg-primary',
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -385,11 +418,16 @@ export function DataTable<TData>({
                     key={row.id}
                     data-state={row.getIsSelected() ? 'selected' : undefined}
                     className={rowClassName?.(row)}
+                    onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, row) : undefined}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const meta = cell.column.columnDef.meta as EditableCellMeta | undefined;
                       return (
-                        <TableCell key={cell.id} style={{ width: cell.column.getSize() }}>
+                        <TableCell
+                          key={cell.id}
+                          style={{ width: cell.column.getSize() }}
+                          className={enableColumnResizing ? 'whitespace-normal break-words' : undefined}
+                        >
                           {meta?.editable ? (
                             <EditableCell cellContext={cell.getContext()} onEdit={onCellEdit} />
                           ) : cell.getIsGrouped() ? (

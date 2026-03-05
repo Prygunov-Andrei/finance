@@ -65,6 +65,7 @@ class ObjectViewSet(CashFlowMixin, viewsets.ModelViewSet):
     cash_flow: Получить cash-flow для объекта
     """
     queryset = Object.objects.all()
+    pagination_class = None
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status']

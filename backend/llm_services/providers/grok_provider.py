@@ -16,7 +16,7 @@ class GrokProvider(BaseLLMProvider):
     BASE_URL = "https://api.x.ai/v1"
     REQUEST_TIMEOUT = 120.0  # Таймаут на запрос (секунды)
     
-    def __init__(self, api_key: str, model_name: str = "grok-2-vision-1212"):
+    def __init__(self, api_key: str, model_name: str = "grok-4-fast-non-reasoning"):
         super().__init__(api_key, model_name)
         self.headers = {
             "Authorization": f"Bearer {api_key}",

@@ -124,14 +124,19 @@ echo $! >> "$PIDFILE"
 echo "  Kanban API         → PID $!"
 
 # Celery ERP worker
-$CELERY -A finans_assistant worker --concurrency=1 -l info &
+# macOS: --pool=solo чтобы избежать SIGSEGV при fork() (ObjC runtime)
+CELERY_POOL="prefork"
+if [ "$(uname)" = "Darwin" ]; then
+    CELERY_POOL="solo"
+fi
+$CELERY -A finans_assistant worker --pool=$CELERY_POOL --concurrency=1 -l info &
 echo $! >> "$PIDFILE"
-echo "  Celery ERP worker  → PID $!"
+echo "  Celery ERP worker  → PID $! (pool=$CELERY_POOL)"
 
 # Celery Kanban worker
-$CELERY -A kanban_service worker --concurrency=1 -l info &
+$CELERY -A kanban_service worker --pool=$CELERY_POOL --concurrency=1 -l info &
 echo $! >> "$PIDFILE"
-echo "  Celery Kanban worker → PID $!"
+echo "  Celery Kanban worker → PID $! (pool=$CELERY_POOL)"
 
 # Vite dev server (порт 3000)
 cd "$ROOT_DIR/frontend"

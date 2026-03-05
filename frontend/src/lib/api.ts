@@ -444,6 +444,11 @@ class ApiClient {
     return this.getConstructionObjects(filters);
   }
 
+  // Курсы валют ЦБ РФ
+  async getCBRRates(): Promise<{ date: string; usd: string; eur: string; cny: string }> {
+    return this.request('/cbr-rates/');
+  }
+
   // Framework Contracts (Рамочные договоры)
   async getFrameworkContracts(params?: {
     counterparty?: number;
@@ -853,6 +858,22 @@ class ApiClient {
     });
   }
 
+  async autoMatchWorksForEstimate(estimateId: number, priceListId?: number) {
+    const body: Record<string, number> = { estimate_id: estimateId };
+    if (priceListId) body.price_list_id = priceListId;
+    return this.request<WorkMatchResult[]>('/estimate-items/auto-match-works/', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async applyMatchedWorks(items: Array<{ item_id: number; work_item_id: number; work_price?: string }>) {
+    return this.request<{ applied: number }>('/estimate-items/apply-match-works/', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
   async importEstimateFile(estimateId: number, file: File, preview?: boolean) {
     const formData = new FormData();
     formData.append('estimate_id', estimateId.toString());
@@ -861,6 +882,30 @@ class ApiClient {
     return this.request<EstimateImportPreview | EstimateItem[]>(
       '/estimate-items/import/',
       { method: 'POST', body: formData },
+    );
+  }
+
+  async importEstimateRows(
+    estimateId: number,
+    rows: Array<{ name: string; model_name?: string; unit?: string; quantity?: string; material_unit_price?: string; work_unit_price?: string; is_section?: boolean }>,
+  ) {
+    return this.request<EstimateItem[]>('/estimate-items/import-rows/', {
+      method: 'POST',
+      body: JSON.stringify({ estimate_id: estimateId, rows }),
+    });
+  }
+
+  async promoteItemToSection(itemId: number) {
+    return this.request<{ section_id: number }>(
+      `/estimate-items/${itemId}/promote-to-section/`,
+      { method: 'POST' },
+    );
+  }
+
+  async demoteSectionToItem(sectionId: number) {
+    return this.request<{ item_id: number }>(
+      `/estimate-sections/${sectionId}/demote-to-item/`,
+      { method: 'POST' },
     );
   }
 
@@ -3331,6 +3376,23 @@ export interface AutoMatchResult {
   source_price_history_id: number | null;
 }
 
+export interface WorkMatchResult {
+  item_id: number;
+  name: string;
+  matched_work: {
+    id: number;
+    name: string;
+    article: string;
+    section_name: string;
+    hours: string;
+    required_grade: string;
+    unit: string;
+  } | null;
+  work_price: string | null;
+  work_confidence: number;
+  source: string;
+}
+
 export interface EstimateImportPreview {
   rows: Array<{
     item_number: number;
@@ -3344,6 +3406,7 @@ export interface EstimateImportPreview {
   }>;
   sections: string[];
   total_rows: number;
+  confidence?: number;
 }
 
 export interface EstimateDeviationRow {

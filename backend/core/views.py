@@ -1,6 +1,9 @@
+import logging
+
+import httpx
 from rest_framework import viewsets, status, permissions, serializers as drf_serializers
 from rest_framework.views import APIView
-from rest_framework.decorators import action
+from rest_framework.decorators import api_view, permission_classes as perm_classes, action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -14,6 +17,8 @@ from .serializers import (
 )
 from .models import Notification, NotificationService
 from .service_permissions import IsServiceToken
+
+logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
@@ -270,3 +275,44 @@ class SystemNotificationCreateView(APIView):
         )
 
         return Response({'id': n.id, 'status': 'ok'}, status=status.HTTP_201_CREATED)
+
+
+# =============================================================================
+# CBR Exchange Rates
+# =============================================================================
+
+CBR_JSON_URL = 'https://www.cbr-xml-daily.ru/daily_json.js'
+CBR_TIMEOUT = 5  # секунд
+
+
+@extend_schema(
+    summary='Курсы валют ЦБ РФ',
+    description='Получить текущие курсы USD, EUR, CNY с сайта ЦБ РФ',
+    tags=['Справочники'],
+)
+@api_view(['GET'])
+@perm_classes([permissions.IsAuthenticated])
+def cbr_rates(request):
+    """Курсы USD, EUR, CNY с сайта ЦБ РФ"""
+    try:
+        resp = httpx.get(CBR_JSON_URL, timeout=CBR_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        logger.exception('CBR rates fetch failed')
+        return Response(
+            {'error': f'Не удалось получить курсы ЦБ: {exc}'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    valute = data.get('Valute', {})
+    usd = valute.get('USD', {}).get('Value')
+    eur = valute.get('EUR', {}).get('Value')
+    cny = valute.get('CNY', {}).get('Value')
+
+    return Response({
+        'date': data.get('Date', '')[:10],
+        'usd': str(round(usd, 4)) if usd else None,
+        'eur': str(round(eur, 4)) if eur else None,
+        'cny': str(round(cny, 4)) if cny else None,
+    })

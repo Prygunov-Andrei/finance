@@ -133,11 +133,23 @@ class EstimateViewSet(VersioningMixin, viewsets.ModelViewSet):
 
 class EstimateSectionViewSet(viewsets.ModelViewSet):
     """ViewSet для разделов сметы"""
-    
+
     queryset = EstimateSection.objects.select_related('estimate').prefetch_related('subsections')
     serializer_class = EstimateSectionSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['estimate']
+
+    @action(detail=True, methods=['post'], url_path='demote-to-item')
+    def demote_to_item(self, request, pk=None):
+        """Превратить раздел обратно в обычную строку сметы."""
+        try:
+            section = EstimateSection.objects.get(pk=pk)
+        except EstimateSection.DoesNotExist:
+            return Response({'error': 'Раздел не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        from .services.estimate_import_service import EstimateImportService
+        result = EstimateImportService().demote_section_to_item(int(pk))
+        return Response(result)
 
 
 class EstimateSubsectionViewSet(viewsets.ModelViewSet):
@@ -168,7 +180,8 @@ class EstimateCharacteristicViewSet(viewsets.ModelViewSet):
 
 class EstimateItemViewSet(viewsets.ModelViewSet):
     """ViewSet для строк сметы"""
-    
+    pagination_class = None
+
     queryset = EstimateItem.objects.select_related(
         'estimate', 'section', 'subsection',
         'product', 'work_item', 'source_price_history',
@@ -182,6 +195,18 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'model_name', 'original_name']
     ordering_fields = ['sort_order', 'item_number', 'name', 'material_unit_price', 'work_unit_price']
     ordering = ['sort_order', 'item_number']
+
+    @action(detail=True, methods=['post'], url_path='promote-to-section')
+    def promote_to_section(self, request, pk=None):
+        """Превратить строку сметы в раздел (секцию)."""
+        try:
+            EstimateItem.objects.get(pk=pk)
+        except EstimateItem.DoesNotExist:
+            return Response({'error': 'Строка не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+        from .services.estimate_import_service import EstimateImportService
+        result = EstimateImportService().promote_item_to_section(int(pk))
+        return Response(result)
 
     @action(detail=False, methods=['post'], url_path='bulk-create')
     def bulk_create(self, request):
@@ -255,6 +280,74 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
         results = matcher.preview_matches(estimate)
         return Response(results)
 
+    @action(detail=False, methods=['post'], url_path='auto-match-works')
+    def auto_match_works(self, request):
+        """Preview-подбор работ для строк сметы (без сохранения)"""
+        estimate_id = request.data.get('estimate_id')
+        price_list_id = request.data.get('price_list_id')
+
+        if not estimate_id:
+            return Response(
+                {'error': 'Не указан estimate_id'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            estimate = Estimate.objects.get(pk=estimate_id)
+        except Estimate.DoesNotExist:
+            return Response(
+                {'error': 'Смета не найдена'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from .services.estimate_auto_matcher import EstimateAutoMatcher
+        matcher = EstimateAutoMatcher()
+        results = matcher.preview_works(estimate, price_list_id=price_list_id)
+        return Response(results)
+
+    @action(detail=False, methods=['post'], url_path='apply-match-works')
+    def apply_match_works(self, request):
+        """Применить выбранные совпадения работ и записать маппинги"""
+        items_data = request.data.get('items', [])
+        if not items_data:
+            return Response(
+                {'error': 'Пустой список'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from pricelists.models import WorkItem
+        from .services.estimate_auto_matcher import EstimateAutoMatcher
+
+        ids = [d['item_id'] for d in items_data if d.get('item_id')]
+        existing = {
+            item.id: item
+            for item in EstimateItem.objects.filter(id__in=ids).select_related('product')
+        }
+
+        work_ids = [d['work_item_id'] for d in items_data if d.get('work_item_id')]
+        works = {wi.id: wi for wi in WorkItem.objects.filter(id__in=work_ids)}
+
+        updated = []
+        for d in items_data:
+            item = existing.get(d.get('item_id'))
+            wi = works.get(d.get('work_item_id'))
+            if not item or not wi:
+                continue
+
+            item.work_item = wi
+            if d.get('work_price') and item.work_unit_price == 0:
+                item.work_unit_price = d['work_price']
+            updated.append(item)
+
+            # Записываем маппинг для обучения системы
+            if item.product:
+                EstimateAutoMatcher.record_manual_correction(item.product, wi)
+
+        if updated:
+            EstimateItem.objects.bulk_update(updated, ['work_item', 'work_unit_price'])
+
+        return Response({'applied': len(updated)})
+
     @action(detail=False, methods=['post'], url_path='import',
             parser_classes=[MultiPartParser])
     def import_file(self, request):
@@ -303,6 +396,34 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
             })
 
         created_items = importer.save_imported_items(int(estimate_id), parsed)
+        return Response(
+            EstimateItemSerializer(created_items, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=['post'], url_path='import-rows')
+    def import_rows(self, request):
+        """Импорт строк из предпросмотра (JSON) с назначенными разделами."""
+        estimate_id = request.data.get('estimate_id')
+        rows = request.data.get('rows', [])
+
+        if not estimate_id or not rows:
+            return Response(
+                {'error': 'Необходимы estimate_id и rows'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            Estimate.objects.get(pk=estimate_id)
+        except Estimate.DoesNotExist:
+            return Response(
+                {'error': 'Смета не найдена'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from .services.estimate_import_service import EstimateImportService
+        importer = EstimateImportService()
+        created_items = importer.save_rows_from_preview(int(estimate_id), rows)
         return Response(
             EstimateItemSerializer(created_items, many=True).data,
             status=status.HTTP_201_CREATED,

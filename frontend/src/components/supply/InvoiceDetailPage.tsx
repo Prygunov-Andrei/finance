@@ -135,6 +135,7 @@ export function InvoiceDetailPage() {
     onSuccess: () => {
       toast.success('Счёт удалён');
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['estimate-invoices'] });
       navigate(backUrl);
     },
     onError: (err: any) => toast.error(err?.data?.detail || 'Ошибка при удалении'),
