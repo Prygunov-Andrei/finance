@@ -120,6 +120,10 @@ services:
       - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
       - GROK_API_KEY=${GROK_API_KEY:-}
       - BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY:-}
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY:-}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
+      - JWT_ISSUER=${JWT_ISSUER:-finans-assistant-erp}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kanban-service}
     volumes:
       - backend_media:/app/media
       - backend_logs:/app/logs
