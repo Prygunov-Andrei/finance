@@ -114,6 +114,12 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
       - ERP_SERVICE_TOKEN=${ERP_SERVICE_TOKEN:-}
+      - PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN:-}
+      - PRODUCTION_IP=${PRODUCTION_IP:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      - BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY:-}
     volumes:
       - backend_media:/app/media
       - backend_logs:/app/logs
@@ -246,6 +252,10 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - SENTRY_DSN=${SENTRY_DSN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      - BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY:-}
     volumes:
       - backend_logs:/app/logs
     depends_on:
