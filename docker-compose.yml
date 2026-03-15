@@ -132,6 +132,7 @@ services:
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kanban-service}
       - BREEZ_API_BASE_URL=${BREEZ_API_BASE_URL:-https://api.breez.ru/v1}
       - BREEZ_API_AUTH_HEADER=${BREEZ_API_AUTH_HEADER:-}
+      - FNS_API_KEY=${FNS_API_KEY:-}
     volumes:
       - ./backend:/app
       - backend_media:/app/media
@@ -271,6 +272,7 @@ services:
       - BANK_ENCRYPTION_KEY=${BANK_ENCRYPTION_KEY:-}
       - BREEZ_API_BASE_URL=${BREEZ_API_BASE_URL:-https://api.breez.ru/v1}
       - BREEZ_API_AUTH_HEADER=${BREEZ_API_AUTH_HEADER:-}
+      - FNS_API_KEY=${FNS_API_KEY:-}
     volumes:
       - ./backend:/app
       - backend_media:/app/media

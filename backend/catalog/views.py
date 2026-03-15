@@ -234,7 +234,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         product = self.get_object()
         prices = ProductPriceHistory.objects.filter(
             product=product
-        ).select_related('counterparty').order_by('-invoice_date')
+        ).select_related('counterparty', 'invoice').order_by('-invoice_date')
         
         serializer = ProductPriceHistorySerializer(prices, many=True)
         return Response(serializer.data)

@@ -387,6 +387,57 @@ class InvoiceService:
 
     @staticmethod
     @transaction.atomic
+    def auto_verify(invoice_id: int):
+        """
+        Автоматическая верификация для массового импорта (без оператора).
+
+        Выполняет те же действия, что verify(), но без требования user:
+        1. Проверяет наличие контрагента и суммы
+        2. Создаёт Product + ProductPriceHistory + LLM-категоризацию
+        3. Переводит в PAID с paid_at = invoice_date (исторические счета)
+
+        Если контрагент или сумма отсутствуют — оставляет в REVIEW
+        для ручной обработки оператором.
+        """
+        invoice = Invoice.objects.select_for_update().get(id=invoice_id)
+
+        if invoice.status != Invoice.Status.REVIEW:
+            return
+
+        if not invoice.counterparty_id or not invoice.amount_gross:
+            logger.info(
+                'auto_verify skip invoice #%d: counterparty=%s, amount=%s',
+                invoice_id, invoice.counterparty_id, invoice.amount_gross,
+            )
+            return
+
+        # Создать товары в каталоге из позиций (+ история цен + категоризация)
+        InvoiceService._create_products_from_items(invoice)
+
+        # Исторические счета → сразу PAID с датой счёта
+        invoice.status = Invoice.Status.PAID
+        if invoice.invoice_date:
+            from datetime import datetime as dt
+            invoice.paid_at = timezone.make_aware(
+                dt.combine(invoice.invoice_date, dt.min.time())
+            )
+        else:
+            invoice.paid_at = timezone.now()
+        invoice.save()
+
+        InvoiceEvent.objects.create(
+            invoice=invoice,
+            event_type=InvoiceEvent.EventType.REVIEWED,
+            comment='Автоматическая верификация (массовый импорт)',
+        )
+        InvoiceEvent.objects.create(
+            invoice=invoice,
+            event_type=InvoiceEvent.EventType.PAID,
+            comment='Исторический счёт — оплачен ранее (массовый импорт)',
+        )
+
+    @staticmethod
+    @transaction.atomic
     def submit_to_registry(invoice_id: int, user):
         """Оператор отправил в реестр: VERIFIED → IN_REGISTRY."""
         invoice = Invoice.objects.select_for_update().get(id=invoice_id)

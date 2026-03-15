@@ -57,7 +57,16 @@ export function PriceHistoryTable({ prices, isLoading }: PriceHistoryTableProps)
                 {price.unit}
               </td>
               <td className="py-3 px-4">
-                {price.invoice_number}
+                {price.invoice ? (
+                  <a
+                    href={`/invoices/${price.invoice}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {price.invoice_number || `#${price.invoice}`}
+                  </a>
+                ) : (
+                  price.invoice_number || <span className="text-gray-400">—</span>
+                )}
               </td>
               <td className="py-3 px-4">
                 {price.payment ? (

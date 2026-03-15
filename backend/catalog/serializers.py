@@ -69,7 +69,7 @@ class ProductPriceHistorySerializer(serializers.ModelSerializer):
         model = ProductPriceHistory
         fields = [
             'id', 'counterparty', 'counterparty_name', 'price', 'unit',
-            'invoice_date', 'invoice_number', 'payment', 'created_at'
+            'invoice_date', 'invoice_number', 'invoice', 'payment', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 

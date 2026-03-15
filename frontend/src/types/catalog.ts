@@ -84,6 +84,7 @@ export interface ProductPriceHistory {
   unit: string;
   invoice_date: string;
   invoice_number: string;
+  invoice: number | null;
   payment: number | null;
   created_at: string;
 }
