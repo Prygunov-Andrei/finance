@@ -1,0 +1,112 @@
+# ===========================
+# HVAC News Platform .gitignore
+# ===========================
+
+# ===== Backend (Django) =====
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+ENV/
+env/
+
+# Django
+*.log
+*.pot
+*.pyc
+db.sqlite3
+backend/db.sqlite3
+backend/media/
+!backend/media/.gitkeep
+
+# Static files (collected)
+backend/staticfiles/
+backend/static/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# ===== Frontend (React/Vite) =====
+
+# Dependencies
+frontend/node_modules/
+node_modules/
+
+# Build output
+frontend/dist/
+frontend/build/
+
+# Environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Vite
+frontend/.vite/
+
+# Logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# ===== General =====
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Backups (не коммитим бэкапы БД)
+backups/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# ngrok
+*.ngrok.log
+ngrok.log
+
+# Docker (для будущей контейнеризации)
+.docker/
+docker-compose.override.yml
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage/
+
+# pytest
+.pytest_cache/

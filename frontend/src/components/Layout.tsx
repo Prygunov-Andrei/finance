@@ -7,7 +7,7 @@ import {
   Package, CheckSquare, Landmark, Receipt,
   Truck, CalendarClock, TrendingUp, BarChart3, ShoppingCart, Link2,
   ExternalLink, HardHat, Search, BookOpen, HelpCircle, Archive,
-  Calendar, PieChart, Wallet, Scale, Megaphone, Calculator
+  Calendar, PieChart, Wallet, Scale, Megaphone, Calculator, Globe, Phone
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { 
@@ -175,7 +175,21 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // 9. ПЕРЕПИСКА
+  // 9. ПОРТАЛ СМЕТ
+  {
+    id: 'portal',
+    label: 'Портал смет',
+    icon: <Globe className="w-5 h-5" />,
+    path: '/portal',
+    section: 'commercial.estimates',
+    children: [
+      { id: 'portal-requests', label: 'Запросы', icon: <FileText className="w-4 h-4" />, path: '/portal/requests', section: 'commercial.estimates' },
+      { id: 'portal-callbacks', label: 'Заявки на звонок', icon: <Phone className="w-4 h-4" />, path: '/portal/callbacks', section: 'commercial.estimates' },
+      { id: 'portal-settings', label: 'Настройки', icon: <Settings className="w-4 h-4" />, path: '/portal/settings', section: 'commercial.estimates' },
+    ],
+  },
+
+  // 10. ПЕРЕПИСКА
   { id: 'communications', label: 'Переписка', icon: <Mail className="w-5 h-5" />, path: '/communications', section: 'communications' },
 
   // 10. СПРАВОЧНИКИ И НАСТРОЙКИ

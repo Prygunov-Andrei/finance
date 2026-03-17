@@ -23,6 +23,8 @@ import { EstimateDetail } from './components/estimates/EstimateDetail';
 import { MountingEstimates } from './components/estimates/MountingEstimates';
 import { MountingEstimateDetail } from './components/estimates/MountingEstimateDetail';
 import { EstimatesPage } from './components/estimates/EstimatesPage';
+import PortalRequestsPage from './components/portal/PortalRequestsPage';
+import PortalCallbacksPage from './components/portal/PortalCallbacksPage';
 import { TechnicalProposalsList } from './components/proposals/TechnicalProposalsList';
 import { TechnicalProposalDetail } from './components/proposals/TechnicalProposalDetail';
 import { MountingProposalsList } from './components/proposals/MountingProposalsList';
@@ -252,7 +254,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <PermissionsContext.Provider value={permissionsValue}>
       <BreadcrumbProvider>
-      <Router>
+      <Router basename="/erp">
         <Routes>
           <Route 
             path="/login" 
@@ -865,6 +867,22 @@ export default function App() {
             <ProtectedRoute requiredSection="marketing.executors">
               <Layout onLogout={handleLogout} user={user}>
                 <StubPage title="Поиск Исполнителей" description="Поиск субподрядчиков и исполнителей" parentSection="Маркетинг" />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Портал смет */}
+          <Route path="/portal/requests" element={
+            <ProtectedRoute requiredSection="commercial.estimates">
+              <Layout onLogout={handleLogout} user={user}>
+                <PortalRequestsPage />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/portal/callbacks" element={
+            <ProtectedRoute requiredSection="commercial.estimates">
+              <Layout onLogout={handleLogout} user={user}>
+                <PortalCallbacksPage />
               </Layout>
             </ProtectedRoute>
           } />

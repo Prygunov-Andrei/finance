@@ -49,6 +49,11 @@ PRODUCTION_IP = os.environ.get('PRODUCTION_IP', '')
 if PRODUCTION_IP:
     ALLOWED_HOSTS.append(PRODUCTION_IP)
 
+# Домен публичного портала смет
+PORTAL_DOMAIN = os.environ.get('PORTAL_DOMAIN', '')
+if PORTAL_DOMAIN:
+    ALLOWED_HOSTS.append(PORTAL_DOMAIN)
+
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:8000',
@@ -66,6 +71,10 @@ if PRODUCTION_DOMAIN:
         f'https://www.{PRODUCTION_DOMAIN}',
     ])
 
+# Портал смет
+if PORTAL_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{PORTAL_DOMAIN}')
+
 
 # Application definition
 
@@ -81,6 +90,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
     'corsheaders',
+    'storages',
     'core',
     'objects',
     'contracts',
@@ -222,10 +232,15 @@ if DEBUG:
 else:
     # Production — только конкретные домены
     CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = [
-        "https://your-production-domain.com",  # TODO: заменить на реальный домен
-        # Добавьте другие production домены
-    ]
+    CORS_ALLOWED_ORIGINS = []
+    if PRODUCTION_DOMAIN:
+        CORS_ALLOWED_ORIGINS.append(f"https://{PRODUCTION_DOMAIN}")
+    # Домен публичного портала смет
+    PORTAL_DOMAIN = os.environ.get('PORTAL_DOMAIN', '')
+    if PORTAL_DOMAIN:
+        CORS_ALLOWED_ORIGINS.append(f"https://{PORTAL_DOMAIN}")
+    # Dev-режим портала
+    CORS_ALLOWED_ORIGINS.append("http://localhost:3002")
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -500,3 +515,53 @@ if not DEBUG:
     LOGGING['loggers']['worklog']['handlers'].append('file')
     LOGGING['loggers']['celery']['handlers'].append('file')
 
+# =============================================================================
+# Email Configuration (SMTP)
+# =============================================================================
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+
+# =============================================================================
+# File Storage (Django 4.2+ STORAGES dict)
+# =============================================================================
+# НЕ меняем DEFAULT_FILE_STORAGE — все существующие FileField остаются на локальном диске.
+# Отдельный storage backend для публичного портала (MinIO/S3).
+PORTAL_S3_ENDPOINT_URL = os.environ.get('PORTAL_S3_ENDPOINT_URL', WORKLOG_S3_ENDPOINT_URL)
+PORTAL_S3_ACCESS_KEY = os.environ.get('PORTAL_S3_ACCESS_KEY', WORKLOG_S3_ACCESS_KEY)
+PORTAL_S3_SECRET_KEY = os.environ.get('PORTAL_S3_SECRET_KEY', WORKLOG_S3_SECRET_KEY)
+PORTAL_S3_BUCKET_NAME = os.environ.get('PORTAL_S3_BUCKET_NAME', 'portal-estimates')
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'portal': {
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        'OPTIONS': {
+            'bucket_name': PORTAL_S3_BUCKET_NAME,
+            'endpoint_url': PORTAL_S3_ENDPOINT_URL,
+            'access_key': PORTAL_S3_ACCESS_KEY,
+            'secret_key': PORTAL_S3_SECRET_KEY,
+            'default_acl': 'private',
+            'querystring_auth': True,
+            'querystring_expire': 3600,
+        },
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
+
+# =============================================================================
+# Celery Task Routing — публичные задачи в отдельной очереди
+# =============================================================================
+CELERY_TASK_ROUTES = {
+    'api_public.tasks.*': {'queue': 'public_tasks'},
+}

@@ -1,0 +1,16 @@
+[Unit]
+Description=HVAC News Gunicorn
+After=network.target postgresql.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/hvac-news/backend
+ExecStart=/var/www/hvac-news/backend/venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 2
+Restart=always
+EnvironmentFile=/var/www/hvac-news/backend/.env
+Environment=HVAC_ENV=prod
+
+[Install]
+WantedBy=multi-user.target
+

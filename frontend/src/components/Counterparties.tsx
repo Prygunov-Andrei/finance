@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { api, Counterparty, CreateCounterpartyData, FNSSuggestResult, FNSQuickCheckResponse, FNSEnrichResponse } from '../lib/api';
@@ -9,7 +9,9 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
-import { Plus, Loader2, Users, Search, Database, Globe, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, FileText, StickyNote, XCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Loader2, Users, Search, Database, Globe, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, FileText, StickyNote, XCircle, CheckCircle2, Trash2, ChevronLeft, ChevronRight, Merge } from 'lucide-react';
+import { Checkbox } from './ui/checkbox';
+import { CounterpartyDedup } from './CounterpartyDedup';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +23,6 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { useCounterparties } from '../hooks';
 
 type CounterpartyFilter = 'all' | 'customer' | 'potential_customer' | 'supplier' | 'executor';
 
@@ -38,6 +39,11 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCounterparty, setEditingCounterparty] = useState<Counterparty | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Counterparty | null>(null);
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [dedupMode, setDedupMode] = useState(false);
+  const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -45,13 +51,46 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
     if (lockedFilter) setFilter(lockedFilter);
   }, [lockedFilter]);
 
-  const { data: counterpartiesData, isLoading, error } = useCounterparties();
-  const counterparties = counterpartiesData || [];
+  // Определяем серверный тип-фильтр для API
+  const apiTypeParam = useMemo(() => {
+    if (filter === 'customer') return 'customer';
+    if (filter === 'potential_customer') return 'potential_customer';
+    if (filter === 'supplier' || filter === 'executor') return 'vendor';
+    return undefined;
+  }, [filter]);
+
+  const { data: paginatedData, isLoading, error } = useQuery({
+    queryKey: ['counterparties-paginated', page, apiTypeParam],
+    queryFn: () => api.getCounterpartiesPaginated({ page, type: apiTypeParam }),
+    staleTime: 60_000,
+  });
+
+  const counterparties = paginatedData?.results || [];
+  const totalCount = paginatedData?.count || 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Сбрасываем страницу и выделение при смене фильтра
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds(new Set());
+  }, [filter]);
+
+  // Фильтрация supplier/executor на клиенте (т.к. vendor_subtype нет в серверном фильтре)
+  const filteredCounterparties = useMemo(() => {
+    if (filter === 'supplier') {
+      return counterparties.filter(cp => cp.vendor_subtype === 'supplier' || cp.vendor_subtype === 'both');
+    }
+    if (filter === 'executor') {
+      return counterparties.filter(cp => cp.vendor_subtype === 'executor' || cp.vendor_subtype === 'both');
+    }
+    return counterparties;
+  }, [counterparties, filter]);
 
   const createMutation = useMutation({
     mutationFn: (data: CreateCounterpartyData) => api.createCounterparty(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
       setIsDialogOpen(false);
       toast.success('Контрагент успешно создан');
     },
@@ -61,10 +100,11 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<CreateCounterpartyData> }) => 
+    mutationFn: ({ id, data }: { id: number; data: Partial<CreateCounterpartyData> }) =>
       api.updateCounterparty(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
       setIsEditDialogOpen(false);
       setEditingCounterparty(null);
       toast.success('Контрагент успешно обновлен');
@@ -78,10 +118,25 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
     mutationFn: (id: number) => api.deleteCounterparty(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
       toast.success('Контрагент успешно удален');
     },
     onError: (error: any) => {
       toast.error(`Ошибка удаления контрагента: ${error?.message || 'Неизвестная ошибка'}`);
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: number[]) => api.deleteCounterparties(ids),
+    onSuccess: (_, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
+      toast.success(`Удалено контрагентов: ${ids.length}`);
+      setSelectedIds(new Set());
+      setBulkDeleteConfirm(false);
+    },
+    onError: (error: any) => {
+      toast.error(`Ошибка удаления: ${error?.message || 'Неизвестная ошибка'}`);
     },
   });
 
@@ -98,20 +153,22 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
     navigate(`/counterparties/${counterparty.id}`);
   };
 
-  const filteredCounterparties = counterparties?.filter((cp) => {
-    if (filter === 'all') return true;
-    if (filter === 'customer') return cp.type === 'customer' || cp.type === 'both';
-    if (filter === 'potential_customer') return cp.type === 'potential_customer';
-    if (filter === 'supplier') {
-      return (cp.type === 'vendor' || cp.type === 'both') && 
-             (cp.vendor_subtype === 'supplier' || cp.vendor_subtype === 'both');
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredCounterparties.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredCounterparties.map(cp => cp.id)));
     }
-    if (filter === 'executor') {
-      return (cp.type === 'vendor' || cp.type === 'both') && 
-             (cp.vendor_subtype === 'executor' || cp.vendor_subtype === 'both');
-    }
-    return true;
-  });
+  };
 
   const getTypeLabel = (type: string) => {
     switch (type) {
@@ -145,12 +202,21 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
     }
   };
 
+  if (dedupMode) {
+    return <CounterpartyDedup onBack={() => setDedupMode(false)} />;
+  }
+
   return (
     <div className="p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-semibold">{pageTitle || 'Контрагенты'}</h1>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setDedupMode(true)}>
+              <Merge className="w-4 h-4 mr-2" />
+              Дедупликация
+            </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700">
@@ -170,6 +236,7 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
               />
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Filters — hidden when lockedFilter is set */}
@@ -183,6 +250,33 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
               <TabsTrigger value="executor">Исполнители</TabsTrigger>
             </TabsList>
           </Tabs>
+        )}
+
+        {/* Панель массовых действий */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <span className="text-sm text-blue-700">Выбрано: {selectedIds.size}</span>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteConfirm(true)}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-1" />
+              )}
+              Удалить выбранных
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Снять выделение
+            </Button>
+          </div>
         )}
 
         {/* Content */}
@@ -206,11 +300,18 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
             </Button>
           </div>
         ) : (
+          <>
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="px-3 py-2.5 w-10">
+                      <Checkbox
+                        checked={filteredCounterparties.length > 0 && selectedIds.size === filteredCounterparties.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Название
                     </th>
@@ -239,13 +340,19 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
                   {filteredCounterparties.map((counterparty: Counterparty) => (
                     <tr
                       key={counterparty.id}
-                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedIds.has(counterparty.id) ? 'bg-blue-50' : ''}`}
                       onClick={() => handleRowClick(counterparty)}
                       tabIndex={0}
                       role="link"
                       aria-label={`Открыть карточку ${counterparty.name}`}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleRowClick(counterparty); }}
                     >
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(counterparty.id)}
+                          onCheckedChange={() => toggleSelect(counterparty.id)}
+                        />
+                      </td>
                       <td className="px-4 py-2.5">
                         <div className="text-sm text-gray-900">{counterparty.name}</div>
                         {counterparty.short_name && (
@@ -258,7 +365,7 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
                       {filter === 'all' && (
                         <td className="px-4 py-2.5 whitespace-nowrap">
                           <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                            counterparty.type === 'customer' 
+                            counterparty.type === 'customer'
                               ? 'bg-green-100 text-green-700'
                               : counterparty.type === 'potential_customer'
                               ? 'bg-orange-100 text-orange-700'
@@ -303,6 +410,58 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
               </table>
             </div>
           </div>
+
+          {/* Пагинация */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-gray-500">
+                Всего: {totalCount}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setPage(p => Math.max(1, p - 1)); setSelectedIds(new Set()); }}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                    .reduce<(number | 'dots')[]>((acc, p, i, arr) => {
+                      if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('dots');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((item, i) =>
+                      item === 'dots' ? (
+                        <span key={`dots-${i}`} className="px-1 text-gray-400">...</span>
+                      ) : (
+                        <Button
+                          key={item}
+                          variant={page === item ? 'default' : 'outline'}
+                          size="sm"
+                          className="min-w-[32px]"
+                          onClick={() => { setPage(item); setSelectedIds(new Set()); }}
+                        >
+                          {item}
+                        </Button>
+                      )
+                    )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIds(new Set()); }}
+                  disabled={page >= totalPages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
@@ -317,6 +476,26 @@ export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: Co
               <AlertDialogCancel>Отмена</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить выбранных контрагентов</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы уверены, что хотите удалить {selectedIds.size} контрагент(ов)? Это действие нельзя отменить.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
                 className="bg-red-600 text-white hover:bg-red-700"
               >
                 Удалить

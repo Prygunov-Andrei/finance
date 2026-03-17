@@ -135,6 +135,10 @@ urlpatterns = [
     path('api/v1/', include('banking.urls')),
     path('api/v1/', include('supply.urls')),
     path('api/v1/', include('supplier_integrations.urls')),
+    # Публичный API портала смет (отдельный namespace)
+    path('api/public/v1/', include('api_public.urls')),
+    # Admin API портала (для ERP-операторов, JWT-аутентификация)
+    path('api/v1/portal/', include('api_public.admin_urls')),
     path('api/v1/', api_root, name='api-root'),
 ]
 

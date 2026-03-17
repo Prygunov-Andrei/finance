@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Project, ProjectNote, Estimate, EstimateSection,
     EstimateSubsection, EstimateCharacteristic, EstimateItem,
-    MountingEstimate
+    MountingEstimate, SpecificationItem
 )
 
 
@@ -136,3 +136,15 @@ class MountingEstimateAdmin(admin.ModelAdmin):
         'number', 'version_number', 'parent_version',
         'created_at', 'updated_at'
     ]
+
+
+@admin.register(SpecificationItem)
+class SpecificationItemAdmin(admin.ModelAdmin):
+    list_display = [
+        'name', 'model_name', 'brand', 'unit', 'quantity',
+        'section_name', 'page_number', 'request',
+    ]
+    list_filter = ['section_name', 'request']
+    search_fields = ['name', 'model_name', 'brand']
+    raw_id_fields = ['request', 'source_file']
+    readonly_fields = ['created_at', 'updated_at']

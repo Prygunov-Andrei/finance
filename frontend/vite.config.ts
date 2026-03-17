@@ -4,6 +4,7 @@
   import path from 'path';
 
   export default defineConfig({
+    base: '/erp/',
     plugins: [react()],
     test: {
       globals: true,

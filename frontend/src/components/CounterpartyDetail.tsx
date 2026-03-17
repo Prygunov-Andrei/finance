@@ -51,10 +51,7 @@ export function CounterpartyDetail() {
   // Загрузка контрагента
   const { data: counterparty, isLoading, error } = useQuery({
     queryKey: ['counterparty', counterpartyId],
-    queryFn: async () => {
-      const all = await api.getCounterparties();
-      return all.find((c) => c.id === counterpartyId) || null;
-    },
+    queryFn: () => api.getCounterparty(counterpartyId),
     enabled: !!counterpartyId,
   });
 

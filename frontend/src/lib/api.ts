@@ -308,11 +308,56 @@ class ApiClient {
     return response as Counterparty[];
   }
 
+  async getCounterpartiesPaginated(params?: { search?: string; type?: string; page?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.type) queryParams.append('type', params.type);
+    if (params?.page) queryParams.append('page', String(params.page));
+    const queryString = queryParams.toString();
+    const endpoint = `/counterparties/${queryString ? `?${queryString}` : ''}`;
+    const response = await this.request<PaginatedResponse<Counterparty> | Counterparty[]>(endpoint);
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response as PaginatedResponse<Counterparty>;
+    }
+    return { count: (response as Counterparty[]).length, next: null, previous: null, results: response as Counterparty[] };
+  }
+
+  async deleteCounterparties(ids: number[]) {
+    return Promise.all(ids.map(id => this.deleteCounterparty(id)));
+  }
+
+  async getCounterpartyDuplicates(minSimilarity = 0.85) {
+    return this.request<{
+      groups: CounterpartyDuplicateGroup[];
+      total_groups: number;
+    }>(`/counterparties/duplicates/?min_similarity=${minSimilarity}`);
+  }
+
+  async mergeCounterparties(keepId: number, removeIds: number[]) {
+    return this.request<{ merged: number; relations_moved: Record<string, number> }>(
+      '/counterparties/merge/',
+      { method: 'POST', body: JSON.stringify({ keep_id: keepId, remove_ids: removeIds }) },
+    );
+  }
+
+  async validateCounterpartyInns(inns: string[]) {
+    return this.request<{
+      results: Record<string, { found: boolean; fns_name?: string; status?: string; error?: string }>;
+    }>('/counterparties/validate-inns/', {
+      method: 'POST',
+      body: JSON.stringify({ inns }),
+    });
+  }
+
   async createCounterparty(data: CreateCounterpartyData) {
     return this.request<Counterparty>('/counterparties/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async getCounterparty(id: number) {
+    return this.request<Counterparty>(`/counterparties/${id}/`);
   }
 
   async updateCounterparty(id: number, data: Partial<CreateCounterpartyData>) {
@@ -3130,6 +3175,30 @@ export interface Counterparty {
   created_at?: string;
 }
 
+export interface CounterpartyDuplicateItem {
+  id: number;
+  name: string;
+  short_name?: string;
+  inn: string;
+  type: string;
+  vendor_subtype?: string | null;
+  legal_form?: string;
+  kpp?: string;
+  ogrn?: string;
+  is_active?: boolean;
+  _relations: {
+    invoices_count: number;
+    contracts_count: number;
+    price_history_count: number;
+  };
+}
+
+export interface CounterpartyDuplicateGroup {
+  normalized_name: string;
+  counterparties: CounterpartyDuplicateItem[];
+  similarity: number;
+}
+
 export interface ConstructionObject {
   id: number;
   name: string;
@@ -5438,6 +5507,77 @@ ApiClient.prototype.getSupplierBrands = async function (this: ApiClient, params?
 // --- Supplier Sync Logs ---
 ApiClient.prototype.getSupplierSyncLogs = async function (this: ApiClient, params?: string) {
   return this.request<PaginatedResponse<any>>(`/supplier-sync-logs/${params ? '?' + params : ''}`);
+};
+
+// =========================================================================
+// Portal Admin API (Заход 6 — управление публичными запросами смет)
+// =========================================================================
+
+ApiClient.prototype.getPortalRequests = async function (this: ApiClient, params?: string) {
+  return this.request<any[]>(`/portal/requests/${params ? '?' + params : ''}`);
+};
+
+ApiClient.prototype.getPortalRequestDetail = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/portal/requests/${id}/`);
+};
+
+ApiClient.prototype.approvePortalRequest = async function (this: ApiClient, id: number) {
+  return this.request<any>(`/portal/requests/${id}/approve/`, { method: 'POST' });
+};
+
+ApiClient.prototype.rejectPortalRequest = async function (this: ApiClient, id: number, reason?: string) {
+  return this.request<any>(`/portal/requests/${id}/reject/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: reason || '' }),
+  });
+};
+
+ApiClient.prototype.getPortalConfig = async function (this: ApiClient) {
+  return this.request<any>(`/portal/config/`);
+};
+
+ApiClient.prototype.updatePortalConfig = async function (this: ApiClient, data: any) {
+  return this.request<any>(`/portal/config/`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+ApiClient.prototype.getPortalPricing = async function (this: ApiClient) {
+  return this.request<any[]>(`/portal/pricing/`);
+};
+
+ApiClient.prototype.createPortalPricing = async function (this: ApiClient, data: any) {
+  return this.request<any>(`/portal/pricing/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+ApiClient.prototype.updatePortalPricing = async function (this: ApiClient, id: number, data: any) {
+  return this.request<any>(`/portal/pricing/${id}/`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+ApiClient.prototype.deletePortalPricing = async function (this: ApiClient, id: number) {
+  return this.request<void>(`/portal/pricing/${id}/`, { method: 'DELETE' });
+};
+
+ApiClient.prototype.getPortalCallbacks = async function (this: ApiClient, params?: string) {
+  return this.request<any[]>(`/portal/callbacks/${params ? '?' + params : ''}`);
+};
+
+ApiClient.prototype.updateCallbackStatus = async function (this: ApiClient, id: number, status: string) {
+  return this.request<any>(`/portal/callbacks/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+};
+
+ApiClient.prototype.getPortalStats = async function (this: ApiClient) {
+  return this.request<any>(`/portal/stats/`);
 };
 
 export const api = new ApiClient();

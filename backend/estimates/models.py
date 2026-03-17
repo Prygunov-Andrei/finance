@@ -1146,3 +1146,64 @@ class ColumnConfigTemplate(TimestampedModel):
                 is_default=True
             ).exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
+
+
+class SpecificationItem(TimestampedModel):
+    """Сырая позиция, извлечённая LLM из спецификации проекта.
+
+    Жизненный цикл:
+    1. Создаётся при парсинге PDF/Excel
+    2. Дедупликация (группировка по name+model+brand, суммирование quantity)
+    3. Трансформация в EstimateItem при создании Estimate
+    4. После создания Estimate — используется только для аудита/отладки
+
+    НЕ содержит цен — цены живут в EstimateItem.
+    """
+
+    # Cross-app FK: модель живёт в estimates, но ссылается на api_public
+    request = models.ForeignKey(
+        'api_public.EstimateRequest', on_delete=models.CASCADE,
+        related_name='spec_items',
+        verbose_name='Запрос',
+    )
+    source_file = models.ForeignKey(
+        'api_public.EstimateRequestFile', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='spec_items',
+        verbose_name='Исходный файл',
+    )
+
+    name = models.CharField(max_length=500, verbose_name='Наименование')
+    model_name = models.CharField(
+        max_length=300, blank=True, verbose_name='Модель/артикул',
+    )
+    brand = models.CharField(
+        max_length=255, blank=True, verbose_name='Бренд/производитель',
+    )
+    unit = models.CharField(
+        max_length=50, default='шт', verbose_name='Единица измерения',
+    )
+    quantity = models.DecimalField(
+        max_digits=14, decimal_places=3, default=1,
+        verbose_name='Количество',
+    )
+    tech_specs_raw = models.TextField(
+        blank=True, verbose_name='Тех. характеристики (из документа)',
+    )
+    section_name = models.CharField(
+        max_length=255, blank=True,
+        verbose_name='Раздел проекта',
+        help_text='ОВ, ВК, ЭО, АР, КР и т.д.',
+    )
+
+    page_number = models.PositiveIntegerField(
+        default=0, verbose_name='Страница в документе',
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['sort_order', 'created_at']
+        verbose_name = 'Позиция спецификации (сырые данные)'
+        verbose_name_plural = 'Позиции спецификации (сырые данные)'
+
+    def __str__(self):
+        return f'{self.name} ({self.quantity} {self.unit})'

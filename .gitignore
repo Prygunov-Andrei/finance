@@ -57,3 +57,10 @@ backend/catalog/data/suppliers/**/*.pdf
 # Конфиденциальные документы
 реквизиты*
 docs/private/
+
+# hvac-info
+hvac-info/backups/
+hvac-info/backend/media/
+hvac-info/backend/staticfiles/
+hvac-info/frontend/build/
+hvac-info/index_avgust/

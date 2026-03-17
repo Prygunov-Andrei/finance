@@ -65,6 +65,9 @@ services:
       /usr/bin/mc mb myminio/files --ignore-existing;
       /usr/bin/mc mb myminio/product-media --ignore-existing;
       /usr/bin/mc anonymous set download myminio/product-media;
+      /usr/bin/mc mb myminio/portal-estimates --ignore-existing;
+      /usr/bin/mc mb myminio/hvac-media --ignore-existing;
+      /usr/bin/mc anonymous set download myminio/hvac-media;
       exit 0;
       "
 
@@ -133,6 +136,20 @@ services:
       - BREEZ_API_BASE_URL=${BREEZ_API_BASE_URL:-https://api.breez.ru/v1}
       - BREEZ_API_AUTH_HEADER=${BREEZ_API_AUTH_HEADER:-}
       - FNS_API_KEY=${FNS_API_KEY:-}
+      # Portal S3 storage
+      - PORTAL_S3_ENDPOINT_URL=http://minio:9000
+      - PORTAL_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - PORTAL_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - PORTAL_S3_BUCKET_NAME=portal-estimates
+      - PORTAL_DOMAIN=${PORTAL_DOMAIN:-}
+      # Email (SMTP)
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@example.com}
     volumes:
       - ./backend:/app
       - backend_media:/app/media
@@ -273,6 +290,20 @@ services:
       - BREEZ_API_BASE_URL=${BREEZ_API_BASE_URL:-https://api.breez.ru/v1}
       - BREEZ_API_AUTH_HEADER=${BREEZ_API_AUTH_HEADER:-}
       - FNS_API_KEY=${FNS_API_KEY:-}
+      # Portal S3 storage
+      - PORTAL_S3_ENDPOINT_URL=http://minio:9000
+      - PORTAL_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - PORTAL_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - PORTAL_S3_BUCKET_NAME=portal-estimates
+      - PORTAL_DOMAIN=${PORTAL_DOMAIN:-}
+      # Email (SMTP)
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@example.com}
     volumes:
       - ./backend:/app
       - backend_media:/app/media
@@ -304,6 +335,58 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =========================================================================
+  # CELERY PUBLIC WORKER (публичный портал смет — отдельная очередь)
+  # =========================================================================
+
+  celery-public-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A finans_assistant worker --loglevel=info --concurrency=2 -Q public_tasks
+    environment:
+      - DEBUG=${DEBUG:-True}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-docker-dev-key-change-in-production}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-finans_assistant}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - WORKLOG_S3_ENDPOINT_URL=http://minio:9000
+      - WORKLOG_S3_PUBLIC_URL=http://localhost:9000
+      - WORKLOG_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - WORKLOG_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - WORKLOG_S3_BUCKET_NAME=worklog-media
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - GROK_API_KEY=${GROK_API_KEY:-}
+      # Portal S3 storage
+      - PORTAL_S3_ENDPOINT_URL=http://minio:9000
+      - PORTAL_S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - PORTAL_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - PORTAL_S3_BUCKET_NAME=portal-estimates
+      - PORTAL_DOMAIN=${PORTAL_DOMAIN:-}
+      # Email (SMTP)
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@example.com}
+    volumes:
+      - ./backend:/app
+      - backend_media:/app/media
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -366,6 +449,101 @@ services:
       - backend
     restart: unless-stopped
 
+  # =========================================================================
+  # PORTAL — Публичный портал расчёта смет (React + nginx)
+  # =========================================================================
+
+  portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    ports:
+      - "3002:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # =========================================================================
+  # HVAC-INFO — Новостной портал (отдельный Django + React)
+  # =========================================================================
+
+  createhvacdb:
+    image: postgres:14-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-postgres}
+      DB_USER: ${DB_USER:-postgres}
+      DB_HOST: postgres
+      HVAC_DB_NAME: ${HVAC_DB_NAME:-hvac_db}
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Ensuring hvac_db database exists...';
+      psql -h $$DB_HOST -U $$DB_USER -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='$$HVAC_DB_NAME'\" | grep -q 1
+      || psql -h $$DB_HOST -U $$DB_USER -d postgres -c \"CREATE DATABASE \\\"$$HVAC_DB_NAME\\\"\" ;
+      exit 0;
+      "
+
+  hvac-backend:
+    build:
+      context: ./hvac-info/backend
+      dockerfile: Dockerfile
+    command: ["gunicorn", "config.wsgi:application",
+              "--bind", "0.0.0.0:8001", "--workers", "2", "--timeout", "120",
+              "--access-logfile", "-", "--error-logfile", "-"]
+    ports:
+      - "8001:8001"
+    environment:
+      - DEBUG=${HVAC_DEBUG:-False}
+      - HVAC_ENV=prod
+      - SECRET_KEY=${HVAC_SECRET_KEY:-django-insecure-hvac-change-in-production}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${HVAC_DB_NAME:-hvac_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - ALLOWED_HOSTS=hvac-info.com,www.hvac-info.com,localhost,hvac-backend
+      # AI провайдеры
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Email
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      # Captcha
+      - HCAPTCHA_SECRET_KEY=${HCAPTCHA_SECRET_KEY:-}
+      # Translation
+      - TRANSLATION_API_KEY=${TRANSLATION_API_KEY:-}
+    volumes:
+      - hvac_media:/app/media
+      - hvac_static:/app/staticfiles
+    depends_on:
+      createhvacdb:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r = urllib.request.urlopen('http://localhost:8001/api/hvac/references/manufacturers/')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  hvac-frontend:
+    build:
+      context: ./hvac-info/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    depends_on:
+      - hvac-backend
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
@@ -373,3 +551,5 @@ volumes:
   backend_media:
   backend_logs:
   backend_static:
+  hvac_media:
+  hvac_static:
