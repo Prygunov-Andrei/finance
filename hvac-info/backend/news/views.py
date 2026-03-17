@@ -2,6 +2,7 @@ import logging
 import requests as http_requests
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
@@ -58,6 +59,12 @@ def get_default_prompts() -> dict:
     }
 
 
+class NewsPagination(PageNumberPagination):
+    page_size = 12
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class NewsPostViewSet(viewsets.ModelViewSet):
     """
     ViewSet для новостей.
@@ -65,6 +72,7 @@ class NewsPostViewSet(viewsets.ModelViewSet):
     - Создание/Редактирование/Удаление: только администраторы
     """
     permission_classes = [permissions.AllowAny]
+    pagination_class = NewsPagination
     
     def get_serializer_class(self):
         """Используем разные сериализаторы для чтения и записи"""
