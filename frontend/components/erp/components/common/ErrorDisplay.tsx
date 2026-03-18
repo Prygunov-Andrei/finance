@@ -1,7 +1,7 @@
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATE_STYLES, MESSAGES } from '../../constants';
-import { Button } from '../ui/button';
+import { Button } from '@/components/ui/button';
 
 interface ErrorDisplayProps {
   /** Сообщение об ошибке */

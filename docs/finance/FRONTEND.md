@@ -1,6 +1,6 @@
 # Frontend-компоненты финансового модуля
 
-**Путь**: `frontend/src/components/finance/`
+**Путь**: `frontend/components/finance/`
 **Обновлено**: Февраль 2026
 
 ---

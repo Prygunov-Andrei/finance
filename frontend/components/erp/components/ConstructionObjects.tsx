@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ConstructionObject, CreateConstructionObjectData } from '@/lib/api';
 import { CONSTANTS } from '../constants';
 import { formatDate } from '@/lib/utils';
 import { useObjects } from '@/hooks/useReferenceData';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
-import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Building2, Loader2, Plus, Search, Calendar, MapPin, LayoutGrid, Table as TableIcon } from 'lucide-react';
 import { toast } from 'sonner';
 

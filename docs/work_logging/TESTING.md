@@ -176,7 +176,7 @@ npm run test:watch # watch-режим
 ### Структура файлов
 
 ```
-frontend/src/__tests__/
+frontend/__tests__/
 ├── setup.ts                    # jest-dom matchers
 ├── worklog-api.test.ts         # 11 тестов — API client worklog methods
 └── worklog-components.test.tsx # 24 теста — все worklog-компоненты
@@ -215,7 +215,7 @@ frontend/src/__tests__/
 | `backend/worklog/` | ~85% | ≥ 90% |
 | `bot/` | ~80% | ≥ 85% |
 | `mini-app/src/` | ~70% | ≥ 80% |
-| `frontend/src/` (worklog) | ~75% | ≥ 75% |
+| `frontend/` (worklog) | ~75% | ≥ 75% |
 
 ---
 

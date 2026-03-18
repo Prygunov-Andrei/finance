@@ -2,6 +2,7 @@ from django.conf import settings as django_settings
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from personnel.models import resolve_permission_level
+from core.throttling import LoginRateThrottle
 
 
 class ERPTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -54,4 +55,5 @@ class ERPTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class ERPTokenObtainPairView(TokenObtainPairView):
     serializer_class = ERPTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 

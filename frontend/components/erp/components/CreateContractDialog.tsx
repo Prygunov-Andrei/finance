@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Checkbox } from './ui/checkbox';
-import { Card } from './ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card } from '@/components/ui/card';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useObjects, useCounterparties, useLegalEntities, useFrameworkContracts } from '@/hooks';
@@ -178,8 +178,8 @@ export function CreateContractDialog({ contractId, onSuccess }: CreateContractDi
   });
 
   // Фильтрация родительских договоров (только доходные)
-  const allContracts = parentContracts?.results || parentContracts || [];
-  const incomeContracts = allContracts.filter(c => c.contract_type === 'income');
+  const allContracts = Array.isArray(parentContracts) ? parentContracts : (parentContracts as any)?.results || [];
+  const incomeContracts = allContracts.filter((c: any) => c.contract_type === 'income');
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 mt-4">

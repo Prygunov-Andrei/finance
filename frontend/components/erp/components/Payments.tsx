@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, Payment, CreatePaymentData, ParseInvoiceResponse, InvoiceItem } from '@/lib/api';
 import { Loader2, Plus, Download, Search, Filter, X, TrendingUp, TrendingDown, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, ExternalLink } from 'lucide-react';
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
-import { Badge } from './ui/badge';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ExcelExport } from './ExcelExport';
 import { InvoiceUploader } from './payments/InvoiceUploader';
@@ -808,14 +808,14 @@ export function Payments() {
               {selectedPayment.items && selectedPayment.items.length > 0 && (
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium mb-3">Позиции товаров ({selectedPayment.items_count || selectedPayment.items.length})</h4>
-                  <InvoiceItemsTable 
-                    items={selectedPayment.items.map(item => ({
+                  <InvoiceItemsTable
+                    items={selectedPayment.items.map((item: any) => ({
                       raw_name: item.raw_name,
                       quantity: item.quantity,
                       unit: item.unit,
                       price_per_unit: item.price_per_unit,
                       amount: item.amount,
-                    }))}
+                    })) as InvoiceItem[]}
                     readonly={true}
                   />
                 </div>

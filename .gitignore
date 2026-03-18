@@ -30,12 +30,13 @@ db.sqlite3-journal
 .DS_Store
 Thumbs.db
 
-# Frontend (когда будет добавлен)
+# Frontend
 node_modules/
 .next/
 out/
 dist/
 build/
+*.tsbuildinfo
 
 # Environment
 .env

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { X } from 'lucide-react';
 import { api, MountingCondition, Counterparty } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
-import { Button } from '../ui/button';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 interface CreateMountingProposalFromTKPDialogProps {

@@ -5,18 +5,18 @@ import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { useCatalogCategories, useCatalogCategoryTree } from '@/hooks';
 import { Category, CategoryTreeNode } from '@/types/catalog';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Checkbox } from '../ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronRight, ChevronDown, Plus, Trash2, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '../ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 
 export function CatalogCategories() {
   const queryClient = useQueryClient();
@@ -37,7 +37,14 @@ export function CatalogCategories() {
   });
 
   // Форма
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    code: string;
+    parent_category: number | null;
+    description: string;
+    sort_order: string;
+    is_active: boolean;
+  }>({
     name: '',
     code: '',
     parent_category: null,

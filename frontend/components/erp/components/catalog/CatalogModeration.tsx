@@ -5,14 +5,14 @@ import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { useCatalogCategories, useCatalogCategoryTree } from '@/hooks';
 import { Product, ProductDuplicate } from '@/types/catalog';
-import { Button } from '../ui/button';
+import { Button } from '@/components/ui/button';
 import { CheckCircle, Archive, Search as SearchIcon, GitMerge } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '../ui/alert-dialog';
-import { useNavigate } from 'react-router';
+} from '@/components/ui/alert-dialog';
+import { useNavigate } from '@/hooks/erp-router';
 import { MergeProductsModal } from './MergeProductsModal';
 
 export function CatalogModeration() {

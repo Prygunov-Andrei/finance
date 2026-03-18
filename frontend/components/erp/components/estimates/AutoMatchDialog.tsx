@@ -2,12 +2,12 @@ import React, { useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { api, type AutoMatchResult, type AutoMatchOffer } from '@/lib/api';
-import { DataTable } from '../ui/data-table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Label } from '../ui/label';
+import { DataTable } from '@/components/ui/data-table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { Loader2, Wand2, Check, X, Package, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { CONSTANTS } from '../../constants';
@@ -220,7 +220,7 @@ export const AutoMatchDialog: React.FC<AutoMatchDialogProps> = ({
     onOpenChange(false);
   }, [onOpenChange]);
 
-  const supplierList = suppliers?.results || [];
+  const supplierList = Array.isArray(suppliers) ? suppliers : (suppliers as any)?.results || [];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

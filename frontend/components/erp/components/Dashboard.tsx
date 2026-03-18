@@ -2,9 +2,9 @@ import { TrendingUp, TrendingDown, FileText, CheckCircle, DollarSign, Wallet, Ar
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Button } from './ui/button';
-import { Card } from './ui/card';
-import { useNavigate } from 'react-router';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { useNavigate } from '@/hooks/erp-router';
 import { CONSTANTS, COLORS, LOCALE } from '../constants';
 import { formatDate, formatAmount, formatCurrency, formatThousands } from '@/lib/utils';
 
@@ -283,7 +283,7 @@ export function Dashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }: any) => `${name}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                     outerRadius={CONSTANTS.PIE_CHART_RADIUS}
                     fill={COLORS.CHART_DEFAULT}
                     dataKey="value"

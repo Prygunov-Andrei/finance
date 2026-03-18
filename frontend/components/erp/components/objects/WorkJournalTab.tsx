@@ -3,14 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, WorklogShift, WorklogMedia, WorklogReport, PaginatedResponse, Counterparty } from '@/lib/api';
 import { formatDate, formatDateTime, cn } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Loader2, FileText, FileSpreadsheet, ClipboardList, Users, Image, Clock, Camera, Video, Mic, FileQuestion, ChevronLeft, ChevronRight, Filter, Eye, MessageCircle, Send, Globe, Save, Link2, CheckCircle2, XCircle, Settings, UserPlus, Copy, ExternalLink, Plus, QrCode } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Badge } from '../ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { QRCodeSVG } from 'qrcode.react';
 
 // =============================================================================

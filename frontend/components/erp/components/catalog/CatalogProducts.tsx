@@ -5,11 +5,11 @@ import { api } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
 import { useCatalogCategoryTree } from '@/hooks';
 import { Product, CategoryTreeNode } from '@/types/catalog';
-import { Input } from '../ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Button } from '../ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { Search, Plus, Trash2, ChevronRight, ChevronDown, FolderOpen, Package } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { ProductFormDialog } from './ProductFormDialog';
 import { DeleteProductDialog } from './DeleteProductDialog';
 
@@ -309,7 +309,7 @@ export function CatalogProducts() {
               </SelectContent>
             </Select>
 
-            {suppliers && suppliers.results && suppliers.results.length > 0 && (
+            {suppliers && (Array.isArray(suppliers) ? suppliers : (suppliers as any)?.results || []).length > 0 && (
               <Select
                 value={filters.supplier || "all"}
                 onValueChange={(v) => { setFilters({ ...filters, supplier: v === "all" ? "" : v }); setPage(1); }}
@@ -319,7 +319,7 @@ export function CatalogProducts() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Все поставщики</SelectItem>
-                  {suppliers.results.map((s: any) => (
+                  {(Array.isArray(suppliers) ? suppliers : (suppliers as any)?.results || []).map((s: any) => (
                     <SelectItem key={s.id} value={s.id.toString()}>
                       {s.name}
                     </SelectItem>

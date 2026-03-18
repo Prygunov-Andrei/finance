@@ -296,7 +296,7 @@ export default defineConfig({
   ...
 })
 
-// frontend/src/main.tsx — BrowserRouter
+// frontend/main.tsx — BrowserRouter
 <BrowserRouter basename="/erp">
 ```
 

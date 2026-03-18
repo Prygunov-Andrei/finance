@@ -23,7 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './ui/select';
+} from '@/components/ui/select';
 import { Loader2, Users, Building2, UserCircle } from 'lucide-react';
 
 // =====================================================================

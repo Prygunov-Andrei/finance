@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { api } from '@/lib/api';
 import type { Invoice, InvoiceStatus } from '@/types/supply';
 import {
   Loader2, Search, Filter, X, FileText, Check, XCircle,
   CalendarClock, Eye, ChevronLeft, ChevronRight, Plus,
 } from 'lucide-react';
-import { Card } from '../ui/card';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Badge } from '../ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
-import { Textarea } from '../ui/textarea';
-import { Label } from '../ui/label';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
@@ -22,6 +22,7 @@ import { CONSTANTS } from '../../constants';
 const STATUS_LABELS: Record<InvoiceStatus, string> = {
   recognition: 'Распознавание',
   review: 'На проверке',
+  verified: 'Проверен',
   in_registry: 'В реестре',
   approved: 'Одобрен',
   sending: 'Отправка в банк',
@@ -32,6 +33,7 @@ const STATUS_LABELS: Record<InvoiceStatus, string> = {
 const STATUS_COLORS: Record<InvoiceStatus, string> = {
   recognition: 'bg-purple-100 text-purple-800',
   review: 'bg-yellow-100 text-yellow-800',
+  verified: 'bg-teal-100 text-teal-800',
   in_registry: 'bg-blue-100 text-blue-800',
   approved: 'bg-green-100 text-green-800',
   sending: 'bg-indigo-100 text-indigo-800',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, FileSpreadsheet, Download, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
 
 interface InvoiceFilePreviewProps {

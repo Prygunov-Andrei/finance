@@ -2,9 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   typescript: {
-    // ERP код перенесён из Vite и содержит TS-ошибки,
-    // которые не влияют на работу (Vite их игнорировал)
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
   async rewrites() {
@@ -20,8 +18,8 @@ const nextConfig = {
       { source: '/api/hvac/:path*', destination: `${hvacUrl}/api/hvac/:path*` },
       // Public portal API
       { source: '/api/public/:path*', destination: `${backendUrl}/api/public/:path*` },
-      // Kanban
-      { source: '/kanban-api/:path*', destination: `${kanbanUrl}/kanban-api/:path*` },
+      // Kanban (merged into main backend — proxy kept for backwards compat during transition)
+      { source: '/kanban-api/:path*', destination: `${backendUrl}/kanban-api/:path*` },
       // Django admin
       { source: '/admin/:path*', destination: `${backendUrl}/admin/:path*` },
       { source: '/hvac-admin/:path*', destination: `${hvacUrl}/hvac-admin/:path*` },

@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { api, type Act, type ActItem } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { DataTable } from '../ui/data-table';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { DataTable } from '@/components/ui/data-table';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Loader2, CheckCircle, FileSignature } from 'lucide-react';
 import { toast } from 'sonner';
 

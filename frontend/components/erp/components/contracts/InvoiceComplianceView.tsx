@@ -2,9 +2,9 @@ import React, { useMemo, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { api, type InvoiceComplianceResult } from '@/lib/api';
-import { DataTable } from '../ui/data-table';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { DataTable } from '@/components/ui/data-table';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Loader2, LinkIcon, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 

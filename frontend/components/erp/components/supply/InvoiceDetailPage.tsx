@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router';
+import { useParams, useNavigate, useLocation } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Invoice, InvoiceItem, InvoiceEvent } from '@/types/supply';
@@ -8,19 +8,19 @@ import {
   ExternalLink, Clock, User, Download, Send, Trash2, Plus,
   AlertCircle, CheckCircle,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
-import { Textarea } from '../ui/textarea';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Separator } from '../ui/separator';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { formatDate, formatAmount } from '@/lib/utils';
 import { InvoiceFilePreview } from './InvoiceFilePreview';
 import { InvoiceEditForm } from './InvoiceEditForm';
-import { useBreadcrumb } from '../../hooks/useBreadcrumb';
+import { useBreadcrumb } from '@/hooks/useBreadcrumb';
 
 const STATUS_LABELS: Record<string, string> = {
   recognition: 'Распознавание',
@@ -589,7 +589,7 @@ export function InvoiceDetailPage() {
               const itemsTotal = invoice.items.reduce((sum: number, item: InvoiceItem) => {
                 return sum + (parseFloat(item.quantity) || 0) * (parseFloat(item.price_per_unit) || 0);
               }, 0);
-              const grossAmount = parseFloat(invoice.amount_gross) || 0;
+              const grossAmount = parseFloat(invoice.amount_gross || '0') || 0;
               const diffPct = grossAmount > 0 ? Math.abs(itemsTotal - grossAmount) / grossAmount * 100 : 0;
               const isMatch = diffPct <= 5;
 

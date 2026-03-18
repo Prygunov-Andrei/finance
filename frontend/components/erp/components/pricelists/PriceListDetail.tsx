@@ -1,20 +1,20 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, PriceListItem, UpdatePriceListItemData, CreatePriceListAgreementData, CreatePriceListData } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '../ui/alert-dialog';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Checkbox } from '../ui/checkbox';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+} from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ArrowLeft, Loader2, MoreVertical, Calendar, FileText, Users, Trash2, Edit2, Info, Download, Settings, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -115,12 +115,12 @@ export function PriceListDetail() {
     mutationFn: (agreementId: number) => api.deletePriceListAgreement(agreementId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['price-list', id] });
-      setDeletingAgreementId(null);
+      setDeleteAgreementTarget(null);
       toast.success('Согласование удалено');
     },
     onError: (error: Error) => {
       toast.error(`Ошибка: ${error.message}`);
-      setDeletingAgreementId(null);
+      setDeleteAgreementTarget(null);
     },
   });
 

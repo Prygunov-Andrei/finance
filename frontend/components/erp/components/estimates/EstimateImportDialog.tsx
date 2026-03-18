@@ -2,11 +2,11 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { api, type EstimateImportPreview } from '@/lib/api';
-import { DataTable } from '../ui/data-table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Progress } from '../ui/progress';
+import { DataTable } from '@/components/ui/data-table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Upload, FileSpreadsheet, FileText, Loader2, CheckCircle, FolderOpen, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 

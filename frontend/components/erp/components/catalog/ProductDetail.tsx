@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { api } from '@/lib/api';
 import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { useCatalogCategories } from '@/hooks';
 import { Product, ProductAlias } from '@/types/catalog';
 import { SupplierProduct, SupplierStock } from '@/types/supplier';
-import { Button } from '../ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Label } from '../ui/label';
-import { Dialog, DialogContent } from '../ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   ArrowLeft, CheckCircle, Archive, Edit, ChevronLeft, ChevronRight,
   ExternalLink, FileText, Package, Warehouse,
@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '../ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { PriceHistoryTable } from './PriceHistoryTable';
 
 type Tab = 'info' | 'aliases' | 'prices' | 'suppliers';
@@ -149,7 +149,7 @@ export function ProductDetail() {
     setGalleryOpen(true);
   };
 
-  const supplierList = supplierProducts?.results || supplierProducts || [];
+  const supplierList = Array.isArray(supplierProducts) ? supplierProducts : (supplierProducts as any)?.results || [];
 
   return (
     <div className="h-screen flex flex-col">
@@ -253,7 +253,7 @@ export function ProductDetail() {
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg mb-4">Изображения</h3>
                 <div className="flex gap-3 overflow-x-auto pb-2">
-                  {product.images.map((url, i) => (
+                  {product.images.map((url: string, i: number) => (
                     <img
                       key={i}
                       src={url}
@@ -410,7 +410,7 @@ export function ProductDetail() {
                     {Object.entries(product.tech_specs).map(([key, value]) => (
                       <tr key={key} className="border-b last:border-0">
                         <td className="py-2 pr-4 text-gray-600 font-medium w-1/3">{key}</td>
-                        <td className="py-2 text-gray-900">{value}</td>
+                        <td className="py-2 text-gray-900">{value as React.ReactNode}</td>
                       </tr>
                     ))}
                   </tbody>

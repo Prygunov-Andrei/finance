@@ -12,12 +12,12 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import { computeAllFormulas } from '../../lib/formula-engine';
 import { CONSTANTS } from '../../constants';
-import { DataTable, createSelectColumn } from '../ui/data-table';
-import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Badge } from '../ui/badge';
+import { DataTable, createSelectColumn } from '@/components/ui/data-table';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, ClipboardPaste, Loader2, Upload, Wand2, Hammer, FolderOpen, ChevronUp, ChevronDown, ArrowRightFromLine, ArrowDownToLine, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { EstimateImportDialog } from './EstimateImportDialog';
@@ -369,7 +369,7 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
     if (!pasteText.trim()) return;
     const lines = pasteText.trim().split('\n');
     const newItems: CreateEstimateItemData[] = lines
-      .map((line) => {
+      .map((line): CreateEstimateItemData | null => {
         const cols = line.split('\t');
         if (cols.length < 2) return null;
         return {
@@ -381,7 +381,7 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
           quantity: cols[3]?.trim() || '1',
           material_unit_price: cols[4]?.trim() || '0',
           work_unit_price: cols[5]?.trim() || '0',
-        } satisfies CreateEstimateItemData;
+        };
       })
       .filter((x): x is CreateEstimateItemData => x !== null && x.name !== '');
 

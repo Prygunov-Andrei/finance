@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ProjectNote } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +18,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '../ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { ArrowLeft, Loader2, FileText, Download, Plus, Edit2, Trash2, Check, Calendar, Users, Info, History } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -493,7 +493,7 @@ export function ProjectDetail() {
                       </div>
                       <p className="text-gray-900 whitespace-pre-wrap">{note.text}</p>
                     </div>
-                    {currentUser && note.author.id === currentUser.id && (
+                    {!!(currentUser as any) && note.author.id === (currentUser as any).id && (
                       <div className="flex items-center gap-2 ml-4">
                         <Button
                           variant="ghost"

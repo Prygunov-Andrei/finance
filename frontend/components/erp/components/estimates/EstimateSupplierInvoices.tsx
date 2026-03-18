@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { Upload, Loader2, Eye, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { BulkInvoiceUpload } from '../finance/BulkInvoiceUpload';
 
 type EstimateSupplierInvoicesProps = {

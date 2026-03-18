@@ -84,6 +84,7 @@ export interface Invoice {
   id: number;
   source: InvoiceSource;
   source_display: string;
+  invoice_type?: string;
   status: InvoiceStatus;
   status_display: string;
   invoice_file: string | null;

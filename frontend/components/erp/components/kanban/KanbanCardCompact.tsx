@@ -1,8 +1,8 @@
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { ArrowRightFromLine } from 'lucide-react';
-import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { KanbanCard, CardColor } from '@/lib/kanbanApi';
 
 type TunnelActionProp = {

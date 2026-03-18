@@ -686,8 +686,8 @@
 | Unit-тесты Mini App API + lib | 15 ✅ | `mini-app/src/__tests__/api-client.test.ts`, `telegram-lib.test.ts` |
 | Unit-тесты Mini App i18n | 4 ✅ | `mini-app/src/__tests__/i18n.test.ts` |
 | Unit-тесты Mini App компонентов | 22 ✅ | `mini-app/src/__tests__/components.test.tsx` |
-| Unit-тесты ERP компонентов | 24 ✅ | `frontend/src/__tests__/worklog-components.test.tsx` |
-| Unit-тесты ERP API client | 11 ✅ | `frontend/src/__tests__/worklog-api.test.ts` |
+| Unit-тесты ERP компонентов | 24 ✅ | `frontend/__tests__/worklog-components.test.tsx` |
+| Unit-тесты ERP API client | 11 ✅ | `frontend/__tests__/worklog-api.test.ts` |
 | **Итого Unit написано** | **199 ✅** | |
 | E2E сценарии | 5 | Ручные/автоматизированные |
 | Интеграционные | 7 | `backend/worklog/tests/test_integration.py` |
@@ -705,7 +705,7 @@
 | `backend/worklog/` | ≥ 90% |
 | `bot/` | ≥ 85% |
 | `mini-app/src/` | ≥ 80% |
-| `frontend/src/` (worklog) | ≥ 75% |
+| `frontend/` (worklog) | ≥ 75% |
 
 ---
 

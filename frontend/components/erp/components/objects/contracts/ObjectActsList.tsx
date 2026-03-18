@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { ClipboardList } from 'lucide-react';
-import { api, Act, ContractListItem } from '../../../lib/api';
-import { Badge } from '../../ui/badge';
+import { api, Act, ContractListItem } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '../../common/EmptyState';
 import { LoadingSpinner } from '../../common/LoadingSpinner';
-import { formatDate, formatCurrency } from '../../../lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../../constants';
 
 type ObjectActsListProps = {

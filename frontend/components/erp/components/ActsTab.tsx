@@ -4,14 +4,14 @@ import { api, Act, CreateActData } from '@/lib/api';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 import { Loader2, Plus, FileText, MoreVertical, Pencil, Trash2, CheckCircle, Download } from 'lucide-react';
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from './ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 
 interface ActsTabProps {
@@ -43,7 +43,7 @@ export function ActsTab({ contractId }: ActsTabProps) {
   });
 
   // Извлекаем массив из ответа API
-  const acts = actsData?.results || actsData || [];
+  const acts = Array.isArray(actsData) ? actsData : (actsData as any)?.results || [];
 
   const createMutation = useMutation({
     mutationFn: (data: CreateActData) => api.createAct(data),
@@ -209,7 +209,7 @@ export function ActsTab({ contractId }: ActsTabProps) {
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Статус
                   </th>
-                  {acts.some(act => act.unpaid_amount) && (
+                  {acts.some((act: any) => act.unpaid_amount) && (
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Не оплачено
                     </th>
@@ -220,7 +220,7 @@ export function ActsTab({ contractId }: ActsTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {acts.map((act) => (
+                {acts.map((act: any) => (
                   <tr key={act.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-2.5">
                       <div className="text-sm font-medium text-gray-900">{act.number}</div>
@@ -254,7 +254,7 @@ export function ActsTab({ contractId }: ActsTabProps) {
                         {getStatusLabel(act.status)}
                       </span>
                     </td>
-                    {acts.some(a => a.unpaid_amount) && (
+                    {acts.some((a: any) => a.unpaid_amount) && (
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         {act.unpaid_amount ? (
                           <div className="text-sm font-medium text-orange-600">

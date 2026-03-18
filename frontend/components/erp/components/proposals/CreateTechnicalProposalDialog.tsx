@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, TechnicalProposalDetail, EstimateList, FrontOfWorkItem } from '@/lib/api';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useObjects, useLegalEntities } from '@/hooks';
 import { CONSTANTS } from '../../constants';
@@ -100,7 +100,7 @@ export function CreateTechnicalProposalDialog({ open, onOpenChange }: CreateTech
               tkp: result.id,
               front_item: row.front_item_id,
               when_text: row.when_text,
-              when_date: row.when_date || null,
+              when_date: row.when_date || undefined,
             });
           } catch {
             // silently skip duplicates

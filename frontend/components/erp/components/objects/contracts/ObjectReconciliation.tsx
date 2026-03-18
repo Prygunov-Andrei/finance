@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
-import { api, ContractListItem } from '../../../lib/api';
+import { api, ContractListItem } from '@/lib/api';
 import { EmptyState } from '../../common/EmptyState';
 import { LoadingSpinner } from '../../common/LoadingSpinner';
-import { formatCurrency } from '../../../lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../../constants';
 
 type ObjectReconciliationProps = {

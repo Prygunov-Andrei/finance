@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { api, EstimateList } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
 import { useObjects } from '@/hooks/useReferenceData';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Search, FileText, Loader2, Filter, X } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -192,7 +192,7 @@ export function Estimates() {
                 className="mt-1.5 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Все объекты</option>
-                {objects.map((obj) => (
+                {objects.map((obj: any) => (
                   <option key={obj.id} value={obj.id}>{obj.name}</option>
                 ))}
               </select>
@@ -347,7 +347,7 @@ export function Estimates() {
                   required
                 >
                   <option value={0}>Выберите объект</option>
-                  {objects.map((obj) => (
+                  {objects.map((obj: any) => (
                     <option key={obj.id} value={obj.id}>{obj.name}</option>
                   ))}
                 </select>

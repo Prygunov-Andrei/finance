@@ -1,9 +1,9 @@
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, Account, AccountBalance } from '@/lib/api';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, CreditCard, Building2, TrendingUp } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 

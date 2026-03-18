@@ -2,26 +2,26 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { api, ConstructionObject } from '@/lib/api';
 import { formatDate, formatDateTime, getStatusBadgeClass, getStatusLabel, cn } from '@/lib/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '../ui/dialog';
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../ui/select';
+} from '@/components/ui/select';
 import { Building2, MapPin, Calendar, Pencil, Loader2, Check, X, Camera } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '../ui/badge';
+import { Badge } from '@/components/ui/badge';
 
 type ObjectHeaderProps = {
   object: ConstructionObject;

@@ -90,7 +90,7 @@ backend/payments/
 └── tests/
     └── test_journal_entries.py
 
-frontend/src/components/finance/
+frontend/components/finance/
 ├── FinanceDashboard.tsx       # Дашборд с балансами
 ├── PaymentsTabPage.tsx        # Контейнер с 3 табами
 ├── InvoicesTab.tsx            # Список счетов + фильтры

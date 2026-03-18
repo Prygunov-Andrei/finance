@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { Plus, Search, Filter, X } from 'lucide-react';
 import { api, ContractListItem } from '@/lib/api';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Badge } from '../ui/badge';
-import { Label } from '../ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { CreateContractDialog } from '../CreateContractDialog';
 import { useObjects, useCounterparties, useLegalEntities } from '@/hooks';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
@@ -28,7 +28,7 @@ export function ContractsList() {
   });
 
   // Извлекаем массив contracts из ответа API
-  const contracts = contractsData?.results || contractsData || [];
+  const contracts = Array.isArray(contractsData) ? contractsData : (contractsData as any)?.results || [];
 
   // Загрузка справочников для фильтров с кешированием
   const { data: objectsData } = useObjects();
@@ -227,7 +227,7 @@ export function ContractsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {contracts.map((contract) => (
+                {contracts.map((contract: any) => (
                   <tr
                     key={contract.id}
                     onClick={() => navigate(`/contracts/${contract.id}`)}

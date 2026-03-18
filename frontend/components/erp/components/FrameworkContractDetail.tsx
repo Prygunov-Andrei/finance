@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -17,9 +17,9 @@ import {
   X,
 } from 'lucide-react';
 import { api, FrameworkContractDetail as FCDetail } from '@/lib/api';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Label } from './ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,7 +29,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from './ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
@@ -509,7 +509,7 @@ function PriceListsTab({ frameworkContract }: { frameworkContract: FCDetail }) {
   };
 
   // Фильтруем доступные для добавления прайс-листы
-  const availablePriceLists = allPriceLists?.results?.filter(
+  const availablePriceLists = (Array.isArray(allPriceLists) ? allPriceLists : (allPriceLists as any)?.results || []).filter(
     (pl: any) => !frameworkContract.price_lists.includes(pl.id)
   ) || [];
 

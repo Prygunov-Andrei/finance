@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { VendorMatchSuggestion, ParsedVendor } from '@/lib/api';
 import { useCounterparties } from '@/hooks';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { PlusCircle, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -35,9 +35,9 @@ export function CounterpartySelector({
   });
 
   const { data: counterpartiesData } = useCounterparties();
-  const counterparties = Array.isArray(counterpartiesData) 
-    ? counterpartiesData 
-    : counterpartiesData?.results || [];
+  const counterparties = Array.isArray(counterpartiesData)
+    ? counterpartiesData
+    : (counterpartiesData as any)?.results || [];
 
   const handleCreateNew = () => {
     if (!newCounterparty.name || !newCounterparty.inn) {
@@ -67,7 +67,7 @@ export function CounterpartySelector({
 
   // Собираем список: suggestions первыми, затем остальные
   const suggestionIds = new Set(suggestions.map(s => s.id));
-  const otherCounterparties = counterparties.filter(c => !suggestionIds.has(c.id));
+  const otherCounterparties = counterparties.filter((c: any) => !suggestionIds.has(c.id));
 
   return (
     <>
@@ -120,7 +120,7 @@ export function CounterpartySelector({
             )}
 
             {/* Остальные контрагенты */}
-            {otherCounterparties.map((counterparty) => (
+            {otherCounterparties.map((counterparty: any) => (
               <SelectItem key={counterparty.id} value={counterparty.id.toString()}>
                 {counterparty.name}
                 {counterparty.short_name && ` (${counterparty.short_name})`}

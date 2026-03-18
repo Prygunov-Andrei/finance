@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Button } from '../ui/button';
+import { useNavigate } from '@/hooks/erp-router';
+import { Button } from '@/components/ui/button';
 import { Plus, Loader2, FileText, Calendar } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { usePriceLists } from '@/hooks';

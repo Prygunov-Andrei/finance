@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router';
+import { useNavigate, useLocation } from '@/hooks/erp-router';
 import { 
   Home, Users, Building2, FileText, DollarSign, Settings, 
   LogOut, Menu, ChevronRight, List, Briefcase,
@@ -9,7 +9,7 @@ import {
   ExternalLink, HardHat, Search, BookOpen, HelpCircle, Archive,
   Calendar, PieChart, Wallet, Scale, Megaphone, Calculator, Globe, Phone
 } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -17,12 +17,12 @@ import {
   DropdownMenuLabel, 
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
-} from './ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { GlobalSearch } from './GlobalSearch';
 import { NotificationBadge } from './NotificationBadge';
-import { usePermissions } from '../hooks/usePermissions';
-import { useBreadcrumb } from '../hooks/useBreadcrumb';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useBreadcrumb } from '@/hooks/useBreadcrumb';
 const logo = '/logo.png';
 
 interface LayoutProps {

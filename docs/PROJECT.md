@@ -1394,7 +1394,7 @@ Bitrix24 CRM (Канбан) → Webhook → SupplyRequest → Invoice (recogniti
 - **Гибридная архитектура Invoice-Estimate:** FK `estimate` в Invoice — разделение «исследовательских» счетов сметчика и обычных счетов снабженца. Счета привязанные к смете не видны в списке снабженца (фильтр `estimate__isnull=True`)
 - Метод `EstimateAutoMatcher.preview_matches()` — предварительный подбор цен из счетов без сохранения в БД, с информацией об источнике (поставщик, номер счёта, дата)
 - Endpoint `auto_match` переключён с `auto_fill()` на `preview_matches()` — теперь возвращает `AutoMatchResult[]` вместо агрегированных stats
-- Компонент `EstimateSupplierInvoices` (`frontend/src/components/estimates/EstimateSupplierInvoices.tsx`) — вкладка «Счета поставщиков» в редакторе сметы: загрузка, статусы, навигация к проверке
+- Компонент `EstimateSupplierInvoices` (`frontend/components/estimates/EstimateSupplierInvoices.tsx`) — вкладка «Счета поставщиков» в редакторе сметы: загрузка, статусы, навигация к проверке
 - Вкладка «Счета поставщиков» в `EstimateDetail.tsx`
 - `BulkInvoiceUpload` — опциональный prop `estimateId` для привязки загруженных счетов к смете
 - `InvoiceDetailPage` — условная обратная навигация: если счёт привязан к смете, кнопка «Назад» ведёт обратно в смету
@@ -1406,13 +1406,13 @@ Bitrix24 CRM (Канбан) → Webhook → SupplyRequest → Invoice (recogniti
 ### Версия 3.2 (23.02.2026)
 
 **Добавлено:**
-- Компонент `DataTable` (`frontend/src/components/ui/data-table.tsx`) — переиспользуемая таблица на TanStack Table + react-virtual:
+- Компонент `DataTable` (`frontend/components/ui/data-table.tsx`) — переиспользуемая таблица на TanStack Table + react-virtual:
   - Виртуализация строк (5000+), сортировка, глобальная фильтрация, inline-редактирование ячеек, выделение строк (checkbox), группировка, footer с итогами
 - Новые типы в `api.ts`: `EstimateItem`, `CreateEstimateItemData`, `AutoMatchResult`, `EstimateImportPreview`, `EstimateDeviationRow`, `EstimatePurchaseLink`, `InvoiceComplianceResult`
 - Новые API-методы в `ApiClient`: CRUD EstimateItem (`getEstimateItems`, `createEstimateItem`, `updateEstimateItem`, `deleteEstimateItem`), bulk-операции (`bulkCreateEstimateItems`, `bulkUpdateEstimateItems`), `autoMatchEstimateItems`, `importEstimateFile`, CRUD ContractEstimateItem/Section, `createContractEstimateVersion`, `splitContractEstimate`, `updateContractText`, `deleteContractText`, `checkInvoiceCompliance`, `autoLinkInvoice`, `getEstimateDeviations`
 - Frontend тесты: DataTable (12 тестов — рендер, сортировка, фильтрация, row selection, inline edit, custom row class, footer, virtualization)
 - Зависимости: `@tanstack/react-table`, `@tanstack/react-virtual`
-- Компонент `EstimateItemsEditor` (`frontend/src/components/estimates/EstimateItemsEditor.tsx`) — табличный редактор строк сметы:
+- Компонент `EstimateItemsEditor` (`frontend/components/estimates/EstimateItemsEditor.tsx`) — табличный редактор строк сметы:
   - Inline-editing ячеек с debounced auto-save (PATCH), добавление строк через диалог, вставка из Excel (парсинг TSV), bulk-удаление выделенных строк, итоговые суммы (материалы, работы, всего), фильтрация/поиск, цветовая индикация аналогов, read-only режим для утверждённых смет
   - Интегрирован как вкладка «Строки сметы» в `EstimateDetail.tsx`
 - Бэкенд сервис импорта смет `EstimateImportService` (`backend/estimates/services/estimate_import_service.py`):
@@ -1420,16 +1420,16 @@ Bitrix24 CRM (Канбан) → Webhook → SupplyRequest → Invoice (recogniti
   - `import_from_pdf()` — парсинг PDF через LLM с Pydantic-схемами
   - `save_imported_items()` — сохранение распознанных строк в EstimateItem с созданием EstimateSection
   - Endpoint: `POST /api/v1/estimate-items/import/` (preview + confirm режимы)
-- Компонент `EstimateImportDialog` (`frontend/src/components/estimates/EstimateImportDialog.tsx`) — 4-шаговый wizard: drag-n-drop, парсинг, предпросмотр, подтверждение
-- Компонент `AutoMatchDialog` (`frontend/src/components/estimates/AutoMatchDialog.tsx`) — автоподбор цен и работ с выбором прайс-листа, таблицей результатов, уверенностью, accept/reject
-- Компонент `ContractEstimateDetail` (`frontend/src/components/contracts/ContractEstimateDetail.tsx`) — страница детальной сметы к договору с таблицей строк, итогами, действиями (согласовать, подписать, создать версию)
-- Компонент `AccumulativeEstimateView` (`frontend/src/components/contracts/AccumulativeEstimateView.tsx`) — накопительная смета с цветовой индикацией и экспортом в Excel
-- Компонент `EstimateRemainderView` (`frontend/src/components/contracts/EstimateRemainderView.tsx`) — остатки по смете
-- Компонент `EstimateDeviationsView` (`frontend/src/components/contracts/EstimateDeviationsView.tsx`) — отклонения с фильтром по типу
-- Компонент `ActCreateDialog` (`frontend/src/components/contracts/ActCreateDialog.tsx`) — создание актов КС-2/КС-3/Простой с выбором строк из накопительной сметы
-- Компонент `ActDetailPage` (`frontend/src/components/contracts/ActDetailPage.tsx`) — страница акта с позициями, суммами, действиями согласования/подписания
-- Компонент `InvoiceComplianceView` (`frontend/src/components/contracts/InvoiceComplianceView.tsx`) — проверка счёта на соответствие смете, авто-сопоставление
-- Компонент `ContractTextEditor` (`frontend/src/components/contracts/ContractTextEditor.tsx`) — Markdown-редактор текста договора с версионированием и preview
+- Компонент `EstimateImportDialog` (`frontend/components/estimates/EstimateImportDialog.tsx`) — 4-шаговый wizard: drag-n-drop, парсинг, предпросмотр, подтверждение
+- Компонент `AutoMatchDialog` (`frontend/components/estimates/AutoMatchDialog.tsx`) — автоподбор цен и работ с выбором прайс-листа, таблицей результатов, уверенностью, accept/reject
+- Компонент `ContractEstimateDetail` (`frontend/components/contracts/ContractEstimateDetail.tsx`) — страница детальной сметы к договору с таблицей строк, итогами, действиями (согласовать, подписать, создать версию)
+- Компонент `AccumulativeEstimateView` (`frontend/components/contracts/AccumulativeEstimateView.tsx`) — накопительная смета с цветовой индикацией и экспортом в Excel
+- Компонент `EstimateRemainderView` (`frontend/components/contracts/EstimateRemainderView.tsx`) — остатки по смете
+- Компонент `EstimateDeviationsView` (`frontend/components/contracts/EstimateDeviationsView.tsx`) — отклонения с фильтром по типу
+- Компонент `ActCreateDialog` (`frontend/components/contracts/ActCreateDialog.tsx`) — создание актов КС-2/КС-3/Простой с выбором строк из накопительной сметы
+- Компонент `ActDetailPage` (`frontend/components/contracts/ActDetailPage.tsx`) — страница акта с позициями, суммами, действиями согласования/подписания
+- Компонент `InvoiceComplianceView` (`frontend/components/contracts/InvoiceComplianceView.tsx`) — проверка счёта на соответствие смете, авто-сопоставление
+- Компонент `ContractTextEditor` (`frontend/components/contracts/ContractTextEditor.tsx`) — Markdown-редактор текста договора с версионированием и preview
 - Новые маршруты: `/contracts/estimates/:id`, обновлён `/contracts/acts/:id`
 - Вкладка «Текст договора» в `ContractDetail.tsx`
 
@@ -1560,7 +1560,7 @@ Bitrix24 CRM (Канбан) → Webhook → SupplyRequest → Invoice (recogniti
 
 ### Фронтенд: usePermissions
 
-Файл: `frontend/src/hooks/usePermissions.ts`
+Файл: `frontend/hooks/usePermissions.ts`
 
 - `resolveLevel(permissions, section)` — зеркало бекенд-логики fallback
 - `hasAccess(section, minLevel)` — проверка доступа с поддержкой точечной нотации
@@ -1568,7 +1568,7 @@ Bitrix24 CRM (Канбан) → Webhook → SupplyRequest → Invoice (recogniti
 
 ### Фронтенд: useBreadcrumb
 
-Файл: `frontend/src/hooks/useBreadcrumb.tsx`
+Файл: `frontend/hooks/useBreadcrumb.tsx`
 
 - `BreadcrumbProvider` — контекст, оборачивающий роутер в App.tsx
 - `useBreadcrumb()` — хук, возвращающий `{ detailLabel, setDetailLabel }`

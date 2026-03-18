@@ -308,7 +308,7 @@ finans_assistant/
 │   ├── package.json
 │   └── vite.config.ts
 ├── docker-compose.yml          # Redis + MinIO
-├── frontend/src/
+├── frontend/
 │   ├── components/
 │   │   ├── ObjectDetail.tsx    # +WorkJournalTab (полный интерфейс)
 │   │   └── ui/                 # Shadcn UI (Badge, Tabs, Dialog...)

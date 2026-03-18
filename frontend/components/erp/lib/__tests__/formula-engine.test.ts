@@ -2,6 +2,7 @@
  * Тесты для formula-engine.ts — зеркало бэкенд-реализации.
  * ~12 тест-кейсов.
  */
+// @ts-ignore vitest not installed as dependency
 import { describe, it, expect } from 'vitest';
 import {
   evaluateFormula,

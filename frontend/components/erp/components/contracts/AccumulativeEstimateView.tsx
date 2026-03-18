@@ -4,8 +4,8 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { api, type AccumulativeEstimateRow } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { DataTable } from '../ui/data-table';
-import { Button } from '../ui/button';
+import { DataTable } from '@/components/ui/data-table';
+import { Button } from '@/components/ui/button';
 import { Loader2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 

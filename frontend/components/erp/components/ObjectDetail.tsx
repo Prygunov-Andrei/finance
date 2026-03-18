@@ -1,9 +1,9 @@
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { CONSTANTS } from '../constants';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Button } from './ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, LayoutDashboard, UserCheck, HardHat, Settings } from 'lucide-react';
 import { ObjectHeader } from './objects/ObjectHeader';
 import { ObjectMainTab } from './objects/ObjectMainTab';

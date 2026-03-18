@@ -8,11 +8,11 @@ import {
   DEFAULT_COLUMN_CONFIG,
 } from '@/lib/api';
 import { validateFormula } from '../../lib/formula-engine';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Badge } from '../ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Plus, Trash2, ChevronUp, ChevronDown, RotateCcw, Save, Download,
   Eye, EyeOff, Loader2,

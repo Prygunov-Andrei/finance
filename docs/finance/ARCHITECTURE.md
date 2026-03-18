@@ -1,6 +1,6 @@
 # Архитектура финансового модуля
 
-**Файлы**: `backend/payments/`, `frontend/src/components/finance/`
+**Файлы**: `backend/payments/`, `frontend/components/finance/`
 **Обновлено**: Февраль 2026
 
 ---

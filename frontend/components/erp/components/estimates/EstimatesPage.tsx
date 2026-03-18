@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams } from '@/hooks/erp-router';
 import { Estimates } from './Estimates';
 import { MountingEstimates } from './MountingEstimates';
 

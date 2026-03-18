@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ContractAmendment, CreateContractAmendmentData } from '@/lib/api';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Plus, Loader2, FileText, MoreVertical, Trash2, Download } from 'lucide-react';
 import {
   AlertDialog,
@@ -17,7 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from './ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
@@ -134,7 +134,7 @@ export function ContractAmendmentsTab({ contractId }: ContractAmendmentsTabProps
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {amendmentsList.map((amendment) => (
+                {amendmentsList.map((amendment: any) => (
                   <tr key={amendment.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-2.5">
                       <div className="text-sm font-medium text-gray-900">{amendment.number}</div>

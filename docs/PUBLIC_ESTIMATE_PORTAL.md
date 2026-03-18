@@ -2043,7 +2043,7 @@ portal/                              — Корень проекта (рядом
     lib/
       api.ts                        — API-клиент (/api/public/v1/)
     components/
-      ui/                           — shadcn/ui (скопировать из frontend/src/components/ui/)
+      ui/                           — shadcn/ui (скопировать из frontend/components/ui/)
       layout/
         PortalLayout.tsx             — Шапка + футер (минималистичный, без ERP-сайдбара)
         Header.tsx                   — Логотип + навигация
@@ -2434,8 +2434,8 @@ Celery Beat — проверка истёкших RFQ, обновление ст
 | `Product`, `ProductAlias` | `catalog/models.py` | Каталог товаров с алиасами |
 | `ProductPriceHistory` | `catalog/models.py` | История закупочных цен |
 | `SupplierProduct` | `supplier_integrations/models.py` | Товары поставщиков с ценами (ric_price, base_price) |
-| shadcn/ui компоненты | `frontend/src/components/ui/` | UI-компоненты для переиспользования (скопировать в portal/) |
-| `ApiClient` паттерн | `frontend/src/lib/api.ts` | Паттерн HTTP-клиента с JWT interceptors и retry |
+| shadcn/ui компоненты | `frontend/components/ui/` | UI-компоненты для переиспользования (скопировать в portal/) |
+| `ApiClient` паттерн | `frontend/lib/api.ts` | Паттерн HTTP-клиента с JWT interceptors и retry |
 
 **Зависимости для добавления в requirements.txt:**
 - `django-storages[boto3]>=1.14.0` — S3/MinIO storage backend для файлов портала

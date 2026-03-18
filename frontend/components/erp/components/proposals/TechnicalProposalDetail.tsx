@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useBreadcrumb } from '../../hooks/useBreadcrumb';
+import { useBreadcrumb } from '@/hooks/useBreadcrumb';
 import { ArrowLeft, AlertCircle, Pencil, Trash2, Copy, FileText, Plus, History, Building2, Calendar, Clock, DollarSign, TrendingUp, User, FileCheck, X, Save, ChevronDown } from 'lucide-react';
 import {
   api,
@@ -10,19 +10,19 @@ import {
   TKPFrontOfWork,
   TKPEstimateSection,
   TKPEstimateSubsection,
-} from "../../lib/api";
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { Label } from "../ui/label";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
+} from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +32,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "../ui/alert-dialog";
+} from "@/components/ui/alert-dialog";
 import { CreateMountingProposalFromTKPDialog } from "./CreateMountingProposalFromTKPDialog";
 import { CreateVersionDialog } from "./CreateVersionDialog";
 import { formatDate, formatDateTime, formatAmount, formatCurrency, getStatusBadgeClass, getStatusLabel } from '@/lib/utils';
@@ -1033,9 +1033,9 @@ function EstimatesTab({ tkp }: { tkp: TKPDetail }) {
 
   // Фильтруем доступные для добавления сметы
   const availableEstimates =
-    allEstimates?.results?.filter(
-      (est) => !addedEstimateIds.includes(est.id),
-    ) || [];
+    (Array.isArray(allEstimates) ? allEstimates : (allEstimates as any)?.results || []).filter(
+      (est: any) => !addedEstimateIds.includes(est.id),
+    );
 
   if (tkp.estimates.length === 0 && tkp.estimate_sections.length === 0) {
     return (
@@ -1070,7 +1070,7 @@ function EstimatesTab({ tkp }: { tkp: TKPDetail }) {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {availableEstimates.map((estimate) => (
+                    {availableEstimates.map((estimate: any) => (
                       <label
                         key={estimate.id}
                         className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
@@ -1256,7 +1256,7 @@ function EstimatesTab({ tkp }: { tkp: TKPDetail }) {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {availableEstimates.map((estimate) => (
+                  {availableEstimates.map((estimate: any) => (
                     <label
                       key={estimate.id}
                       className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"

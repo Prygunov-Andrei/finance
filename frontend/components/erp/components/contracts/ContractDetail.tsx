@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Pencil, Trash2, FileText, Loader2, TrendingUp } from 'lucide-react';
 import {
@@ -15,8 +15,8 @@ import {
   Bar,
 } from 'recharts';
 import { api, ContractDetail as ContractDetailType } from '@/lib/api';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,8 +26,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '../ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+} from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { CreateContractDialog } from '../CreateContractDialog';
 import { ContractAmendmentsTab } from '../ContractAmendmentsTab';
@@ -192,7 +192,7 @@ export function ContractDetail() {
           {balance && (
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="text-gray-600 mb-1">Баланс</div>
-              <div className={balanceColor}>{formatCurrency(balance.balance, balance.currency)}</div>
+              <div className={balanceColor}>{formatCurrency(balance.balance, (balance as any).currency)}</div>
             </div>
           )}
           {margin && contract.contract_type === 'income' && (
@@ -525,28 +525,28 @@ function CashFlowTab({ contractId }: { contractId: number }) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="period" />
                 <YAxis />
-                <Tooltip 
-                  formatter={(value: number) => formatAmount(value)}
+                <Tooltip
+                  formatter={(value: any) => formatAmount(Number(value))}
                 />
                 <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="income" 
-                  stroke={COLORS.CHART_INCOME} 
+                <Line
+                  type="monotone"
+                  dataKey="income"
+                  stroke={COLORS.CHART_INCOME}
                   name="Приход"
                   strokeWidth={2}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="expense" 
-                  stroke={COLORS.CHART_EXPENSE} 
+                <Line
+                  type="monotone"
+                  dataKey="expense"
+                  stroke={COLORS.CHART_EXPENSE}
                   name="Расход"
                   strokeWidth={2}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="balance" 
-                  stroke={COLORS.CHART_NET} 
+                <Line
+                  type="monotone"
+                  dataKey="balance"
+                  stroke={COLORS.CHART_NET}
                   name="Баланс"
                   strokeWidth={2}
                 />
@@ -556,8 +556,8 @@ function CashFlowTab({ contractId }: { contractId: number }) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="period" />
                 <YAxis />
-                <Tooltip 
-                  formatter={(value: number) => formatAmount(value)}
+                <Tooltip
+                  formatter={(value: any) => formatAmount(Number(value))}
                 />
                 <Legend />
                 <Bar dataKey="income" fill={COLORS.CHART_INCOME} name="Приход" />

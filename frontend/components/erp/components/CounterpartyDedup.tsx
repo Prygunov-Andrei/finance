@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, CounterpartyDuplicateGroup } from '@/lib/api';
-import { Button } from './ui/button';
-import { Checkbox } from './ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Merge, CheckCircle2, XCircle, AlertTriangle, Search, ArrowLeft } from 'lucide-react';
 import {
   AlertDialog,
@@ -13,7 +13,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from './ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 
 type FnsValidation = Record<string, { found: boolean; fns_name?: string; status?: string; error?: string }>;

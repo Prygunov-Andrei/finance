@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate } from '@/hooks/erp-router';
 import { Plus, Search, Filter, X, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Badge } from '../ui/badge';
-import { Label } from '../ui/label';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { useCounterparties, useLegalEntities } from '@/hooks';
@@ -29,8 +29,8 @@ export function FrameworkContractsList() {
   const { data: legalEntitiesData } = useLegalEntities();
 
   // Извлекаем массивы из ответов API
-  const counterparties = counterpartiesData?.results || counterpartiesData || [];
-  const legalEntities = legalEntitiesData?.results || legalEntitiesData || [];
+  const counterparties = Array.isArray(counterpartiesData) ? counterpartiesData : (counterpartiesData as any)?.results || [];
+  const legalEntities = Array.isArray(legalEntitiesData) ? legalEntitiesData : (legalEntitiesData as any)?.results || [];
 
   const getStatusBadge = (status: string, isActive: boolean) => {
     if (status === 'draft') {
@@ -134,7 +134,7 @@ export function FrameworkContractsList() {
                 className="w-full px-3 py-2 border rounded-md mt-1"
               >
                 <option value="">Все исполнители</option>
-                {counterparties.map((cp) => (
+                {counterparties.map((cp: any) => (
                   <option key={cp.id} value={cp.id}>{cp.name}</option>
                 ))}
               </select>
@@ -147,7 +147,7 @@ export function FrameworkContractsList() {
                 className="w-full px-3 py-2 border rounded-md mt-1"
               >
                 <option value="">Все компании</option>
-                {legalEntities.map((le) => (
+                {legalEntities.map((le: any) => (
                   <option key={le.id} value={le.id}>{le.name}</option>
                 ))}
               </select>

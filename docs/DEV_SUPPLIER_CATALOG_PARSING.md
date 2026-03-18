@@ -446,7 +446,7 @@ PyMuPDF (`fitz`) должен быть установлен: `pip install PyMuPD
 | `catalog/management/commands/parse_supplier_catalog.py` | CLI: парсинг |
 | `catalog/management/commands/import_supplier_catalog.py` | CLI: импорт |
 | `core/management/commands/setup_clean_db.py` | Скрипт первоначального наполнения |
-| `frontend/src/components/catalog/SupplierCatalogsPage.tsx` | Список каталогов |
-| `frontend/src/components/catalog/SupplierCatalogDetail.tsx` | Детали каталога |
-| `frontend/src/types/catalog.ts` | TypeScript-типы |
-| `frontend/src/lib/api.ts` | API-методы |
+| `frontend/components/catalog/SupplierCatalogsPage.tsx` | Список каталогов |
+| `frontend/components/catalog/SupplierCatalogDetail.tsx` | Детали каталога |
+| `frontend/types/catalog.ts` | TypeScript-типы |
+| `frontend/lib/api.ts` | API-методы |

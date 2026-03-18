@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate, Link } from 'react-router';
+import { useParams, useNavigate, Link } from '@/hooks/erp-router';
 import { api, Act } from '@/lib/api';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 import { Loader2, ArrowLeft, FileText, Pencil, Trash2, CheckCircle, Download, DollarSign } from 'lucide-react';
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,9 +20,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from './ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Progress } from './ui/progress';
+import { Progress } from '@/components/ui/progress';
 
 export function ActDetail() {
   const { id } = useParams<{ id: string }>();
@@ -90,7 +90,7 @@ export function ActDetail() {
 
   const isOverdue = () => {
     if (!act || !act.due_date || act.status !== 'signed') return false;
-    const unpaid = parseFloat(act.unpaid_amount);
+    const unpaid = parseFloat(act.unpaid_amount || '0');
     if (unpaid <= 0) return false;
     
     const dueDate = new Date(act.due_date);

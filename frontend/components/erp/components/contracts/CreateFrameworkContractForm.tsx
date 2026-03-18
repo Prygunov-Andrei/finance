@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { api, FrameworkContractDetail } from '@/lib/api';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { useLegalEntities, usePriceLists } from '@/hooks';
 
-interface FormData {
+interface FrameworkContractFormData {
   name: string;
   date: string;
   valid_from: string;
@@ -31,7 +31,7 @@ export function CreateFrameworkContractForm() {
   const queryClient = useQueryClient();
   const isEditing = !!id;
 
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<FrameworkContractFormData>({
     name: '',
     date: new Date().toISOString().split('T')[0],
     valid_from: new Date().toISOString().split('T')[0],
@@ -83,7 +83,7 @@ export function CreateFrameworkContractForm() {
 
   // Создание рамочного договора
   const createMutation = useMutation({
-    mutationFn: async (data: FormData) => {
+    mutationFn: async (data: FrameworkContractFormData) => {
       const formDataToSend = new FormData();
       formDataToSend.append('name', data.name);
       formDataToSend.append('date', data.date);
@@ -100,7 +100,7 @@ export function CreateFrameworkContractForm() {
         });
       }
 
-      return api.createFrameworkContract(formDataToSend);
+      return api.createFrameworkContract(formDataToSend as any);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['framework-contracts'] });
@@ -115,7 +115,7 @@ export function CreateFrameworkContractForm() {
 
   // Обновление рамочного договора
   const updateMutation = useMutation({
-    mutationFn: async (data: FormData) => {
+    mutationFn: async (data: FrameworkContractFormData) => {
       const formDataToSend = new FormData();
       formDataToSend.append('name', data.name);
       formDataToSend.append('date', data.date);
@@ -132,7 +132,7 @@ export function CreateFrameworkContractForm() {
         });
       }
 
-      return api.updateFrameworkContract(parseInt(id!), formDataToSend);
+      return api.updateFrameworkContract(parseInt(id!), formDataToSend as any);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['framework-contracts'] });
@@ -172,7 +172,7 @@ export function CreateFrameworkContractForm() {
     }
   };
 
-  const handleChange = (field: keyof FormData, value: any) => {
+  const handleChange = (field: keyof FrameworkContractFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -193,9 +193,9 @@ export function CreateFrameworkContractForm() {
     );
   }
 
-  const legalEntities = legalEntitiesData?.results || [];
-  const counterparties = counterpartiesData?.results || [];
-  const priceLists = priceListsData?.results || [];
+  const legalEntities = Array.isArray(legalEntitiesData) ? legalEntitiesData : (legalEntitiesData as any)?.results || [];
+  const counterparties = Array.isArray(counterpartiesData) ? counterpartiesData : (counterpartiesData as any)?.results || [];
+  const priceLists = Array.isArray(priceListsData) ? priceListsData : (priceListsData as any)?.results || [];
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (

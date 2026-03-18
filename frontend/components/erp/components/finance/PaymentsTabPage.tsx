@@ -1,6 +1,6 @@
-import { useSearchParams } from 'react-router';
+import { useSearchParams } from '@/hooks/erp-router';
 import { Receipt, CreditCard, TrendingUp } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { InvoicesTab } from './InvoicesTab';
 import { PaymentRegistryTab } from './PaymentRegistryTab';
 import { IncomingPaymentsTab } from './IncomingPaymentsTab';

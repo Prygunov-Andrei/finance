@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, PaymentRegistryItem, ExpenseCategory, Account, ContractListItem, Act } from '@/lib/api';
 import { Loader2, Plus, CheckCircle, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from './ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useExpenseCategories, useAccounts } from '@/hooks';
 import { CONSTANTS } from '../constants';
@@ -104,13 +104,13 @@ export function PaymentRegistry() {
 
   const approveMutation = useMutation({
     mutationFn: api.approvePaymentRegistryItem.bind(api),
-    onSuccess: (updatedItem) => {
+    onSuccess: (updatedItem: PaymentRegistryItem) => {
       // Обновляем только текущую страницу
       queryClient.setQueryData(['payment-registry', currentPage], (oldData: any) => {
         if (!oldData || !oldData.results) return oldData;
         return {
           ...oldData,
-          results: oldData.results.map((item: PaymentRegistryItem) => 
+          results: oldData.results.map((item: PaymentRegistryItem) =>
             item.id === updatedItem.id ? updatedItem : item
           ),
         };
@@ -124,7 +124,7 @@ export function PaymentRegistry() {
 
   const payMutation = useMutation({
     mutationFn: (id: number) => api.payPaymentRegistryItem(id),
-    onSuccess: (updatedItem) => {
+    onSuccess: (updatedItem: PaymentRegistryItem) => {
       // Обновляем только текущую страницу
       queryClient.setQueryData(['payment-registry', currentPage], (oldData: any) => {
         if (!oldData || !oldData.results) return oldData;
@@ -148,9 +148,9 @@ export function PaymentRegistry() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason?: string }) => 
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
       api.cancelPaymentRegistryItem(id, reason),
-    onSuccess: (updatedItem) => {
+    onSuccess: (updatedItem: PaymentRegistryItem) => {
       queryClient.setQueryData(['payment-registry', currentPage], (oldData: any) => {
         if (!oldData || !oldData.results) return oldData;
         return {

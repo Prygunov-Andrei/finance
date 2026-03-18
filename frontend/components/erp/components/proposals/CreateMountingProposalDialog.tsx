@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, MountingProposalDetail, MountingEstimateList, MountingCondition } from '@/lib/api';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useObjects, useCounterparties } from '@/hooks';
 import { CONSTANTS } from '../../constants';
@@ -251,7 +251,7 @@ export function CreateMountingProposalDialog({
                     required
                   >
                     <option value="">Выберите объект</option>
-                    {objects?.results?.map((obj) => (
+                    {(Array.isArray(objects) ? objects : (objects as any)?.results || []).map((obj: any) => (
                       <option key={obj.id} value={obj.id}>{obj.name}</option>
                     ))}
                   </select>
@@ -266,7 +266,7 @@ export function CreateMountingProposalDialog({
                     onChange={(e) => setFormData({ ...formData, counterparty: e.target.value })}
                   >
                     <option value="">Не выбран</option>
-                    {counterparties?.results?.map((cp) => (
+                    {(Array.isArray(counterparties) ? counterparties : (counterparties as any)?.results || []).map((cp: any) => (
                       <option key={cp.id} value={cp.id}>{cp.name}</option>
                     ))}
                   </select>
