@@ -1,0 +1,1255 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
+import { api, Counterparty, CreateCounterpartyData, FNSSuggestResult, FNSQuickCheckResponse, FNSEnrichResponse } from '../lib/api';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
+import { Plus, Loader2, Users, Search, Database, Globe, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, FileText, StickyNote, XCircle, CheckCircle2, Trash2, ChevronLeft, ChevronRight, Merge } from 'lucide-react';
+import { Checkbox } from './ui/checkbox';
+import { CounterpartyDedup } from './CounterpartyDedup';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
+import { toast } from 'sonner';
+
+type CounterpartyFilter = 'all' | 'customer' | 'potential_customer' | 'supplier' | 'executor';
+
+type CounterpartiesProps = {
+  lockedFilter?: CounterpartyFilter;
+  lockedCreateType?: Counterparty['type'];
+  pageTitle?: string;
+};
+
+export function Counterparties({ lockedFilter, lockedCreateType, pageTitle }: CounterpartiesProps = {}) {
+  const effectiveFilter = lockedFilter || 'all';
+  const [filter, setFilter] = useState<CounterpartyFilter>(effectiveFilter);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingCounterparty, setEditingCounterparty] = useState<Counterparty | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Counterparty | null>(null);
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [dedupMode, setDedupMode] = useState(false);
+  const PAGE_SIZE = 20;
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (lockedFilter) setFilter(lockedFilter);
+  }, [lockedFilter]);
+
+  // Определяем серверный тип-фильтр для API
+  const apiTypeParam = useMemo(() => {
+    if (filter === 'customer') return 'customer';
+    if (filter === 'potential_customer') return 'potential_customer';
+    if (filter === 'supplier' || filter === 'executor') return 'vendor';
+    return undefined;
+  }, [filter]);
+
+  const { data: paginatedData, isLoading, error } = useQuery({
+    queryKey: ['counterparties-paginated', page, apiTypeParam],
+    queryFn: () => api.getCounterpartiesPaginated({ page, type: apiTypeParam }),
+    staleTime: 60_000,
+  });
+
+  const counterparties = paginatedData?.results || [];
+  const totalCount = paginatedData?.count || 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Сбрасываем страницу и выделение при смене фильтра
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds(new Set());
+  }, [filter]);
+
+  // Фильтрация supplier/executor на клиенте (т.к. vendor_subtype нет в серверном фильтре)
+  const filteredCounterparties = useMemo(() => {
+    if (filter === 'supplier') {
+      return counterparties.filter(cp => cp.vendor_subtype === 'supplier' || cp.vendor_subtype === 'both');
+    }
+    if (filter === 'executor') {
+      return counterparties.filter(cp => cp.vendor_subtype === 'executor' || cp.vendor_subtype === 'both');
+    }
+    return counterparties;
+  }, [counterparties, filter]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: CreateCounterpartyData) => api.createCounterparty(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
+      setIsDialogOpen(false);
+      toast.success('Контрагент успешно создан');
+    },
+    onError: (error: Error) => {
+      toast.error(`Ошибка: ${error.message}`);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<CreateCounterpartyData> }) =>
+      api.updateCounterparty(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
+      setIsEditDialogOpen(false);
+      setEditingCounterparty(null);
+      toast.success('Контрагент успешно обновлен');
+    },
+    onError: (error: any) => {
+      toast.error(`Ошибка обновления контрагента: ${error?.message || 'Неизвестная ошибка'}`);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.deleteCounterparty(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
+      toast.success('Контрагент успешно удален');
+    },
+    onError: (error: any) => {
+      toast.error(`Ошибка удаления контрагента: ${error?.message || 'Неизвестная ошибка'}`);
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: number[]) => api.deleteCounterparties(ids),
+    onSuccess: (_, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['counterparties'] });
+      queryClient.invalidateQueries({ queryKey: ['counterparties-paginated'] });
+      toast.success(`Удалено контрагентов: ${ids.length}`);
+      setSelectedIds(new Set());
+      setBulkDeleteConfirm(false);
+    },
+    onError: (error: any) => {
+      toast.error(`Ошибка удаления: ${error?.message || 'Неизвестная ошибка'}`);
+    },
+  });
+
+  const handleEdit = (counterparty: Counterparty) => {
+    setEditingCounterparty(counterparty);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (counterparty: Counterparty) => {
+    setDeleteTarget(counterparty);
+  };
+
+  const handleRowClick = (counterparty: Counterparty) => {
+    navigate(`/counterparties/${counterparty.id}`);
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredCounterparties.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredCounterparties.map(cp => cp.id)));
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'customer': return 'Заказчик';
+      case 'potential_customer': return 'Потенциальный Заказчик';
+      case 'vendor': return 'Исполнитель-Поставщик';
+      case 'both': return 'Заказчик и Исполнитель-Поставщик';
+      case 'employee': return 'Сотрудник';
+      default: return type;
+    }
+  };
+
+  const getVendorSubtypeLabel = (subtype?: string | null) => {
+    if (!subtype) return '—';
+    switch (subtype) {
+      case 'supplier': return 'Поставщик';
+      case 'executor': return 'Исполнитель';
+      case 'both': return 'Исполнитель и Поставщик';
+      default: return '—';
+    }
+  };
+
+  const getLegalFormLabel = (form?: string) => {
+    if (!form) return '—';
+    switch (form) {
+      case 'ooo': return 'ООО';
+      case 'ip': return 'ИП';
+      case 'fiz': return 'Физ.лицо';
+      case 'self_employed': return 'Самозанятый';
+      default: return form;
+    }
+  };
+
+  if (dedupMode) {
+    return <CounterpartyDedup onBack={() => setDedupMode(false)} />;
+  }
+
+  return (
+    <div className="p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-semibold">{pageTitle || 'Контрагенты'}</h1>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setDedupMode(true)}>
+              <Merge className="w-4 h-4 mr-2" />
+              Дедупликация
+            </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить контрагента
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Новый контрагент</DialogTitle>
+                <DialogDescription>Введите ИНН или название — данные заполнятся автоматически</DialogDescription>
+              </DialogHeader>
+              <CreateCounterpartyForm 
+                onSubmit={(data) => createMutation.mutate(data)}
+                isLoading={createMutation.isPending}
+                lockedType={lockedCreateType}
+              />
+            </DialogContent>
+          </Dialog>
+          </div>
+        </div>
+
+        {/* Filters — hidden when lockedFilter is set */}
+        {!lockedFilter && (
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as CounterpartyFilter)} className="mb-6">
+            <TabsList>
+              <TabsTrigger value="all">Все</TabsTrigger>
+              <TabsTrigger value="customer">Заказчики</TabsTrigger>
+              <TabsTrigger value="potential_customer">Потенциальные</TabsTrigger>
+              <TabsTrigger value="supplier">Поставщики</TabsTrigger>
+              <TabsTrigger value="executor">Исполнители</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+
+        {/* Панель массовых действий */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <span className="text-sm text-blue-700">Выбрано: {selectedIds.size}</span>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteConfirm(true)}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-1" />
+              )}
+              Удалить выбранных
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Снять выделение
+            </Button>
+          </div>
+        )}
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 text-red-600 p-4 rounded-xl">
+            Ошибка загрузки: {(error as Error).message}
+          </div>
+        ) : !filteredCounterparties || filteredCounterparties.length === 0 ? (
+          <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 mb-4">
+              {filter === 'all' ? 'Нет контрагентов' : 'Нет контрагентов в этой категории'}
+            </p>
+            <Button onClick={() => setIsDialogOpen(true)} variant="outline">
+              <Plus className="w-4 h-4 mr-2" />
+              Добавить первого контрагента
+            </Button>
+          </div>
+        ) : (
+          <>
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-2.5 w-10">
+                      <Checkbox
+                        checked={filteredCounterparties.length > 0 && selectedIds.size === filteredCounterparties.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Название
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                      ИНН
+                    </th>
+                    {filter === 'all' && (
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                        Тип
+                      </th>
+                    )}
+                    {(filter === 'all' || filter === 'supplier' || filter === 'executor') && (
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                        Подтип
+                      </th>
+                    )}
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                      Правовая форма
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Контакты
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredCounterparties.map((counterparty: Counterparty) => (
+                    <tr
+                      key={counterparty.id}
+                      className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedIds.has(counterparty.id) ? 'bg-blue-50' : ''}`}
+                      onClick={() => handleRowClick(counterparty)}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Открыть карточку ${counterparty.name}`}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleRowClick(counterparty); }}
+                    >
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(counterparty.id)}
+                          onCheckedChange={() => toggleSelect(counterparty.id)}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="text-sm text-gray-900">{counterparty.name}</div>
+                        {counterparty.short_name && (
+                          <div className="text-xs text-gray-500">{counterparty.short_name}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        <div className="text-xs font-mono text-gray-500">{counterparty.inn}</div>
+                      </td>
+                      {filter === 'all' && (
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                            counterparty.type === 'customer'
+                              ? 'bg-green-100 text-green-700'
+                              : counterparty.type === 'potential_customer'
+                              ? 'bg-orange-100 text-orange-700'
+                              : counterparty.type === 'vendor'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {getTypeLabel(counterparty.type)}
+                          </span>
+                        </td>
+                      )}
+                      {(filter === 'all' || filter === 'supplier' || filter === 'executor') && (
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          {(counterparty.type === 'vendor' || counterparty.type === 'both') ? (
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                              counterparty.vendor_subtype === 'supplier'
+                                ? 'bg-orange-100 text-orange-700'
+                                : counterparty.vendor_subtype === 'executor'
+                                ? 'bg-indigo-100 text-indigo-700'
+                                : counterparty.vendor_subtype === 'both'
+                                ? 'bg-cyan-100 text-cyan-700'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}>
+                              {getVendorSubtypeLabel(counterparty.vendor_subtype)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        <div className="text-xs text-gray-600">{getLegalFormLabel(counterparty.legal_form)}</div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="text-xs text-gray-500 max-w-xs truncate">
+                          {counterparty.contact_info || '—'}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Пагинация */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-gray-500">
+                Всего: {totalCount}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setPage(p => Math.max(1, p - 1)); setSelectedIds(new Set()); }}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                    .reduce<(number | 'dots')[]>((acc, p, i, arr) => {
+                      if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('dots');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((item, i) =>
+                      item === 'dots' ? (
+                        <span key={`dots-${i}`} className="px-1 text-gray-400">...</span>
+                      ) : (
+                        <Button
+                          key={item}
+                          variant={page === item ? 'default' : 'outline'}
+                          size="sm"
+                          className="min-w-[32px]"
+                          onClick={() => { setPage(item); setSelectedIds(new Set()); }}
+                        >
+                          {item}
+                        </Button>
+                      )
+                    )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setPage(p => Math.min(totalPages, p + 1)); setSelectedIds(new Set()); }}
+                  disabled={page >= totalPages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
+        )}
+
+        <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить контрагента</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы уверены, что хотите удалить контрагента &quot;{deleteTarget?.name}&quot;? Это действие нельзя отменить.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить выбранных контрагентов</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы уверены, что хотите удалить {selectedIds.size} контрагент(ов)? Это действие нельзя отменить.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+                className="bg-red-600 text-white hover:bg-red-700"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Диалог редактирования */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Редактировать контрагента</DialogTitle>
+              <DialogDescription>Измените информацию о контрагенте</DialogDescription>
+            </DialogHeader>
+            {editingCounterparty && (
+              <EditCounterpartyForm 
+                counterparty={editingCounterparty}
+                onSubmit={(data) => updateMutation.mutate({ id: editingCounterparty.id, data })}
+                isLoading={updateMutation.isPending}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+}
+
+// ─── Хук для debounced поиска ФНС ──────────────────────────────
+
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+};
+
+// ─── Компонент подсказок ФНС ────────────────────────────────────
+
+interface FNSSuggestDropdownProps {
+  query: string;
+  onSelect: (result: FNSSuggestResult) => void;
+  isVisible: boolean;
+  onClose: () => void;
+}
+
+function FNSSuggestDropdown({ query, onSelect, isVisible, onClose }: FNSSuggestDropdownProps) {
+  const debouncedQuery = useDebounce(query, 400);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['fns-suggest', debouncedQuery],
+    queryFn: () => api.fnsSuggest(debouncedQuery),
+    enabled: isVisible && debouncedQuery.length >= 3,
+    staleTime: 60_000,
+  });
+
+  // Закрытие при клике вне
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    if (isVisible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isVisible, onClose]);
+
+  if (!isVisible || debouncedQuery.length < 3) return null;
+
+  return (
+    <div
+      ref={dropdownRef}
+      className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+    >
+      {isLoading ? (
+        <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Поиск...
+        </div>
+      ) : data?.results && data.results.length > 0 ? (
+        <>
+          <div className="px-3 py-1.5 text-xs text-gray-400 border-b bg-gray-50 flex items-center gap-1">
+            {data.source === 'local' ? (
+              <><Database className="w-3 h-3" /> Из нашей базы</>
+            ) : (
+              <><Globe className="w-3 h-3" /> Из ФНС</>
+            )}
+            <span className="ml-auto">{data.total} результат(ов)</span>
+          </div>
+          {data.results.map((result, idx) => (
+            <button
+              key={`${result.inn}-${idx}`}
+              type="button"
+              className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors border-b last:border-b-0"
+              onClick={() => {
+                onSelect(result);
+                onClose();
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">{result.name}</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <span className="font-mono">ИНН: {result.inn}</span>
+                    {result.kpp && <span className="font-mono">КПП: {result.kpp}</span>}
+                  </div>
+                  {result.address && (
+                    <div className="text-xs text-gray-400 truncate">{result.address}</div>
+                  )}
+                </div>
+                {result.is_local && (
+                  <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">
+                    В базе
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+        </>
+      ) : debouncedQuery.length >= 3 ? (
+        <div className="px-3 py-2 text-sm text-gray-500">Ничего не найдено</div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Форма создания контрагента ─────────────────────────────────
+
+interface CreateCounterpartyFormProps {
+  onSubmit: (data: CreateCounterpartyData) => void;
+  isLoading: boolean;
+  lockedType?: Counterparty['type'];
+}
+
+function CreateCounterpartyForm({ onSubmit, isLoading, lockedType }: CreateCounterpartyFormProps) {
+  const [formData, setFormData] = useState<CreateCounterpartyData>({
+    name: '',
+    short_name: '',
+    inn: '',
+    kpp: '',
+    ogrn: '',
+    type: lockedType || 'customer',
+    vendor_subtype: null,
+    legal_form: 'ooo',
+    address: '',
+    contact_info: '',
+    notes: '',
+  });
+
+  const [activeTab, setActiveTab] = useState('requisites');
+  const [showInnSuggestions, setShowInnSuggestions] = useState(false);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [quickCheck, setQuickCheck] = useState<FNSQuickCheckResponse | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const innFieldRef = useRef<HTMLDivElement>(null);
+  const nameFieldRef = useRef<HTMLDivElement>(null);
+
+  const [isEnriching, setIsEnriching] = useState(false);
+
+  const handleSuggestSelect = useCallback(async (result: FNSSuggestResult) => {
+    if (result.is_local) {
+      toast.info(`Контрагент "${result.name}" уже есть в базе`);
+    }
+    setFormData((prev) => ({
+      ...prev,
+      name: result.name || prev.name,
+      short_name: result.short_name || prev.short_name || '',
+      inn: result.inn || prev.inn,
+      kpp: result.kpp || prev.kpp || '',
+      ogrn: result.ogrn || prev.ogrn || '',
+      legal_form: result.legal_form || prev.legal_form,
+      address: result.address || prev.address || '',
+    }));
+    setShowInnSuggestions(false);
+    setShowNameSuggestions(false);
+
+    const inn = result.inn || '';
+    if (inn && inn.match(/^\d{10,12}$/) && !result.is_local) {
+      setIsEnriching(true);
+      try {
+        const enriched: FNSEnrichResponse = await api.fnsEnrich(inn);
+        setFormData((prev) => ({
+          ...prev,
+          name: enriched.name || prev.name,
+          short_name: enriched.short_name || prev.short_name || '',
+          inn: enriched.inn || prev.inn,
+          kpp: enriched.kpp || prev.kpp || '',
+          ogrn: enriched.ogrn || prev.ogrn || '',
+          legal_form: enriched.legal_form || prev.legal_form,
+          address: enriched.address || prev.address || '',
+          contact_info: enriched.contact_info || prev.contact_info || '',
+        }));
+        toast.success('Реквизиты загружены из ЕГРЮЛ/ЕГРИП');
+      } catch {
+        // Тихо — данные из suggest уже заполнены
+      } finally {
+        setIsEnriching(false);
+      }
+    }
+  }, []);
+
+  const handleQuickCheck = async () => {
+    const inn = formData.inn.trim();
+    if (!inn || !inn.match(/^\d{10,12}$/)) {
+      toast.error('Укажите корректный ИНН (10 или 12 цифр)');
+      return;
+    }
+    setIsChecking(true);
+    setQuickCheck(null);
+    try {
+      const result = await api.fnsQuickCheck(inn);
+      setQuickCheck(result);
+      setActiveTab('fns-check');
+    } catch (e: any) {
+      toast.error(`Ошибка проверки: ${e?.message || 'Неизвестная ошибка'}`);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim() || !formData.inn.trim() || !formData.legal_form) {
+      toast.error('Заполните обязательные поля');
+      setActiveTab('requisites');
+      return;
+    }
+    if (formData.vendor_subtype && formData.type === 'customer') {
+      toast.error('Подтип можно указывать только для контрагентов типа "Исполнитель-Поставщик"');
+      setActiveTab('requisites');
+      return;
+    }
+    const dataToSubmit: CreateCounterpartyData = {
+      ...formData,
+      short_name: formData.short_name?.trim() || undefined,
+      kpp: formData.kpp?.trim() || undefined,
+      ogrn: formData.ogrn?.trim() || undefined,
+      address: formData.address?.trim() || undefined,
+      contact_info: formData.contact_info?.trim() || undefined,
+      notes: formData.notes?.trim() || undefined,
+      vendor_subtype: (formData.type === 'vendor' || formData.type === 'both') ? formData.vendor_subtype : undefined,
+    };
+    onSubmit(dataToSubmit);
+  };
+
+  const showVendorSubtype = formData.type === 'vendor' || formData.type === 'both';
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-3 mb-4">
+          <TabsTrigger value="requisites" className="text-xs gap-1">
+            <FileText className="w-3.5 h-3.5" /> Реквизиты
+          </TabsTrigger>
+          <TabsTrigger value="fns-check" className="text-xs gap-1 relative">
+            <ShieldCheck className="w-3.5 h-3.5" /> Проверка ФНС
+            {quickCheck && (
+              <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
+                quickCheck.summary.risk_level === 'low' ? 'bg-green-500' :
+                quickCheck.summary.risk_level === 'medium' ? 'bg-yellow-500' :
+                quickCheck.summary.risk_level === 'high' ? 'bg-red-500' : 'bg-gray-400'
+              }`} />
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="text-xs gap-1">
+            <StickyNote className="w-3.5 h-3.5" /> Заметки
+          </TabsTrigger>
+        </TabsList>
+
+        <div className="min-h-[520px]">
+        {/* ═══ Вкладка 1: Реквизиты ═══ */}
+        <TabsContent value="requisites" className="space-y-4 mt-0">
+          {/* ИНН с автозаполнением */}
+          <div ref={innFieldRef} className="relative">
+            <Label htmlFor="create-inn">
+              ИНН <span className="text-red-500">*</span>
+            </Label>
+            <div className="flex gap-2 mt-1.5">
+              <Input
+                id="create-inn"
+                value={formData.inn}
+                onChange={(e) => {
+                  setFormData({ ...formData, inn: e.target.value });
+                  if (e.target.value.length >= 3) {
+                    setShowInnSuggestions(true);
+                  }
+                  setQuickCheck(null);
+                }}
+                onFocus={() => {
+                  if (formData.inn.length >= 3) setShowInnSuggestions(true);
+                }}
+                placeholder="Введите ИНН для автозаполнения"
+                disabled={isLoading}
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleQuickCheck}
+                disabled={isLoading || isChecking || !formData.inn.trim()}
+                className="shrink-0 text-xs"
+                title="Проверить контрагента в ФНС"
+              >
+                {isChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                <span className="ml-1">Проверить</span>
+              </Button>
+            </div>
+            <FNSSuggestDropdown
+              query={formData.inn}
+              onSelect={handleSuggestSelect}
+              isVisible={showInnSuggestions}
+              onClose={() => setShowInnSuggestions(false)}
+            />
+          </div>
+
+          {/* Индикатор обогащения данных */}
+          {isEnriching && (
+            <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg text-sm text-blue-600">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Загрузка реквизитов из ЕГРЮЛ/ЕГРИП...
+            </div>
+          )}
+
+          {/* Название с автозаполнением */}
+          <div ref={nameFieldRef} className="relative">
+            <Label htmlFor="create-name">
+              Название <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="create-name"
+              value={formData.name}
+              onChange={(e) => {
+                setFormData({ ...formData, name: e.target.value });
+                if (e.target.value.length >= 3 && !e.target.value.match(/^\d+$/)) {
+                  setShowNameSuggestions(true);
+                }
+              }}
+              onFocus={() => {
+                if (formData.name.length >= 3 && !formData.name.match(/^\d+$/)) {
+                  setShowNameSuggestions(true);
+                }
+              }}
+              placeholder="Введите название для поиска"
+              disabled={isLoading}
+              className="mt-1.5"
+              required
+            />
+            <FNSSuggestDropdown
+              query={formData.name}
+              onSelect={handleSuggestSelect}
+              isVisible={showNameSuggestions}
+              onClose={() => setShowNameSuggestions(false)}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="create-short_name">Краткое название</Label>
+            <Input
+              id="create-short_name"
+              value={formData.short_name}
+              onChange={(e) => setFormData({ ...formData, short_name: e.target.value })}
+              placeholder="Ромашка"
+              disabled={isLoading}
+              className="mt-1.5"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="create-legal_form">
+              Правовая форма <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={formData.legal_form}
+              onValueChange={(value: any) => setFormData({ ...formData, legal_form: value })}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ooo">ООО</SelectItem>
+                <SelectItem value="ip">ИП</SelectItem>
+                <SelectItem value="fiz">Физ.лицо</SelectItem>
+                <SelectItem value="self_employed">Самозанятый</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="create-kpp">КПП</Label>
+              <Input
+                id="create-kpp"
+                value={formData.kpp}
+                onChange={(e) => setFormData({ ...formData, kpp: e.target.value })}
+                placeholder="Заполнится из ФНС"
+                disabled={isLoading}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="create-ogrn">ОГРН</Label>
+              <Input
+                id="create-ogrn"
+                value={formData.ogrn}
+                onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })}
+                placeholder="Заполнится из ФНС"
+                disabled={isLoading}
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="create-address">Юридический адрес</Label>
+            <Input
+              id="create-address"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="Заполнится автоматически из ФНС"
+              disabled={isLoading}
+              className="mt-1.5"
+            />
+          </div>
+
+          {!lockedType && (
+            <div>
+              <Label htmlFor="create-type">
+                Тип <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value: any) => {
+                  setFormData({ 
+                    ...formData, 
+                    type: value,
+                    vendor_subtype: value === 'customer' ? null : formData.vendor_subtype
+                  });
+                }}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer">Заказчик</SelectItem>
+                  <SelectItem value="potential_customer">Потенциальный Заказчик</SelectItem>
+                  <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
+                  <SelectItem value="both">Заказчик и Исполнитель-Поставщик</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {showVendorSubtype && (
+            <div>
+              <Label htmlFor="create-vendor_subtype">Подтип</Label>
+              <Select
+                value={formData.vendor_subtype || 'null'}
+                onValueChange={(value: any) => {
+                  setFormData({ ...formData, vendor_subtype: value === 'null' ? null : value });
+                }}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Не указано</SelectItem>
+                  <SelectItem value="supplier">Поставщик</SelectItem>
+                  <SelectItem value="executor">Исполнитель</SelectItem>
+                  <SelectItem value="both">Исполнитель и Поставщик</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div>
+            <Label htmlFor="create-contact_info">Контакты</Label>
+            <Textarea
+              id="create-contact_info"
+              value={formData.contact_info}
+              onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })}
+              placeholder="Email, телефон..."
+              disabled={isLoading}
+              className="mt-1.5"
+              rows={2}
+            />
+          </div>
+        </TabsContent>
+
+        {/* ═══ Вкладка 2: Проверка ФНС ═══ */}
+        <TabsContent value="fns-check" className="mt-0">
+          {isChecking ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <Loader2 className="w-8 h-8 animate-spin mb-3" />
+              <span className="text-sm">Проверка контрагента в ФНС...</span>
+            </div>
+          ) : quickCheck ? (
+            <FNSCheckTabContent data={quickCheck} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <ShieldCheck className="w-10 h-10 mb-3 opacity-40" />
+              <p className="text-sm text-center">
+                Введите ИНН на вкладке «Реквизиты» и нажмите
+                <br />
+                <span className="font-medium text-gray-600">«Проверить»</span> для загрузки данных из ФНС
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ═══ Вкладка 3: Заметки ═══ */}
+        <TabsContent value="notes" className="mt-0">
+          <div>
+            <Label htmlFor="create-notes">Заметки по контрагенту</Label>
+            <Textarea
+              id="create-notes"
+              value={formData.notes || ''}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Произвольные заметки, комментарии, важная информация..."
+              disabled={isLoading}
+              className="mt-1.5"
+              rows={8}
+            />
+          </div>
+        </TabsContent>
+        </div>
+      </Tabs>
+
+      {/* Кнопка создания — всегда видна */}
+      <div className="flex gap-3 pt-4 border-t mt-4">
+        <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Создание...
+            </>
+          ) : (
+            'Создать'
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Компонент полной проверки ФНС (для вкладки) ─────────────────
+
+function FNSCheckTabContent({ data }: { data: FNSQuickCheckResponse }) {
+  const { summary } = data;
+
+  const RiskIcon = summary.risk_level === 'low' ? ShieldCheck
+    : summary.risk_level === 'medium' ? ShieldAlert
+    : summary.risk_level === 'high' ? ShieldX
+    : AlertTriangle;
+
+  const riskColor = summary.risk_level === 'low' ? 'text-green-600 bg-green-50 border-green-200'
+    : summary.risk_level === 'medium' ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
+    : summary.risk_level === 'high' ? 'text-red-600 bg-red-50 border-red-200'
+    : 'text-gray-600 bg-gray-50 border-gray-200';
+
+  const riskLabel = summary.risk_level === 'low' ? 'Низкий риск'
+    : summary.risk_level === 'medium' ? 'Средний риск'
+    : summary.risk_level === 'high' ? 'Высокий риск'
+    : 'Нет данных';
+
+  return (
+    <div className="space-y-4">
+      {/* Заголовок с уровнем риска */}
+      <div className={`p-3 rounded-lg border ${riskColor}`}>
+        <div className="flex items-center gap-2">
+          <RiskIcon className="w-5 h-5" />
+          <span className="text-sm font-semibold">{riskLabel}</span>
+          <span className="text-xs ml-auto font-mono">
+            +{summary.positive_count} / -{summary.negative_count}
+          </span>
+        </div>
+      </div>
+
+      {/* Негативные факторы */}
+      {summary.negative.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <XCircle className="w-3.5 h-3.5" />
+            Негативные факторы ({summary.negative.length})
+          </h4>
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+            {summary.negative.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 p-2 bg-red-50 rounded text-xs text-red-800 border border-red-100">
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Позитивные факторы */}
+      {summary.positive.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Позитивные факторы ({summary.positive.length})
+          </h4>
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+            {summary.positive.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 p-2 bg-green-50 rounded text-xs text-green-800 border border-green-100">
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Если нет ни позитивных, ни негативных */}
+      {summary.positive.length === 0 && summary.negative.length === 0 && (
+        <div className="text-center py-6 text-gray-400 text-sm">
+          Факторы не обнаружены
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Форма редактирования контрагента ───────────────────────────
+
+interface EditCounterpartyFormProps {
+  counterparty: Counterparty;
+  onSubmit: (data: Partial<CreateCounterpartyData>) => void;
+  isLoading: boolean;
+}
+
+function EditCounterpartyForm({ counterparty, onSubmit, isLoading }: EditCounterpartyFormProps) {
+  const [formData, setFormData] = useState<Partial<CreateCounterpartyData>>({
+    name: counterparty.name,
+    short_name: counterparty.short_name,
+    inn: counterparty.inn,
+    kpp: counterparty.kpp,
+    ogrn: counterparty.ogrn,
+    type: counterparty.type,
+    vendor_subtype: counterparty.vendor_subtype,
+    legal_form: counterparty.legal_form,
+    address: counterparty.address || '',
+    contact_info: counterparty.contact_info,
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name?.trim() || !formData.inn?.trim() || !formData.legal_form) {
+      toast.error('Заполните обязательные поля');
+      return;
+    }
+    if (formData.vendor_subtype && formData.type === 'customer') {
+      toast.error('Подтип можно указывать только для контрагентов типа "Исполнитель-Поставщик"');
+      return;
+    }
+    const dataToSubmit: Partial<CreateCounterpartyData> = {
+      ...formData,
+      short_name: formData.short_name?.trim() || undefined,
+      kpp: formData.kpp?.trim() || undefined,
+      ogrn: formData.ogrn?.trim() || undefined,
+      address: formData.address?.trim() || undefined,
+      contact_info: formData.contact_info?.trim() || undefined,
+      vendor_subtype: (formData.type === 'vendor' || formData.type === 'both') ? formData.vendor_subtype : undefined,
+    };
+    onSubmit(dataToSubmit);
+  };
+
+  const showVendorSubtype = formData.type === 'vendor' || formData.type === 'both';
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+      <div>
+        <Label htmlFor="edit-name">Название <span className="text-red-500">*</span></Label>
+        <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} disabled={isLoading} className="mt-1.5" required />
+      </div>
+      <div>
+        <Label htmlFor="edit-short_name">Краткое название</Label>
+        <Input id="edit-short_name" value={formData.short_name} onChange={(e) => setFormData({ ...formData, short_name: e.target.value })} disabled={isLoading} className="mt-1.5" />
+      </div>
+      <div>
+        <Label htmlFor="edit-legal_form">Правовая форма <span className="text-red-500">*</span></Label>
+        <Select value={formData.legal_form} onValueChange={(value: any) => setFormData({ ...formData, legal_form: value })} disabled={isLoading}>
+          <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ooo">ООО</SelectItem>
+            <SelectItem value="ip">ИП</SelectItem>
+            <SelectItem value="fiz">Физ.лицо</SelectItem>
+            <SelectItem value="self_employed">Самозанятый</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="edit-inn">ИНН <span className="text-red-500">*</span></Label>
+        <Input id="edit-inn" value={formData.inn} onChange={(e) => setFormData({ ...formData, inn: e.target.value })} disabled={isLoading} className="mt-1.5" required />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="edit-kpp">КПП</Label>
+          <Input id="edit-kpp" value={formData.kpp} onChange={(e) => setFormData({ ...formData, kpp: e.target.value })} disabled={isLoading} className="mt-1.5" />
+        </div>
+        <div>
+          <Label htmlFor="edit-ogrn">ОГРН</Label>
+          <Input id="edit-ogrn" value={formData.ogrn} onChange={(e) => setFormData({ ...formData, ogrn: e.target.value })} disabled={isLoading} className="mt-1.5" />
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="edit-address">Юридический адрес</Label>
+        <Input id="edit-address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} disabled={isLoading} className="mt-1.5" />
+      </div>
+      <div>
+        <Label htmlFor="edit-type">Тип <span className="text-red-500">*</span></Label>
+        <Select value={formData.type} onValueChange={(value: any) => { setFormData({ ...formData, type: value, vendor_subtype: value === 'customer' ? null : formData.vendor_subtype }); }} disabled={isLoading}>
+          <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="customer">Заказчик</SelectItem>
+            <SelectItem value="potential_customer">Потенциальный Заказчик</SelectItem>
+            <SelectItem value="vendor">Исполнитель-Поставщик</SelectItem>
+            <SelectItem value="both">Заказчик и Исполнитель-Поставщик</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {showVendorSubtype && (
+        <div>
+          <Label htmlFor="edit-vendor_subtype">Подтип</Label>
+          <Select value={formData.vendor_subtype || 'null'} onValueChange={(value: any) => { setFormData({ ...formData, vendor_subtype: value === 'null' ? null : value }); }} disabled={isLoading}>
+            <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="null">Не указано</SelectItem>
+              <SelectItem value="supplier">Поставщик</SelectItem>
+              <SelectItem value="executor">Исполнитель</SelectItem>
+              <SelectItem value="both">Исполнитель и Поставщик</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div>
+        <Label htmlFor="edit-contact_info">Контакты</Label>
+        <Textarea id="edit-contact_info" value={formData.contact_info} onChange={(e) => setFormData({ ...formData, contact_info: e.target.value })} disabled={isLoading} className="mt-1.5" rows={2} />
+      </div>
+      <div className="flex gap-3 pt-4">
+        <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+          {isLoading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Обновление...</>) : 'Обновить'}
+        </Button>
+      </div>
+    </form>
+  );
+}
