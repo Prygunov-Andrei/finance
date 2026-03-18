@@ -135,6 +135,14 @@ urlpatterns = [
     path('api/v1/', include('banking.urls')),
     path('api/v1/', include('supply.urls')),
     path('api/v1/', include('supplier_integrations.urls')),
+    # Kanban (объединён с основным бэкендом)
+    path('api/v1/', include('kanban_files.urls')),
+    path('api/v1/', include('kanban_core.urls')),
+    path('api/v1/', include('kanban_rules.urls')),
+    path('api/v1/', include('kanban_supply.urls')),
+    path('api/v1/', include('kanban_warehouse.urls')),
+    path('api/v1/', include('kanban_object_tasks.urls')),
+    path('api/v1/', include('kanban_commercial.urls')),
     # Публичный API портала смет (отдельный namespace)
     path('api/public/v1/', include('api_public.urls')),
     # Admin API портала (для ERP-операторов, JWT-аутентификация)

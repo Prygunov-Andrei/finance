@@ -121,6 +121,14 @@ INSTALLED_APPS = [
     'supply',
     'supplier_integrations',
     'api_public',
+    # Kanban (бывший отдельный сервис, теперь часть основного бэкенда)
+    'kanban_core',
+    'kanban_commercial',
+    'kanban_supply',
+    'kanban_warehouse',
+    'kanban_object_tasks',
+    'kanban_rules',
+    'kanban_files',
 ]
 
 MIDDLEWARE = [
@@ -379,6 +387,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'supply.tasks.generate_recurring_invoices',
         'schedule': crontab(hour=6, minute=0),  # Каждый день в 06:00
     },
+    'scan-overdue-object-tasks': {
+        'task': 'kanban_object_tasks.tasks.scan_overdue_tasks',
+        'schedule': crontab(hour=7, minute=0),
+    },
 }
 
 # Bitrix24 Integration
@@ -397,6 +409,17 @@ WORKLOG_S3_ACCESS_KEY = os.environ.get('WORKLOG_S3_ACCESS_KEY', 'minioadmin')
 WORKLOG_S3_SECRET_KEY = os.environ.get('WORKLOG_S3_SECRET_KEY', 'minioadmin')
 WORKLOG_S3_BUCKET_NAME = os.environ.get('WORKLOG_S3_BUCKET_NAME', 'worklog-media')
 WORKLOG_S3_REGION = 'us-east-1'
+
+# =============================================================================
+# MinIO / S3 Configuration (Kanban файлы)
+# =============================================================================
+KANBAN_S3_ENDPOINT_URL = os.environ.get('KANBAN_S3_ENDPOINT_URL', WORKLOG_S3_ENDPOINT_URL)
+KANBAN_S3_PUBLIC_URL = os.environ.get('KANBAN_S3_PUBLIC_URL', 'http://localhost:9000')
+KANBAN_S3_ACCESS_KEY = os.environ.get('KANBAN_S3_ACCESS_KEY', WORKLOG_S3_ACCESS_KEY)
+KANBAN_S3_SECRET_KEY = os.environ.get('KANBAN_S3_SECRET_KEY', WORKLOG_S3_SECRET_KEY)
+KANBAN_S3_REGION = os.environ.get('KANBAN_S3_REGION', 'us-east-1')
+KANBAN_S3_BUCKET_NAME = os.environ.get('KANBAN_S3_BUCKET_NAME', 'files')
+KANBAN_FILE_MAX_SIZE_BYTES = int(os.environ.get('KANBAN_FILE_MAX_SIZE_BYTES', str(100 * 1024 * 1024)))  # 100MB
 
 # =============================================================================
 # MinIO / S3 Configuration (для медиа каталога товаров)

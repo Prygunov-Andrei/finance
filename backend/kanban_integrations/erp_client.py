@@ -1,35 +1,31 @@
+"""
+Прямой вызов ERP-уведомлений.
+
+Канбан теперь часть основного бэкенда — HTTP-клиент не нужен,
+создаём Notification напрямую через Django ORM.
+"""
 from typing import Any, Dict, Optional
-
-import httpx
-from django.conf import settings
-
-
-def _service_headers() -> Dict[str, str]:
-    token = getattr(settings, 'ERP_SERVICE_TOKEN', '')
-    if not token:
-        return {}
-    return {'X-Service-Token': token}
 
 
 def notify_erp(user_id: int, notification_type: str, title: str, message: str = '', data: Optional[Dict[str, Any]] = None) -> None:
-    base = getattr(settings, 'ERP_API_BASE_URL', '').rstrip('/')
-    if not base:
-        return
+    """Создать уведомление для пользователя ERP."""
+    try:
+        from django.contrib.auth import get_user_model
+        from core.models import Notification
 
-    url = f'{base}/notifications/system_create/'
-    headers = _service_headers()
-    if not headers:
-        return
+        User = get_user_model()
+        user = User.objects.filter(pk=user_id).first()
+        if user is None:
+            return
 
-    payload: Dict[str, Any] = {
-        'user_id': user_id,
-        'notification_type': notification_type,
-        'title': title,
-        'message': message,
-        'data': data or {},
-    }
-
-    with httpx.Client(timeout=10) as client:
-        resp = client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
-
+        Notification.objects.create(
+            user=user,
+            notification_type=notification_type or Notification.NotificationType.GENERAL,
+            title=title,
+            message=message,
+            data=data or {},
+        )
+    except Exception:
+        # Не ломаем канбан-логику из-за ошибки уведомления
+        import logging
+        logging.getLogger('kanban').exception('notify_erp: ошибка создания уведомления user_id=%s', user_id)
