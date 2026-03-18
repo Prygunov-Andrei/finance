@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { CategoryTreeNode, Product } from '../../types/catalog';
+import { CategoryTreeNode, Product } from '@/types/catalog';
 import { Loader2 } from 'lucide-react';
 
 interface ProductFormDialogProps {

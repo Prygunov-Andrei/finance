@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, PriceListItem, UpdatePriceListItemData, CreatePriceListAgreementData, CreatePriceListData } from '../../lib/api';
-import { formatDate, formatCurrency } from '../../lib/utils';
+import { api, PriceListItem, UpdatePriceListItemData, CreatePriceListAgreementData, CreatePriceListData } from '@/lib/api';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';

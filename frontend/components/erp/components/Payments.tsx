@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, Payment, CreatePaymentData, ParseInvoiceResponse, InvoiceItem } from '../lib/api';
+import { api, Payment, CreatePaymentData, ParseInvoiceResponse, InvoiceItem } from '@/lib/api';
 import { Loader2, Plus, Download, Search, Filter, X, TrendingUp, TrendingDown, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, ExternalLink } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -16,9 +16,9 @@ import { InvoiceUploader } from './payments/InvoiceUploader';
 import { InvoiceItemsTable } from './payments/InvoiceItemsTable';
 import { CounterpartySelector } from './payments/CounterpartySelector';
 import { PaymentCreateForm } from './payments/PaymentCreateForm';
-import { useAccounts, useExpenseCategories, useLegalEntities } from '../hooks';
+import { useAccounts, useExpenseCategories, useLegalEntities } from '@/hooks';
 import { CONSTANTS } from '../constants';
-import { formatDate, formatAmount, getPaymentTypeBadgeClass, getPaymentStatusBadgeClass, getStatusLabel, getTypeLabel } from '../lib/utils';
+import { formatDate, formatAmount, getPaymentTypeBadgeClass, getPaymentStatusBadgeClass, getStatusLabel, getTypeLabel } from '@/lib/utils';
 
 export function Payments() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);

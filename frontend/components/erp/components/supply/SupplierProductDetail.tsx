@@ -7,9 +7,9 @@ import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Input } from '../ui/input';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import type { SupplierProduct } from '../../types/supplier';
+import type { SupplierProduct } from '@/types/supplier';
 
 export function SupplierProductDetail() {
   const { id } = useParams<{ id: string }>();

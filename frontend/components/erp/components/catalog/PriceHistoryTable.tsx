@@ -1,5 +1,5 @@
-import { ProductPriceHistory } from '../../types/catalog';
-import { formatDate, formatCurrency } from '../../lib/utils';
+import { ProductPriceHistory } from '@/types/catalog';
+import { formatDate, formatCurrency } from '@/lib/utils';
 
 interface PriceHistoryTableProps {
   prices: ProductPriceHistory[];

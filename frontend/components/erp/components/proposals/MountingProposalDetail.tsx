@@ -19,7 +19,7 @@ import {
   AlertCircle,
   ExternalLink,
 } from 'lucide-react';
-import { api, MountingProposalDetail as MPDetailType } from '../../lib/api';
+import { api, MountingProposalDetail as MPDetailType } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -36,8 +36,8 @@ import {
 } from '../ui/alert-dialog';
 import { toast } from 'sonner';
 import { CreateVersionDialog } from './CreateVersionDialog';
-import { formatDate, formatDateTime, formatCurrency, getStatusBadgeClass, getStatusLabel } from '../../lib/utils';
-import { useCounterparties } from '../../hooks';
+import { formatDate, formatDateTime, formatCurrency, getStatusBadgeClass, getStatusLabel } from '@/lib/utils';
+import { useCounterparties } from '@/hooks';
 import { CONSTANTS } from '../../constants';
 
 type TabType = 'info' | 'conditions';

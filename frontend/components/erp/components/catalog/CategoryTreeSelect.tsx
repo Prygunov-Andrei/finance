@@ -1,4 +1,4 @@
-import { CategoryTreeNode } from '../../types/catalog';
+import { CategoryTreeNode } from '@/types/catalog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 interface CategoryTreeSelectProps {

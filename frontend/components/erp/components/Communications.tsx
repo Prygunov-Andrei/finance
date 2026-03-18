@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, Correspondence, ContractListItem } from '../lib/api';
+import { api, Correspondence, ContractListItem } from '@/lib/api';
 import { Loader2, Plus, Search, Filter, ArrowDownCircle, ArrowUpCircle, Download, Edit, Trash2, Link as LinkIcon } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatDate, formatAmount, formatCurrency } from '../lib/utils';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 
 export function Communications() {

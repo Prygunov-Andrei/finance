@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { api, Counterparty, CreateCounterpartyData, FNSSuggestResult, FNSQuickCheckResponse, FNSEnrichResponse } from '../lib/api';
+import { api, Counterparty, CreateCounterpartyData, FNSSuggestResult, FNSQuickCheckResponse, FNSEnrichResponse } from '@/lib/api';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';

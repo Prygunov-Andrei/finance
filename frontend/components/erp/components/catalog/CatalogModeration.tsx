@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import { formatDate, formatAmount } from '../../lib/utils';
+import { api } from '@/lib/api';
+import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { useCatalogCategories, useCatalogCategoryTree } from '../../hooks';
-import { Product, ProductDuplicate } from '../../types/catalog';
+import { useCatalogCategories, useCatalogCategoryTree } from '@/hooks';
+import { Product, ProductDuplicate } from '@/types/catalog';
 import { Button } from '../ui/button';
 import { CheckCircle, Archive, Search as SearchIcon, GitMerge } from 'lucide-react';
 import { toast } from 'sonner';

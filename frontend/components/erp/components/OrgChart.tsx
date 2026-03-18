@@ -15,8 +15,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import { useQuery } from '@tanstack/react-query';
-import { api, LegalEntity, OrgChartData } from '../lib/api';
-import { useLegalEntities } from '../hooks';
+import { api, LegalEntity, OrgChartData } from '@/lib/api';
+import { useLegalEntities } from '@/hooks';
 import {
   Select,
   SelectContent,

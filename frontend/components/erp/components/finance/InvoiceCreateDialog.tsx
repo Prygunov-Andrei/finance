@@ -11,7 +11,7 @@ import {
   AlertTriangle,
   Loader2,
 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import {
   Dialog,
   DialogContent,

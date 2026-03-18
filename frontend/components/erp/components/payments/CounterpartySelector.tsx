@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { VendorMatchSuggestion, ParsedVendor } from '../../lib/api';
-import { useCounterparties } from '../../hooks';
+import { VendorMatchSuggestion, ParsedVendor } from '@/lib/api';
+import { useCounterparties } from '@/hooks';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';

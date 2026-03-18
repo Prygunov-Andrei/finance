@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, WorklogShift, WorklogMedia, WorklogReport, PaginatedResponse, Counterparty } from '../../lib/api';
-import { formatDate, formatDateTime, cn } from '../../lib/utils';
+import { api, WorklogShift, WorklogMedia, WorklogReport, PaginatedResponse, Counterparty } from '@/lib/api';
+import { formatDate, formatDateTime, cn } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';

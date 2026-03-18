@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, LLMProvider } from '../lib/api';
+import { api, LLMProvider } from '@/lib/api';
 import { CONSTANTS } from '../constants';
 import { Loader2, Check, Sparkles } from 'lucide-react';
 import { Card } from './ui/card';

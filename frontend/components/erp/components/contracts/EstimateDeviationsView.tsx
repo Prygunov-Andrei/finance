@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { api, type EstimateDeviationRow } from '../../lib/api';
+import { api, type EstimateDeviationRow } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
 import { DataTable } from '../ui/data-table';
 import { Badge } from '../ui/badge';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, Act, CreateActData } from '../lib/api';
-import { formatDate, formatAmount, formatCurrency } from '../lib/utils';
+import { api, Act, CreateActData } from '@/lib/api';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 import { Loader2, Plus, FileText, MoreVertical, Pencil, Trash2, CheckCircle, Download } from 'lucide-react';
 import { Card } from './ui/card';

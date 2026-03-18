@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback, ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DragDropContext, Droppable, type DropResult } from '@hello-pangea/dnd';
-import { kanbanApi, KanbanCard, KanbanColumn } from '../../lib/kanbanApi';
+import { kanbanApi, KanbanCard, KanbanColumn } from '@/lib/kanbanApi';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Alert, AlertDescription } from '../ui/alert';

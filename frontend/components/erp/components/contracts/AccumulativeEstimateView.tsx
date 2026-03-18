@@ -1,8 +1,8 @@
 import React, { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { api, type AccumulativeEstimateRow } from '../../lib/api';
-import { formatCurrency } from '../../lib/utils';
+import { api, type AccumulativeEstimateRow } from '@/lib/api';
+import { formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { DataTable } from '../ui/data-table';
 import { Button } from '../ui/button';

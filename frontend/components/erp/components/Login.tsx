@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
 const logo = '/logo.png';
 
 interface LoginProps {

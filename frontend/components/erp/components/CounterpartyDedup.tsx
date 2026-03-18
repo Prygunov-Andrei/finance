@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, CounterpartyDuplicateGroup } from '../lib/api';
+import { api, CounterpartyDuplicateGroup } from '@/lib/api';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { Loader2, Merge, CheckCircle2, XCircle, AlertTriangle, Search, ArrowLeft } from 'lucide-react';

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { api, EstimateList } from '../../lib/api';
+import { api, EstimateList } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
-import { useObjects } from '../../hooks/useReferenceData';
+import { useObjects } from '@/hooks/useReferenceData';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';

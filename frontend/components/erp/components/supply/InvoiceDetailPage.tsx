@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import type { Invoice, InvoiceItem, InvoiceEvent } from '../../types/supply';
+import { api } from '@/lib/api';
+import type { Invoice, InvoiceItem, InvoiceEvent } from '@/types/supply';
 import {
   Loader2, ArrowLeft, FileText, Check, XCircle, CalendarClock,
   ExternalLink, Clock, User, Download, Send, Trash2, Plus,
@@ -17,7 +17,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { toast } from 'sonner';
-import { formatDate, formatAmount } from '../../lib/utils';
+import { formatDate, formatAmount } from '@/lib/utils';
 import { InvoiceFilePreview } from './InvoiceFilePreview';
 import { InvoiceEditForm } from './InvoiceEditForm';
 import { useBreadcrumb } from '../../hooks/useBreadcrumb';

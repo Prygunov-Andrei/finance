@@ -9,7 +9,7 @@ import {
   Inbox,
   Banknote,
 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';

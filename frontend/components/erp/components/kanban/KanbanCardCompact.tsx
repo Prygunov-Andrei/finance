@@ -3,7 +3,7 @@ import { Draggable } from '@hello-pangea/dnd';
 import { ArrowRightFromLine } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import type { KanbanCard, CardColor } from '../../lib/kanbanApi';
+import type { KanbanCard, CardColor } from '@/lib/kanbanApi';
 
 type TunnelActionProp = {
   label: string;

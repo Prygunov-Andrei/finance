@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Skeleton } from '../ui/skeleton';
-import { api, Account } from '../../lib/api';
+import { api, Account } from '@/lib/api';
 
 const formatCurrency = (value: string | number | undefined | null): string => {
   if (value === null || value === undefined) return '—';

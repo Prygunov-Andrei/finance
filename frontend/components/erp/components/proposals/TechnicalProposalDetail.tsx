@@ -35,9 +35,9 @@ import {
 } from "../ui/alert-dialog";
 import { CreateMountingProposalFromTKPDialog } from "./CreateMountingProposalFromTKPDialog";
 import { CreateVersionDialog } from "./CreateVersionDialog";
-import { formatDate, formatDateTime, formatAmount, formatCurrency, getStatusBadgeClass, getStatusLabel } from '../../lib/utils';
+import { formatDate, formatDateTime, formatAmount, formatCurrency, getStatusBadgeClass, getStatusLabel } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { useObjects, useLegalEntities } from '../../hooks';
+import { useObjects, useLegalEntities } from '@/hooks';
 
 interface EditFormData {
   name: string;

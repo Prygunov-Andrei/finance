@@ -16,7 +16,7 @@ import {
   Download,
   X,
 } from 'lucide-react';
-import { api, FrameworkContractDetail as FCDetail } from '../lib/api';
+import { api, FrameworkContractDetail as FCDetail } from '@/lib/api';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Label } from './ui/label';
@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatDate, formatAmount, formatCurrency } from '../lib/utils';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 
 type TabType = 'info' | 'price-lists' | 'contracts';

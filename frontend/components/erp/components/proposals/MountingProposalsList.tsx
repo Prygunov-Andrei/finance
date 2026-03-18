@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -29,9 +29,9 @@ import {
 } from '../ui/alert-dialog';
 import { toast } from 'sonner';
 import { CreateMountingProposalDialog } from './CreateMountingProposalDialog';
-import { useObjects, useCounterparties } from '../../hooks';
+import { useObjects, useCounterparties } from '@/hooks';
 import { CONSTANTS } from '../../constants';
-import { formatDate, formatCurrency } from '../../lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 
 export function MountingProposalsList() {
   const navigate = useNavigate();

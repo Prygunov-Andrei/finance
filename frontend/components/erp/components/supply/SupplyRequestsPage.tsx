@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { api } from '../../lib/api';
-import type { SupplyRequest, SupplyRequestStatus } from '../../types/supply';
+import { api } from '@/lib/api';
+import type { SupplyRequest, SupplyRequestStatus } from '@/types/supply';
 import {
   Loader2, Search, Filter, X, ShoppingCart, Eye,
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Clock, Zap,
@@ -13,7 +13,7 @@ import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
-import { formatDate } from '../../lib/utils';
+import { formatDate } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 const STATUS_LABELS: Record<SupplyRequestStatus, string> = {

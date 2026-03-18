@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { api, type AutoMatchResult, type AutoMatchOffer } from '../../lib/api';
+import { api, type AutoMatchResult, type AutoMatchOffer } from '@/lib/api';
 import { DataTable } from '../ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';

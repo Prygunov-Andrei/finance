@@ -1,6 +1,6 @@
-import { TaxSystem } from '../lib/api';
+import { TaxSystem } from '@/lib/api';
 import { Loader2, ScrollText, Check, X } from 'lucide-react';
-import { useTaxSystems } from '../hooks';
+import { useTaxSystems } from '@/hooks';
 
 export function TaxSystemsTab() {
   const { data: taxSystems, isLoading, error } = useTaxSystems();

@@ -9,7 +9,7 @@ import {
   FNSReport,
   FNSStats,
   FNSStatsMethod,
-} from '../lib/api';
+} from '@/lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';

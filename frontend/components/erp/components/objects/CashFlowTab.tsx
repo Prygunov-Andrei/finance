@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api, ContractListItem } from '../../lib/api';
+import { api, ContractListItem } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';

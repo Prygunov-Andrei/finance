@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, WorkerGrade, CreateWorkerGradeData } from '../../lib/api';
+import { api, WorkerGrade, CreateWorkerGradeData } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Input } from '../ui/input';
@@ -8,7 +8,7 @@ import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
 import { Plus, Edit2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 export function WorkerGrades() {

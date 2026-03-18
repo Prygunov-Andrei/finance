@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import type { BitrixIntegration } from '../../types/supply';
+import { api } from '@/lib/api';
+import type { BitrixIntegration } from '@/types/supply';
 import {
   Loader2, Plus, Pencil, Trash2, Link2, Check, ExternalLink, Copy,
   AlertCircle, CheckCircle,
@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatDate } from '../../lib/utils';
+import { formatDate } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 export function BitrixSettingsPage() {

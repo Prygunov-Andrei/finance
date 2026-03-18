@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import type { DashboardData } from '../../types/supply';
+import { api } from '@/lib/api';
+import type { DashboardData } from '@/types/supply';
 import {
   Loader2, Wallet, AlertTriangle, CalendarDays, TrendingDown,
   Building2, Layers, BarChart3,
@@ -8,7 +8,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
-import { formatAmount } from '../../lib/utils';
+import { formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 export function SupplyDashboardPage() {

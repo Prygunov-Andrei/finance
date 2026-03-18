@@ -1,14 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { api, type ContractText } from '../../lib/api';
+import { api, type ContractText } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Loader2, Save, Eye, Edit2, Plus, History } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatDate } from '../../lib/utils';
+import { formatDate } from '@/lib/utils';
 
 type ContractTextEditorProps = {
   contractId: number;

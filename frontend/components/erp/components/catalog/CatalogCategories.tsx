@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import { formatDate, formatAmount } from '../../lib/utils';
+import { api } from '@/lib/api';
+import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { useCatalogCategories, useCatalogCategoryTree } from '../../hooks';
-import { Category, CategoryTreeNode } from '../../types/catalog';
+import { useCatalogCategories, useCatalogCategoryTree } from '@/hooks';
+import { Category, CategoryTreeNode } from '@/types/catalog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';

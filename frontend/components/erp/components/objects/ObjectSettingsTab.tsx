@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import {

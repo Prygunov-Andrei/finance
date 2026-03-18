@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import type { IncomeRecord } from '../../types/supply';
+import { api } from '@/lib/api';
+import type { IncomeRecord } from '@/types/supply';
 import {
   Loader2, Plus, TrendingUp, Pencil, Trash2, Search,
   ChevronLeft, ChevronRight,
@@ -19,7 +19,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatDate, formatAmount } from '../../lib/utils';
+import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 export function IncomeRecordsPage() {

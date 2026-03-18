@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, PaymentRegistryItem, ExpenseCategory, Account, ContractListItem, Act } from '../lib/api';
+import { api, PaymentRegistryItem, ExpenseCategory, Account, ContractListItem, Act } from '@/lib/api';
 import { Loader2, Plus, CheckCircle, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -19,9 +19,9 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { useExpenseCategories, useAccounts } from '../hooks';
+import { useExpenseCategories, useAccounts } from '@/hooks';
 import { CONSTANTS } from '../constants';
-import { formatDate, formatAmount } from '../lib/utils';
+import { formatDate, formatAmount } from '@/lib/utils';
 
 export function PaymentRegistry() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);

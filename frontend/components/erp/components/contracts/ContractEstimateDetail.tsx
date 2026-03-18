@@ -7,8 +7,8 @@ import {
   type ContractEstimateItem,
   type ContractEstimateListItem,
   type ContractEstimateSection,
-} from '../../lib/api';
-import { formatCurrency, formatDate } from '../../lib/utils';
+} from '@/lib/api';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { DataTable } from '../ui/data-table';
 import { Button } from '../ui/button';

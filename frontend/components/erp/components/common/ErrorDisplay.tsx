@@ -1,5 +1,5 @@
 import { AlertCircle, RefreshCw } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn } from '@/lib/utils';
 import { STATE_STYLES, MESSAGES } from '../../constants';
 import { Button } from '../ui/button';
 

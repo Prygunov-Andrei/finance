@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { Plus, Search } from 'lucide-react';
-import { api, TechnicalProposalListItem } from '../../lib/api';
+import { api, TechnicalProposalListItem } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { CreateTechnicalProposalDialog } from './CreateTechnicalProposalDialog';
-import { useObjects, useLegalEntities } from '../../hooks';
-import { formatDate, formatCurrency } from '../../lib/utils';
+import { useObjects, useLegalEntities } from '@/hooks';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 const getDueDateStyle = (dueDate: string | null): string => {

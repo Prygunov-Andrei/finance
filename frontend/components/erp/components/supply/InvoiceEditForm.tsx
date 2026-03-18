@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save, CheckCircle, Plus, AlertCircle } from 'lucide-react';
-import { api } from '../../lib/api';
-import type { Invoice } from '../../types/supply';
+import { api } from '@/lib/api';
+import type { Invoice } from '@/types/supply';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';

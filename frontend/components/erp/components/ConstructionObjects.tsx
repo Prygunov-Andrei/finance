@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ConstructionObject, CreateConstructionObjectData } from '../lib/api';
+import { api, ConstructionObject, CreateConstructionObjectData } from '@/lib/api';
 import { CONSTANTS } from '../constants';
-import { formatDate } from '../lib/utils';
-import { useObjects } from '../hooks/useReferenceData';
+import { formatDate } from '@/lib/utils';
+import { useObjects } from '@/hooks/useReferenceData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';

@@ -2,15 +2,15 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { Plus, Search, Filter, X } from 'lucide-react';
-import { api, ContractListItem } from '../../lib/api';
+import { api, ContractListItem } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { CreateContractDialog } from '../CreateContractDialog';
-import { useObjects, useCounterparties, useLegalEntities } from '../../hooks';
-import { formatDate, formatAmount, formatCurrency } from '../../lib/utils';
+import { useObjects, useCounterparties, useLegalEntities } from '@/hooks';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 export function ContractsList() {

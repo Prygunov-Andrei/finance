@@ -14,7 +14,7 @@ import {
   ERP_PERMISSION_TREE,
   ERPPermissionLevel,
   ERPPermissions,
-} from '../lib/api';
+} from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import {
   Dialog,
@@ -65,7 +65,7 @@ import {
   BadgeMinus,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useLegalEntities } from '../hooks';
+import { useLegalEntities } from '@/hooks';
 import { OrgChart } from './OrgChart';
 
 // =====================================================================

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ContractDetail, WorkScheduleItem, CreateWorkScheduleItemData } from '../lib/api';
+import { api, ContractDetail, WorkScheduleItem, CreateWorkScheduleItemData } from '@/lib/api';
 import { Loader2, Plus, Calendar, Users, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatDate, formatAmount, formatCurrency } from '../lib/utils';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 
 interface WorkScheduleTabProps {

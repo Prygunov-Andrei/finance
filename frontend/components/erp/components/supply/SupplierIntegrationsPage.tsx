@@ -8,9 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import type { SupplierIntegration, SupplierSyncStatus } from '../../types/supplier';
+import type { SupplierIntegration, SupplierSyncStatus } from '@/types/supplier';
 
 export function SupplierIntegrationsPage() {
   const navigate = useNavigate();

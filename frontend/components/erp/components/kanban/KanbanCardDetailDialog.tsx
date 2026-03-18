@@ -7,10 +7,10 @@ import {
   CommercialCase,
   CardColor,
   KanbanAttachment,
-} from '../../lib/kanbanApi';
-import { api } from '../../lib/api';
-import type { Counterparty, ConstructionObject } from '../../lib/api';
-import { useObjects, useCounterparties } from '../../hooks/useReferenceData';
+} from '@/lib/kanbanApi';
+import { api } from '@/lib/api';
+import type { Counterparty, ConstructionObject } from '@/lib/api';
+import { useObjects, useCounterparties } from '@/hooks/useReferenceData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';

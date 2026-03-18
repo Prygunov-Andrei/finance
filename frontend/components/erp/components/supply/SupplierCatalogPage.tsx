@@ -7,9 +7,9 @@ import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import type { SupplierProduct, SupplierBrand, SupplierCategory } from '../../types/supplier';
+import type { SupplierProduct, SupplierBrand, SupplierCategory } from '@/types/supplier';
 
 export function SupplierCatalogPage() {
   const navigate = useNavigate();

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ContractAmendment, CreateContractAmendmentData } from '../lib/api';
+import { api, ContractAmendment, CreateContractAmendmentData } from '@/lib/api';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatDate, formatAmount, formatCurrency } from '../lib/utils';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 
 interface ContractAmendmentsTabProps {

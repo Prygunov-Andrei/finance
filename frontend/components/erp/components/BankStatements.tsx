@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, BankAccount, BankTransaction } from '../lib/api';
+import { api, BankAccount, BankTransaction } from '@/lib/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -18,7 +18,7 @@ import {
   Landmark,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatAmount } from '../lib/utils';
+import { formatAmount } from '@/lib/utils';
 
 export const BankStatements = () => {
   // Radix SelectItem cannot have empty-string values, so we use a sentinel for "all".

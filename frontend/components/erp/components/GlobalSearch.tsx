@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
 import { useNavigate } from 'react-router';
 import { Input } from './ui/input';
-import { formatDate, formatAmount, formatCurrency } from '../lib/utils';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 
 export function GlobalSearch() {

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { Plus, AlertTriangle, FileText, Upload } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';

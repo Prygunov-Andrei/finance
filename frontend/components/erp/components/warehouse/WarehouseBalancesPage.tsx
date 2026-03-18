@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { kanbanApi, StockBalanceRow, StockLocation } from '../../lib/kanbanApi';
+import { kanbanApi, StockBalanceRow, StockLocation } from '@/lib/kanbanApi';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';

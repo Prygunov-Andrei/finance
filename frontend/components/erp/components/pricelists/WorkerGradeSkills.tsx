@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, WorkerGradeSkills, CreateWorkerGradeSkillsData } from '../../lib/api';
+import { api, WorkerGradeSkills, CreateWorkerGradeSkillsData } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
@@ -10,7 +10,7 @@ import { Label } from '../ui/label';
 import { Plus, Edit2, Trash2, Loader2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { CONSTANTS } from '../../constants';
-import { useWorkerGrades, useWorkSections } from '../../hooks';
+import { useWorkerGrades, useWorkSections } from '@/hooks';
 
 export function WorkerGradeSkillsComponent() {
   const queryClient = useQueryClient();

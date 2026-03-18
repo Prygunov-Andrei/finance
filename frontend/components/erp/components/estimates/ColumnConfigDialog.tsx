@@ -6,7 +6,7 @@ import {
   type ColumnType,
   type ColumnConfigTemplate,
   DEFAULT_COLUMN_CONFIG,
-} from '../../lib/api';
+} from '@/lib/api';
 import { validateFormula } from '../../lib/formula-engine';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';

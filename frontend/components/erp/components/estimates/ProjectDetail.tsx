@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ProjectNote } from '../../lib/api';
-import { formatDate } from '../../lib/utils';
+import { api, ProjectNote } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';

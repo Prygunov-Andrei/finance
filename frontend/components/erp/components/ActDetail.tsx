@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate, Link } from 'react-router';
-import { api, Act } from '../lib/api';
-import { formatDate, formatAmount, formatCurrency } from '../lib/utils';
+import { api, Act } from '@/lib/api';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 import { Loader2, ArrowLeft, FileText, Pencil, Trash2, CheckCircle, Download, DollarSign } from 'lucide-react';
 import { Card } from './ui/card';

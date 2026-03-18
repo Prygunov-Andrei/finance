@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { api, type InvoiceComplianceResult } from '../../lib/api';
+import { api, type InvoiceComplianceResult } from '@/lib/api';
 import { DataTable } from '../ui/data-table';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';

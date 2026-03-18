@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, CreateWorkItemData, WorkSection } from '../../lib/api';
+import { api, CreateWorkItemData, WorkSection } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
@@ -10,7 +10,7 @@ import { Label } from '../ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { ArrowLeft, FileText, Clock, Users, Loader2, Star, Hash, Edit2, Trash2, Info } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatDateTime } from '../../lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 export function WorkItemDetail() {

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
 import { CONSTANTS } from '../constants';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';

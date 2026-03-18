@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, MountingProposalDetail, MountingEstimateList, MountingCondition } from '../../lib/api';
+import { api, MountingProposalDetail, MountingEstimateList, MountingCondition } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -8,7 +8,7 @@ import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from 'sonner';
-import { useObjects, useCounterparties } from '../../hooks';
+import { useObjects, useCounterparties } from '@/hooks';
 import { CONSTANTS } from '../../constants';
 
 interface CreateMountingProposalDialogProps {

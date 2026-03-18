@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
-import { api, type EstimateRemainderRow } from '../../lib/api';
-import { formatCurrency } from '../../lib/utils';
+import { api, type EstimateRemainderRow } from '@/lib/api';
+import { formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { DataTable } from '../ui/data-table';
 import { Loader2 } from 'lucide-react';

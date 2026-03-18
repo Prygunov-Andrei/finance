@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { api, ConstructionObject } from '../../lib/api';
-import { formatDate, formatDateTime, getStatusBadgeClass, getStatusLabel, cn } from '../../lib/utils';
+import { api, ConstructionObject } from '@/lib/api';
+import { formatDate, formatDateTime, getStatusBadgeClass, getStatusLabel, cn } from '@/lib/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';

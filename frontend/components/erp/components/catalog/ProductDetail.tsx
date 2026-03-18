@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router';
-import { api } from '../../lib/api';
-import { formatDate, formatAmount } from '../../lib/utils';
+import { api } from '@/lib/api';
+import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { useCatalogCategories } from '../../hooks';
-import { Product, ProductAlias } from '../../types/catalog';
-import { SupplierProduct, SupplierStock } from '../../types/supplier';
+import { useCatalogCategories } from '@/hooks';
+import { Product, ProductAlias } from '@/types/catalog';
+import { SupplierProduct, SupplierStock } from '@/types/supplier';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';

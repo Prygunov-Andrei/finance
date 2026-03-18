@@ -1,12 +1,12 @@
 import { TrendingUp, TrendingDown, FileText, CheckCircle, DollarSign, Wallet, ArrowRight, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { useNavigate } from 'react-router';
 import { CONSTANTS, COLORS, LOCALE } from '../constants';
-import { formatDate, formatAmount, formatCurrency, formatThousands } from '../lib/utils';
+import { formatDate, formatAmount, formatCurrency, formatThousands } from '@/lib/utils';
 
 // Время кеширования данных Dashboard (5 минут)
 const DASHBOARD_STALE_TIME = CONSTANTS.QUERY_STALE_TIME_MS;

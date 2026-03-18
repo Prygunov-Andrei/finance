@@ -2,15 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
-import { api, FrameworkContractDetail } from '../../lib/api';
+import { api, FrameworkContractDetail } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
-import { formatDate, formatAmount, formatCurrency } from '../../lib/utils';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { useLegalEntities, usePriceLists } from '../../hooks';
+import { useLegalEntities, usePriceLists } from '@/hooks';
 
 interface FormData {
   name: string;

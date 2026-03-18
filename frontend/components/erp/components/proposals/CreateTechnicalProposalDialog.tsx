@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, TechnicalProposalDetail, EstimateList, FrontOfWorkItem } from '../../lib/api';
+import { api, TechnicalProposalDetail, EstimateList, FrontOfWorkItem } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -8,7 +8,7 @@ import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { toast } from 'sonner';
-import { useObjects, useLegalEntities } from '../../hooks';
+import { useObjects, useLegalEntities } from '@/hooks';
 import { CONSTANTS } from '../../constants';
 
 interface FrontOfWorkRow {

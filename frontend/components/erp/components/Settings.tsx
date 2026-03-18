@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, LegalEntity, Account, CreateLegalEntityData, CreateAccountData, TaxSystem, ExpenseCategory, CreateExpenseCategoryData, FNSStats } from '../lib/api';
+import { api, LegalEntity, Account, CreateLegalEntityData, CreateAccountData, TaxSystem, ExpenseCategory, CreateExpenseCategoryData, FNSStats } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
@@ -17,8 +17,8 @@ import { toast } from 'sonner';
 import { TaxSystemsTab } from './TaxSystemsTab';
 import { LLMSettings } from './LLMSettings';
 import { BankConnectionsTab } from './BankConnectionsTab';
-import { useLegalEntities, useTaxSystems, useAccounts, useExpenseCategories } from '../hooks';
-import { formatAmount } from '../lib/utils';
+import { useLegalEntities, useTaxSystems, useAccounts, useExpenseCategories } from '@/hooks';
+import { formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../constants';
 
 const SETTINGS_TABS = ['tax-systems', 'entities', 'accounts', 'categories', 'fns', 'llm', 'banking'] as const;

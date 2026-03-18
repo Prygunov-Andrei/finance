@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
-import { Product } from '../../types/catalog';
+import { Product } from '@/types/catalog';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
 interface DeleteProductDialogProps {

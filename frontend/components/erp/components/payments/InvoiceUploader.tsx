@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { api, ParseInvoiceResponse } from '../../lib/api';
+import { api, ParseInvoiceResponse } from '@/lib/api';
 import { Upload, FileText, Loader2, AlertCircle, CheckCircle, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';

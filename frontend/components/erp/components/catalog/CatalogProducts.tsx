@@ -1,10 +1,10 @@
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { CONSTANTS } from '../../constants';
-import { useCatalogCategoryTree } from '../../hooks';
-import { Product, CategoryTreeNode } from '../../types/catalog';
+import { useCatalogCategoryTree } from '@/hooks';
+import { Product, CategoryTreeNode } from '@/types/catalog';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Button } from '../ui/button';

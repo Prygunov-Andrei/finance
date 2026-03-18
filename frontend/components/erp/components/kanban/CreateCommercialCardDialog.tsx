@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { kanbanApi } from '../../lib/kanbanApi';
-import type { Counterparty, ConstructionObject } from '../../lib/api';
-import { useObjects, useCounterparties } from '../../hooks/useReferenceData';
+import { kanbanApi } from '@/lib/kanbanApi';
+import type { Counterparty, ConstructionObject } from '@/lib/api';
+import { useObjects, useCounterparties } from '@/hooks/useReferenceData';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';

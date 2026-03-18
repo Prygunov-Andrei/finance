@@ -6,7 +6,7 @@ import {
   BankPaymentOrder,
   BankPaymentOrderEvent,
   CreateBankPaymentOrderData,
-} from '../lib/api';
+} from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -30,7 +30,7 @@ import {
   Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatAmount } from '../lib/utils';
+import { formatAmount } from '@/lib/utils';
 
 // ─── Статус-бейджи ──────────────────────────────────────────────
 

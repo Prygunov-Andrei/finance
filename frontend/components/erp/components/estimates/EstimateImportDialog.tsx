@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
-import { api, type EstimateImportPreview } from '../../lib/api';
+import { api, type EstimateImportPreview } from '@/lib/api';
 import { DataTable } from '../ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';

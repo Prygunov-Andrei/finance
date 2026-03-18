@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, BankConnection, CreateBankConnectionData, LegalEntity } from '../lib/api';
+import { api, BankConnection, CreateBankConnectionData, LegalEntity } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
@@ -11,7 +11,7 @@ import { Button } from './ui/button';
 import { Switch } from './ui/switch';
 import { Landmark, Loader2, Plus, MoreVertical, Pencil, Trash2, Wifi, WifiOff, RefreshCw, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { useLegalEntities } from '../hooks';
+import { useLegalEntities } from '@/hooks';
 import { CONSTANTS } from '../constants';
 
 export const BankConnectionsTab = () => {

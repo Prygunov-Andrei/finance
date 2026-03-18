@@ -9,9 +9,9 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import type { SupplierIntegration, SupplierSyncStatus, SupplierCategory, SupplierSyncLog } from '../../types/supplier';
+import type { SupplierIntegration, SupplierSyncStatus, SupplierCategory, SupplierSyncLog } from '@/types/supplier';
 
 export function SupplierIntegrationDetail() {
   const { id } = useParams<{ id: string }>();

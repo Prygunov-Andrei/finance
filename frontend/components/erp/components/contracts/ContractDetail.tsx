@@ -14,7 +14,7 @@ import {
   Line,
   Bar,
 } from 'recharts';
-import { api, ContractDetail as ContractDetailType } from '../../lib/api';
+import { api, ContractDetail as ContractDetailType } from '@/lib/api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import {
@@ -34,7 +34,7 @@ import { ContractAmendmentsTab } from '../ContractAmendmentsTab';
 import { WorkScheduleTab } from '../WorkScheduleTab';
 import { ActsTab } from '../ActsTab';
 import { ContractTextEditor } from './ContractTextEditor';
-import { formatDate, formatAmount, formatCurrency } from '../../lib/utils';
+import { formatDate, formatAmount, formatCurrency } from '@/lib/utils';
 import { CONSTANTS, COLORS } from '../../constants';
 
 type TabType = 'info' | 'amendments' | 'schedule' | 'acts' | 'cashflow' | 'text';

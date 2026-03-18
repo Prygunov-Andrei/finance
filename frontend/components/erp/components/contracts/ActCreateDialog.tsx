@@ -6,7 +6,7 @@ import {
   type AccumulativeEstimateRow,
   type ContractEstimateListItem,
   type CreateActData,
-} from '../../lib/api';
+} from '@/lib/api';
 import { DataTable, createSelectColumn } from '../ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
@@ -14,7 +14,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency } from '@/lib/utils';
 
 type ActCreateDialogProps = {
   open: boolean;

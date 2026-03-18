@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -10,7 +10,7 @@ import { Checkbox } from './ui/checkbox';
 import { Card } from './ui/card';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { useObjects, useCounterparties, useLegalEntities, useFrameworkContracts } from '../hooks';
+import { useObjects, useCounterparties, useLegalEntities, useFrameworkContracts } from '@/hooks';
 import { CONSTANTS } from '../constants';
 
 interface CreateContractDialogProps {

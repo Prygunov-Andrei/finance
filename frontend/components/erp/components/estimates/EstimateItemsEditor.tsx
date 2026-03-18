@@ -8,8 +8,8 @@ import {
   type EstimateSection,
   type ColumnDef as ColumnDefAPI,
   DEFAULT_COLUMN_CONFIG,
-} from '../../lib/api';
-import { formatCurrency } from '../../lib/utils';
+} from '@/lib/api';
+import { formatCurrency } from '@/lib/utils';
 import { computeAllFormulas } from '../../lib/formula-engine';
 import { CONSTANTS } from '../../constants';
 import { DataTable, createSelectColumn } from '../ui/data-table';

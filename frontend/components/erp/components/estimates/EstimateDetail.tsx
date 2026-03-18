@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, EstimateSection, EstimateSubsection, EstimateCharacteristic } from '../../lib/api';
-import { formatDate, formatCurrency } from '../../lib/utils';
+import { api, EstimateSection, EstimateSubsection, EstimateCharacteristic } from '@/lib/api';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 import { EstimateItemsEditor } from './EstimateItemsEditor';
 import { EstimateSupplierInvoices } from './EstimateSupplierInvoices';
 import { ColumnConfigDialog } from './ColumnConfigDialog';
-import { type ColumnDef as ColumnDefAPI, DEFAULT_COLUMN_CONFIG } from '../../lib/api';
+import { type ColumnDef as ColumnDefAPI, DEFAULT_COLUMN_CONFIG } from '@/lib/api';
 
 const STATUS_MAP = {
   draft: 'Черновик',

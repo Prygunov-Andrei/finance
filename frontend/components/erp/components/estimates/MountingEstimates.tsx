@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { api, MountingEstimateList } from '../../lib/api';
-import { formatDate, formatCurrency } from '../../lib/utils';
+import { api, MountingEstimateList } from '@/lib/api';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { useObjects } from '../../hooks/useReferenceData';
+import { useObjects } from '@/hooks/useReferenceData';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';

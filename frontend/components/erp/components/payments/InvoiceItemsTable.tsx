@@ -1,5 +1,5 @@
-import { InvoiceItem } from '../../lib/api';
-import { formatAmount } from '../../lib/utils';
+import { InvoiceItem } from '@/lib/api';
+import { formatAmount } from '@/lib/utils';
 
 interface InvoiceItemsTableProps {
   items: InvoiceItem[];

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, CreatePaymentData, ParseInvoiceResponse, InvoiceItem } from '../../lib/api';
-import { formatAmount } from '../../lib/utils';
+import { api, CreatePaymentData, ParseInvoiceResponse, InvoiceItem } from '@/lib/api';
+import { formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
-import { useAccounts, useExpenseCategories, useLegalEntities } from '../../hooks';
+import { useAccounts, useExpenseCategories, useLegalEntities } from '@/hooks';
 import { Loader2, AlertCircle, FileText, Building2, Calendar, DollarSign, Hash, Receipt, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import type { RecurringPayment } from '../../types/supply';
+import { api } from '@/lib/api';
+import type { RecurringPayment } from '@/types/supply';
 import {
   Loader2, Plus, CalendarClock, Pencil, Trash2, Search,
 } from 'lucide-react';
@@ -21,7 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../ui/alert-dialog';
 import { toast } from 'sonner';
-import { formatDate, formatAmount } from '../../lib/utils';
+import { formatDate, formatAmount } from '@/lib/utils';
 import { CONSTANTS } from '../../constants';
 
 const FREQUENCY_LABELS: Record<string, string> = {
