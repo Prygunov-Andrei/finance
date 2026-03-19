@@ -6,7 +6,7 @@ from django.db import transaction
 from kanban_core.models import CardEvent, Card
 from kanban_core.services import log_card_event
 from kanban_rules.models import Rule, RuleExecution
-from kanban_integrations.erp_client import notify_erp
+from kanban_core.notifications import notify_erp
 
 
 class _SystemActor:
