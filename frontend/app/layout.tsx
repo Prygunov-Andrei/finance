@@ -53,7 +53,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="min-h-screen antialiased bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           {children}
         </ThemeProvider>

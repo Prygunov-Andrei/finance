@@ -385,12 +385,12 @@ export function CatalogProducts() {
                           </div>
                         )}
                       </td>
-                      <td className="py-2.5 px-4 text-sm">{product.name}</td>
+                      <td className="py-2.5 px-4 text-sm text-gray-900">{product.name}</td>
                       <td className="py-2.5 px-4 text-sm text-gray-500">{product.brand || '—'}</td>
                       <td className="py-2.5 px-4 text-sm text-gray-500">
                         {product.category_name || '—'}
                       </td>
-                      <td className="py-2.5 px-4 text-sm">{product.default_unit}</td>
+                      <td className="py-2.5 px-4 text-sm text-gray-900">{product.default_unit}</td>
                       <td className="py-2.5 px-4">
                         <span className={`px-2 py-0.5 rounded text-xs ${getStatusBadgeClass(product.status)}`}>
                           {product.status_display}
