@@ -251,6 +251,40 @@ services:
         max-file: "3"
 
   # =========================================================================
+  # CELERY PUBLIC WORKER (задачи портала смет)
+  # =========================================================================
+
+  celery-public-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A finans_assistant worker --loglevel=info --concurrency=2 -Q public_tasks
+    environment:
+      <<: *backend-env
+    volumes:
+      - backend_media:/app/media
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
   # CELERY BEAT (планировщик)
   # =========================================================================
 
@@ -335,8 +369,10 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       - BACKEND_API_URL=http://backend:8000
+      - HVAC_API_URL=http://hvac-backend:8001
     depends_on:
       - backend
+      - hvac-backend
     restart: always
     deploy:
       resources:
@@ -379,6 +415,86 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # =========================================================================
+  # HVAC-INFO — Новостной портал климатической индустрии
+  # =========================================================================
+
+  createhvacdb:
+    image: postgres:14-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+      DB_USER: ${DB_USER}
+      DB_HOST: postgres
+      HVAC_DB_NAME: ${HVAC_DB_NAME:-hvac_db}
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Ensuring hvac_db database exists...';
+      psql -h $$DB_HOST -U $$DB_USER -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='$$HVAC_DB_NAME'\" | grep -q 1
+      || psql -h $$DB_HOST -U $$DB_USER -d postgres -c \"CREATE DATABASE \\\"$$HVAC_DB_NAME\\\"\" ;
+      exit 0;
+      "
+
+  hvac-backend:
+    build:
+      context: ./hvac-backend
+      dockerfile: Dockerfile
+    command: ["gunicorn", "config.wsgi:application",
+              "--bind", "0.0.0.0:8001", "--workers", "2", "--timeout", "120",
+              "--access-logfile", "-", "--error-logfile", "-"]
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      DEBUG: "False"
+      HVAC_ENV: prod
+      SECRET_KEY: ${HVAC_SECRET_KEY:-django-insecure-hvac-change-in-production}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${HVAC_DB_NAME:-hvac_db}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ALLOWED_HOSTS: hvac-info.com,www.hvac-info.com,localhost,hvac-backend
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      HCAPTCHA_SECRET_KEY: ${HCAPTCHA_SECRET_KEY:-}
+      TRANSLATION_API_KEY: ${TRANSLATION_API_KEY:-}
+    volumes:
+      - hvac_media:/app/media
+      - hvac_static:/app/staticfiles
+    depends_on:
+      createhvacdb:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r = urllib.request.urlopen('http://localhost:8001/api/hvac/references/manufacturers/')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   postgres_data:
   redis_data:
@@ -386,3 +502,5 @@ volumes:
   backend_media:
   backend_logs:
   backend_static:
+  hvac_media:
+  hvac_static:
