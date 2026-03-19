@@ -121,10 +121,7 @@ $PYTHON manage.py runserver 0.0.0.0:8000 &
 echo $! >> "$PIDFILE"
 echo "  Django ERP         → PID $!"
 
-# Kanban API (порт 8010)
-DJANGO_SETTINGS_MODULE=kanban_service.settings $PYTHON manage.py runserver 0.0.0.0:8010 &
-echo $! >> "$PIDFILE"
-echo "  Kanban API         → PID $!"
+# Kanban теперь часть основного бэкенда (порт 8000)
 
 # Celery ERP worker
 # macOS: --pool=solo чтобы избежать SIGSEGV при fork() (ObjC runtime)
@@ -136,10 +133,6 @@ $CELERY -A finans_assistant worker --pool=$CELERY_POOL --concurrency=1 -l info &
 echo $! >> "$PIDFILE"
 echo "  Celery ERP worker  → PID $! (pool=$CELERY_POOL)"
 
-# Celery Kanban worker
-$CELERY -A kanban_service worker --pool=$CELERY_POOL --concurrency=1 -l info &
-echo $! >> "$PIDFILE"
-echo "  Celery Kanban worker → PID $! (pool=$CELERY_POOL)"
 
 # Celery ERP beat (периодические задачи)
 $CELERY -A finans_assistant beat -l info --schedule=/tmp/celerybeat-erp &
@@ -167,7 +160,7 @@ echo -e "${GREEN}[5/5] Локальная разработка запущена!
 echo ""
 echo "  Frontend (Vite HMR):  http://localhost:3000"
 echo "  ERP API:              http://localhost:8000/api/v1/"
-echo "  Kanban API:           http://localhost:8010/kanban-api/v1/"
+echo "  Kanban API:           http://localhost:8000/kanban-api/v1/"
 echo "  MinIO Console:        http://localhost:9001"
 echo ""
 echo -e "${YELLOW}Ctrl+C для остановки всех сервисов${NC}"

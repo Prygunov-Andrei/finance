@@ -138,7 +138,7 @@ curl -fsS http://127.0.0.1:8000/api/schema/ >/dev/null 2>&1 && echo -e "${GREEN}
 curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1 && echo -e "${GREEN}Frontend: OK${NC}" || echo -e "${RED}Frontend: FAILED${NC}"
 curl -fsS http://127.0.0.1:3001/ >/dev/null 2>&1 && echo -e "${GREEN}Mini-app: OK${NC}" || echo -e "${RED}Mini-app: FAILED${NC}"
 curl -fsS http://127.0.0.1:8081/bot/webhook >/dev/null 2>&1 && echo -e "${GREEN}Bot: OK${NC}" || true
-curl -fsS http://127.0.0.1:8010/kanban-api/health/ >/dev/null 2>&1 && echo -e "${GREEN}Kanban API: OK${NC}" || echo -e "${RED}Kanban API: FAILED${NC}"
+curl -fsS http://127.0.0.1:8000/kanban-api/health/ >/dev/null 2>&1 && echo -e "${GREEN}Kanban API: OK${NC}" || echo -e "${RED}Kanban API: FAILED${NC}"
 
 # -------------------------------------------------------
 echo -e "${GREEN}[13/13] Final status${NC}"
