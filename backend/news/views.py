@@ -84,25 +84,30 @@ class NewsPostViewSet(viewsets.ModelViewSet):
         """
         Админы видят все новости (включая будущие, черновики и запланированные).
         Обычные пользователи видят только опубликованные новости (status=published и pub_date <= now).
+        Soft-deleted новости скрыты от всех.
         Поддерживает фильтрацию по is_no_news_found через query parameter.
         """
-        queryset = NewsPost.objects.select_related('author').prefetch_related('media').all()
-        
+        queryset = NewsPost.objects.select_related('author').prefetch_related('media').filter(is_deleted=False)
+
         # Если пользователь не админ, показываем только опубликованные новости
         if not self.request.user.is_staff:
             queryset = queryset.filter(
                 status='published',
                 pub_date__lte=timezone.now()
             )
-        
+
         # Фильтрация по is_no_news_found (для массового удаления на фронтенде)
         is_no_news_found = self.request.query_params.get('is_no_news_found', None)
         if is_no_news_found is not None:
-            # Преобразуем строку в boolean
             is_no_news_found_bool = is_no_news_found.lower() in ('true', '1', 'yes')
             queryset = queryset.filter(is_no_news_found=is_no_news_found_bool)
-        
+
         return queryset
+
+    def perform_destroy(self, instance):
+        """Soft-delete: помечаем как удалённую вместо реального удаления"""
+        instance.is_deleted = True
+        instance.save(update_fields=['is_deleted'])
     
     def get_permissions(self):
         """

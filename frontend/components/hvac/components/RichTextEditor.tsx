@@ -35,6 +35,7 @@ export default function RichTextEditor({ content, onChange, onImageUpload }: Ric
   const [isUploading, setIsUploading] = React.useState(false);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         // Отключаем Link в StarterKit, чтобы использовать свою конфигурацию

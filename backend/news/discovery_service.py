@@ -356,9 +356,10 @@ class NewsDiscoveryService:
         
         # Создаем новости
         created_count = 0
+        duplicate_count = 0
         error_count = 0
         is_no_news = False
-        
+
         if not final_news or len(final_news) == 0:
             # Если новостей нет - создаем новость об этом
             self._create_no_news_news(resource, last_search_date, today)
@@ -367,12 +368,18 @@ class NewsDiscoveryService:
         else:
             for news_item in final_news:
                 try:
-                    self._create_news_post(news_item, resource)
-                    created_count += 1
+                    was_created = self._create_news_post(news_item, resource)
+                    if was_created:
+                        created_count += 1
+                    else:
+                        duplicate_count += 1
                 except Exception as e:
                     logger.error(f"Error creating news post: {str(e)}")
                     error_count += 1
-        
+
+        if duplicate_count > 0:
+            logger.info(f"Resource {resource.id}: skipped {duplicate_count} duplicate(s)")
+
         # Обновляем статистику источника
         self._update_resource_statistics(
             resource=resource,
@@ -1041,14 +1048,16 @@ Use web search. Sources: industry publications, press releases. **Translate to R
     
     # Методы _merge_and_summarize и _build_merge_prompt удалены - больше не нужны, так как используем только OpenAI
     
-    def _create_news_post(self, news_item: Dict, resource: NewsResource):
+    def _create_news_post(self, news_item: Dict, resource: NewsResource) -> bool:
         """
         Создает новость из данных, полученных от LLM.
-        
+        Возвращает True если новость создана, False если дубликат.
+
         После оптимизации:
         - LLM возвращает только русский текст (title, summary)
         - source_url всегда берется из resource.url (не из LLM)
         - Переводы будут добавлены при публикации через TranslationService
+        - Дедупликация по source_url + title предотвращает повторное создание
         """
         # Извлекаем данные
         title_ru = news_item.get('title', 'Без заголовка')
@@ -1059,7 +1068,12 @@ Use web search. Sources: industry publications, press releases. **Translate to R
 
         # source_url: берём из ответа LLM (ссылка на конкретную статью), иначе URL ресурса
         source_url = news_item.get('source_url') or resource.url
-        
+
+        # Дедупликация: проверяем по source_url + title (включая soft-deleted)
+        if NewsPost.objects.filter(source_url=source_url, title=title_ru).exists():
+            logger.info(f"Skipping duplicate news: {title_ru} ({source_url})")
+            return False
+
         # Создаем новость (только русский текст)
         news_post = NewsPost.objects.create(
             title=title_ru,
@@ -1070,12 +1084,13 @@ Use web search. Sources: industry publications, press releases. **Translate to R
             author=self.user,
             pub_date=timezone.now()
         )
-        
+
         # Переводы на другие языки (en, de, pt) будут добавлены позже,
         # когда администратор опубликует новость (изменит статус на 'published')
-        
+
         news_post.save()
         logger.info(f"Created news post: {news_post.id} - {title_ru}")
+        return True
     
     def _create_no_news_news(self, resource: NewsResource, start_date: date, end_date: date):
         """Создает новость о том, что новостей не найдено"""
@@ -1541,9 +1556,10 @@ Use web search. Sources: industry publications, press releases. **Translate to R
         
         # Создаем новости
         created_count = 0
+        duplicate_count = 0
         error_count = 0
         is_no_news = False
-        
+
         if not final_news or len(final_news) == 0:
             # Если новостей нет - создаем новость об этом
             self._create_no_news_manufacturer(manufacturer, last_search_date, today)
@@ -1552,11 +1568,17 @@ Use web search. Sources: industry publications, press releases. **Translate to R
         else:
             for news_item in final_news:
                 try:
-                    self._create_manufacturer_news_post(news_item, manufacturer)
-                    created_count += 1
+                    was_created = self._create_manufacturer_news_post(news_item, manufacturer)
+                    if was_created:
+                        created_count += 1
+                    else:
+                        duplicate_count += 1
                 except Exception as e:
                     logger.error(f"Error creating news post for manufacturer: {str(e)}")
                     error_count += 1
+
+        if duplicate_count > 0:
+            logger.info(f"Manufacturer {manufacturer.id}: skipped {duplicate_count} duplicate(s)")
         
         # Обновляем статистику производителя
         self._update_manufacturer_statistics(
@@ -1612,41 +1634,49 @@ Use web search. Sources: industry publications, press releases. **Translate to R
             json_format=templates['json_format']
         )
     
-    def _create_manufacturer_news_post(self, news_item: Dict, manufacturer: Manufacturer):
+    def _create_manufacturer_news_post(self, news_item: Dict, manufacturer: Manufacturer) -> bool:
         """
         Создает новость о производителе из данных, полученных от LLM.
-        
+        Возвращает True если новость создана, False если дубликат.
+
         После оптимизации:
         - LLM возвращает только русский текст (title, summary)
         - source_url всегда берется из website_1 производителя
         - Переводы будут добавлены при публикации
+        - Дедупликация по source_url + title предотвращает повторное создание
         """
         # Извлекаем данные (только title и summary, без source_url)
         title_ru = news_item.get('title', 'Без заголовка')
         summary_ru = news_item.get('summary', '')
-        
+
         # Для производителей используем английский как язык источника
         source_language = 'en'
-        
+
         # source_url ВСЕГДА берем из первого сайта производителя
         source_url = manufacturer.website_1 or ''
-        
+
+        # Дедупликация: проверяем по source_url + title
+        if NewsPost.objects.filter(source_url=source_url, title=title_ru).exists():
+            logger.info(f"Skipping duplicate manufacturer news: {title_ru} ({source_url})")
+            return False
+
         # Создаем новость (только русский текст)
         news_post = NewsPost.objects.create(
             title=title_ru,
             body=summary_ru,
             source_url=source_url,
-            manufacturer=manufacturer,  # Связываем с производителем
+            manufacturer=manufacturer,
             status='draft',
             source_language=source_language,
             author=self.user,
             pub_date=timezone.now()
         )
-        
+
         # Переводы будут добавлены при публикации
-        
+
         news_post.save()
         logger.info(f"Created news post for manufacturer {manufacturer.id}: {news_post.id} - {title_ru}")
+        return True
     
     def _create_no_news_manufacturer(self, manufacturer: Manufacturer, start_date: date, end_date: date):
         """Создает новость о том, что новостей о производителе не найдено"""

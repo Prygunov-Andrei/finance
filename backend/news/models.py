@@ -51,6 +51,11 @@ class NewsPost(models.Model):
         default=False,
         help_text=_("Пометка для записей 'новостей не найдено'. Используется для фильтрации и массового удаления на фронтенде.")
     )
+    is_deleted = models.BooleanField(
+        _("Deleted"),
+        default=False,
+        help_text=_("Soft-delete: новость скрыта и не будет пересоздана discovery")
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
