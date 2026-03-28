@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Search, FileText, Loader2, Filter, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Search, FileText, Loader2, Filter, X, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_MAP = {
@@ -370,44 +371,52 @@ export function Estimates() {
             </div>
 
             <div>
-              <Label htmlFor="projects">Проекты-основания (опционально)</Label>
+              <Label>Проекты-основания (опционально)</Label>
               {formData.object === 0 ? (
-                <select
-                  id="projects"
-                  disabled
-                  className="mt-1.5 w-full px-3 py-2 border border-border rounded-lg opacity-50 cursor-not-allowed"
-                  size={3}
-                >
-                  <option>Сначала выберите объект</option>
-                </select>
+                <p className="mt-1.5 text-sm text-muted-foreground">Сначала выберите объект</p>
               ) : !projects?.length ? (
-                <select
-                  id="projects"
-                  disabled
-                  className="mt-1.5 w-full px-3 py-2 border border-border rounded-lg opacity-50 cursor-not-allowed"
-                  size={3}
-                >
-                  <option>Нет проектов для этого объекта</option>
-                </select>
+                <p className="mt-1.5 text-sm text-muted-foreground">Нет проектов для этого объекта</p>
               ) : (
-                <>
-                  <select
-                    id="projects"
-                    multiple
-                    value={formData.projects.map(String)}
-                    onChange={(e) => {
-                      const selected = Array.from(e.target.selectedOptions).map(o => Number(o.value));
-                      setFormData({ ...formData, projects: selected });
-                    }}
-                    className="mt-1.5 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-                    size={3}
-                  >
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>{p.cipher} - {p.name}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground mt-1">Удерживайте Ctrl для множественного выбора</p>
-                </>
+                <div className="mt-1.5 space-y-2 max-h-48 overflow-y-auto border border-border rounded-lg p-2">
+                  {projects.map((p) => {
+                    const isChecked = formData.projects.includes(p.id);
+                    return (
+                      <label
+                        key={p.id}
+                        className={`flex flex-col gap-1 p-2 rounded-lg cursor-pointer transition-colors ${
+                          isChecked ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                projects: isChecked
+                                  ? prev.projects.filter(id => id !== p.id)
+                                  : [...prev.projects, p.id],
+                              }));
+                            }}
+                            className="rounded border-border"
+                          />
+                          <span className="text-sm font-medium">{p.cipher} — {p.name}</span>
+                        </div>
+                        {p.project_files && p.project_files.length > 0 && (
+                          <div className="ml-6 space-y-0.5">
+                            {p.project_files.map((pf) => (
+                              <div key={pf.id} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                <Badge variant="outline" className="text-[10px] px-1 py-0">{pf.file_type_name}</Badge>
+                                <span className="truncate">{pf.title || pf.original_filename}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
               )}
             </div>
 

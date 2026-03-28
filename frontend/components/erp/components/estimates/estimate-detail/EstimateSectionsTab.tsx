@@ -1,6 +1,8 @@
 import { EstimateSection, EstimateSubsection } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Plus, Edit2, Trash2, FileText } from 'lucide-react';
 
@@ -12,6 +14,7 @@ interface EstimateSectionsTabProps {
   onAddSubsection: (sectionId: number) => void;
   onEditSubsection: (subsection: EstimateSubsection) => void;
   onDeleteSubsection: (subsectionId: number) => void;
+  onUpdateSectionMarkup?: (sectionId: number, data: Partial<EstimateSection>) => void;
 }
 
 export function EstimateSectionsTab({
@@ -22,6 +25,7 @@ export function EstimateSectionsTab({
   onAddSubsection,
   onEditSubsection,
   onDeleteSubsection,
+  onUpdateSectionMarkup,
 }: EstimateSectionsTabProps) {
   return (
     <div className="space-y-6">
@@ -77,14 +81,54 @@ export function EstimateSectionsTab({
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-4">
                 <div className="space-y-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddSubsection(section.id)}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Добавить подраздел
-                  </Button>
+                  <div className="flex items-end gap-4 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onAddSubsection(section.id)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Добавить подраздел
+                    </Button>
+                    {onUpdateSectionMarkup && (
+                      <>
+                        <div className="flex flex-col gap-1">
+                          <Label className="text-xs text-muted-foreground">Наценка мат. %</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="По умолчанию"
+                            defaultValue={section.material_markup_percent ?? ''}
+                            onBlur={(e) => {
+                              const newVal = e.target.value || null;
+                              if (newVal !== (section.material_markup_percent ?? null)) {
+                                onUpdateSectionMarkup(section.id, { material_markup_percent: newVal });
+                              }
+                            }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            className="h-8 w-36 text-sm"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Label className="text-xs text-muted-foreground">Наценка раб. %</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="По умолчанию"
+                            defaultValue={section.work_markup_percent ?? ''}
+                            onBlur={(e) => {
+                              const newVal = e.target.value || null;
+                              if (newVal !== (section.work_markup_percent ?? null)) {
+                                onUpdateSectionMarkup(section.id, { work_markup_percent: newVal });
+                              }
+                            }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            className="h-8 w-36 text-sm"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
 
                   {section.subsections.length > 0 ? (
                     <div className="overflow-x-auto">

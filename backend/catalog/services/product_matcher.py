@@ -327,41 +327,32 @@ def compare_products_with_llm(
 ) -> List[Dict]:
     """
     Сравнивает товар с кандидатами через LLM.
-    
-    Отправляет маленький prompt с product_name и списком кандидатов,
-    получает JSON-ответ: [{is_same: bool, confidence: float}]
-    
+
+    Использует LLMTaskConfig для выбора провайдера (task='product_matching').
+
     Args:
         product_name: Название товара из счёта
         candidates: Список названий кандидатов из каталога (макс 5)
-        
+
     Returns:
         Список результатов: [{"is_same": bool, "confidence": float}, ...]
     """
-    from llm_services.models import LLMProvider as LLMProviderModel
-    from llm_services.providers.openai_provider import OpenAIProvider
-    from llm_services.providers.gemini_provider import GeminiProvider
-    from llm_services.providers.grok_provider import GrokProvider
+    from llm_services.models import LLMTaskConfig
+    from llm_services.providers import get_provider
 
-    # Получить активного провайдера
-    provider_record = LLMProviderModel.objects.filter(is_active=True).first()
-    if not provider_record:
-        raise RuntimeError('Нет активного LLM-провайдера')
+    try:
+        provider_model = LLMTaskConfig.get_provider_for_task('product_matching')
+        provider = get_provider(provider_model)
+    except Exception as exc:
+        logger.warning('LLM provider unavailable for product_matching: %s', exc)
+        return []
 
-    provider_map = {
-        'openai': OpenAIProvider,
-        'gemini': GeminiProvider,
-        'grok': GrokProvider,
-    }
-    provider_cls = provider_map.get(provider_record.provider_type)
-    if not provider_cls:
-        raise RuntimeError(f'Неизвестный провайдер: {provider_record.provider_type}')
-
-    # Формируем prompt
     candidates_text = '\n'.join(
         f'{i+1}. "{c}"' for i, c in enumerate(candidates)
     )
-    prompt = f"""Сравни товар "{product_name}" с кандидатами из каталога.
+
+    system_prompt = 'Ты эксперт по сопоставлению товаров. Отвечай только JSON.'
+    user_prompt = f"""Сравни товар "{product_name}" с кандидатами из каталога.
 Определи, является ли товар тем же самым (возможно записан немного по-другому).
 
 Кандидаты:
@@ -380,68 +371,13 @@ def compare_products_with_llm(
 - "Болт 6мм" и "Болт 6 мм" — ОДИНАКОВЫЕ товары (пробел)
 - Ответь ТОЛЬКО JSON без markdown."""
 
-    # Вызов LLM через низкоуровневый API
     try:
-        import openai
-        import httpx
-
-        if provider_record.provider_type == 'openai':
-            client = openai.OpenAI(api_key=provider_record.api_key)
-            response = client.chat.completions.create(
-                model=provider_record.model_name,
-                messages=[
-                    {'role': 'system', 'content': 'Ты эксперт по сопоставлению товаров. Отвечай только JSON.'},
-                    {'role': 'user', 'content': prompt},
-                ],
-                temperature=0.1,
-                max_tokens=500,
-            )
-            raw_text = response.choices[0].message.content.strip()
-
-        elif provider_record.provider_type == 'grok':
-            with httpx.Client(timeout=30) as client:
-                resp = client.post(
-                    'https://api.x.ai/v1/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {provider_record.api_key}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={
-                        'model': provider_record.model_name,
-                        'messages': [
-                            {'role': 'system', 'content': 'Ты эксперт по сопоставлению товаров. Отвечай только JSON.'},
-                            {'role': 'user', 'content': prompt},
-                        ],
-                        'temperature': 0.1,
-                        'max_tokens': 500,
-                    },
-                )
-                resp.raise_for_status()
-                raw_text = resp.json()['choices'][0]['message']['content'].strip()
-
-        elif provider_record.provider_type == 'gemini':
-            import google.generativeai as genai
-            genai.configure(api_key=provider_record.api_key)
-            model = genai.GenerativeModel(provider_record.model_name)
-            response = model.generate_content(prompt)
-            raw_text = response.text.strip()
-
-        else:
-            raise RuntimeError(f'Unsupported provider: {provider_record.provider_type}')
-
-        # Парсим JSON
-        # Убираем markdown-обёртку если есть
-        if raw_text.startswith('```'):
-            raw_text = raw_text.strip('`').strip()
-            if raw_text.startswith('json'):
-                raw_text = raw_text[4:].strip()
-
-        results = json.loads(raw_text)
-        if not isinstance(results, list):
-            results = [results]
-
-        return results
-
+        result = provider.chat_completion(system_prompt, user_prompt)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and not result.get('text'):
+            return [result]
+        return []
     except json.JSONDecodeError as exc:
         logger.warning('LLM returned invalid JSON for product comparison: %s', exc)
         return []

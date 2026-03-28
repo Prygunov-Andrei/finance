@@ -54,6 +54,9 @@ cd bot && pytest
 - Kanban permissions: через `core/kanban_permissions.py` (KanbanRolePermissionMixin)
 - Views >500 LOC разбиты на packages: payments/views/, estimates/views/, contracts/views/
 - URL prefix: `/api/v1/` для ERP, `/api/public/v1/` для портала, `/api/hvac/` для HVAC
+- Markup system: трёхуровневые наценки (смета → раздел → строка), сервис пересчёта в `estimates/services/markup_service.py`, три режима (percent/fixed_price/fixed_amount). Документация: `docs/estimates/markup-architecture.md`
+- Work matching: async 8-уровневый pipeline подбора расценок работ (default → history → pricelist → knowledge → category → fuzzy → LLM → web), сервис в `estimates/services/work_matching/`, Celery + Redis сессии, самообучение через ProductKnowledge + .md файлы. Документация: `docs/estimates/work-matching-dev.md`
+- LLM task config: настройка провайдера для каждой задачи через `LLMTaskConfig`, поддержка локальных LLM. Никакие провайдеры не хардкодятся
 
 ### Frontend
 - UI primitives: `@/components/ui/` (shadcn/ui) — единственная копия

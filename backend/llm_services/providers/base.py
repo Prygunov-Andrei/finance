@@ -154,6 +154,31 @@ class BaseLLMProvider(ABC):
         """
         raise NotImplementedError("Subclasses must implement parse_with_prompt")
 
+    def chat_completion(self, system_prompt: str, user_prompt: str,
+                        response_format: str = 'json', **kwargs) -> dict:
+        """Текстовый chat completion без изображений.
+
+        Args:
+            system_prompt: Системный промпт
+            user_prompt: Пользовательский промпт
+            response_format: 'json' для JSON-ответа, 'text' для текста
+
+        Returns:
+            dict — JSON-ответ LLM
+        """
+        raise NotImplementedError("Subclasses must implement chat_completion")
+
+    def chat_completion_with_search(self, system_prompt: str, user_prompt: str) -> dict:
+        """Chat completion с поиском в интернете.
+
+        По умолчанию — fallback на обычный chat_completion.
+        Провайдеры с supports_web_search переопределяют этот метод.
+
+        Returns:
+            dict — JSON-ответ LLM (может содержать 'grounding_sources')
+        """
+        return self.chat_completion(system_prompt, user_prompt)
+
     @staticmethod
     def calculate_file_hash(content: bytes) -> str:
         """Вычисляет SHA256 хэш файла"""

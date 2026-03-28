@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, EstimateSection, EstimateSubsection, EstimateCharacteristic, EstimateCreateRequest} from '@/lib/api';
 import { CONSTANTS } from '@/constants';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, FileText, Plus, Info, DollarSign, History, FileSpreadsheet, Table2, Receipt, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, Plus, Info, DollarSign, History, FileSpreadsheet, Table2, Receipt, Trash2, Download, ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { EstimateItemsEditor } from '../EstimateItemsEditor';
 import { EstimateSupplierInvoices } from '../EstimateSupplierInvoices';
@@ -83,6 +84,17 @@ export function EstimateDetail() {
     queryFn: () => api.pricelists.getPriceLists(),
     staleTime: CONSTANTS.REFERENCE_STALE_TIME_MS,
   });
+
+  // Файлы проектов для импорта в редакторе строк
+  const allProjectFiles = useMemo(() => {
+    if (!estimate?.projects) return [];
+    return estimate.projects.flatMap((project) =>
+      (project.project_files || []).map((pf) => ({
+        ...pf,
+        projectCipher: project.cipher,
+      }))
+    );
+  }, [estimate?.projects]);
 
   // Mutations
   const updateFieldMutation = useMutation({
@@ -249,14 +261,29 @@ export function EstimateDetail() {
           <Button variant="outline" onClick={() => setVersionHistoryOpen(true)}><History className="w-4 h-4 mr-2" />История версий</Button>
           <Button variant="outline" onClick={() => setIsVersionDialogOpen(true)}><Plus className="w-4 h-4 mr-2" />Новая версия</Button>
           <Button variant="outline" onClick={() => setIsMountingDialogOpen(true)}><FileSpreadsheet className="w-4 h-4 mr-2" />Создать монтажную смету</Button>
-          <Button variant="outline" onClick={async () => {
-            try {
-              const blob = await api.estimates.exportEstimate(Number(id));
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url; a.download = `Смета_${estimate?.number || id}.xlsx`; a.click(); URL.revokeObjectURL(url);
-            } catch { toast.error('Ошибка экспорта'); }
-          }}><Download className="w-4 h-4 mr-2" />Экспорт в Excel</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline"><Download className="w-4 h-4 mr-2" />Экспорт в Excel<ChevronDown className="w-4 h-4 ml-1" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={async () => {
+                try {
+                  const blob = await api.estimates.exportEstimate(Number(id), 'internal');
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `Смета_${estimate?.number || id}_внутр.xlsx`; a.click(); URL.revokeObjectURL(url);
+                } catch { toast.error('Ошибка экспорта'); }
+              }}>Экспорт (внутренний)</DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => {
+                try {
+                  const blob = await api.estimates.exportEstimate(Number(id), 'external');
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `Смета_${estimate?.number || id}_клиент.xlsx`; a.click(); URL.revokeObjectURL(url);
+                } catch { toast.error('Ошибка экспорта'); }
+              }}>Экспорт (для заказчика)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800" onClick={() => { setDeleteConfirmName(''); setDeleteEstimateOpen(true); }}><Trash2 className="w-4 h-4 mr-2" />Удалить</Button>
         </div>
       </div>
@@ -284,12 +311,13 @@ export function EstimateDetail() {
             onAddSubsection={(sectionId) => { setCurrentSectionId(sectionId); setEditingSubsection(null); setSubsectionForm({ name: '', materials_sale: '0.00', works_sale: '0.00', materials_purchase: '0.00', works_purchase: '0.00', sort_order: 0 }); setSubsectionDialogOpen(true); }}
             onEditSubsection={(subsection) => { setEditingSubsection(subsection); setSubsectionForm({ name: subsection.name, materials_sale: subsection.materials_sale, works_sale: subsection.works_sale, materials_purchase: subsection.materials_purchase, works_purchase: subsection.works_purchase, sort_order: subsection.sort_order }); setSubsectionDialogOpen(true); }}
             onDeleteSubsection={(subsectionId) => setDeleteSubsectionTarget(subsectionId)}
+            onUpdateSectionMarkup={(sectionId, data) => updateSectionMutation.mutate({ sectionId, data })}
           />
         </TabsContent>
 
         <TabsContent value="items" className="space-y-6">
           <div className="bg-card rounded-xl shadow-sm border border-border p-6">
-            <EstimateItemsEditor estimateId={Number(id)} readOnly={estimate?.status === 'approved' || estimate?.status === 'agreed'} columnConfig={estimate?.column_config} onOpenColumnConfig={() => setColumnConfigOpen(true)} />
+            <EstimateItemsEditor estimateId={Number(id)} readOnly={estimate?.status === 'approved' || estimate?.status === 'agreed'} columnConfig={estimate?.column_config} onOpenColumnConfig={() => setColumnConfigOpen(true)} projectFiles={allProjectFiles} />
           </div>
         </TabsContent>
 

@@ -15,12 +15,13 @@ export interface ProjectList {
   secondary_check_done: boolean;
   version_number: number;
   is_current: boolean;
+  project_files: ProjectFile[];
   created_at: string;
   updated_at: string;
 }
 
 export interface ProjectDetail extends ProjectList {
-  file: string;
+  file?: string;
   notes?: string;
   production_approval_file?: string;
   production_approval_date?: string;
@@ -42,6 +43,30 @@ export interface ProjectNote {
     username: string;
   };
   text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectFileType {
+  id: number;
+  name: string;
+  code: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectFile {
+  id: number;
+  project: number;
+  file: string;
+  file_type: number;
+  file_type_name: string;
+  title: string;
+  original_filename: string;
+  uploaded_by: number | null;
+  uploaded_by_username: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -97,11 +122,19 @@ export const DEFAULT_COLUMN_CONFIG: ColumnDef[] = [
   { key: 'model_name', label: 'Модель', type: 'builtin', builtin_field: 'model_name', width: 150, editable: true, visible: true, formula: null, decimal_places: null, aggregatable: false, options: null },
   { key: 'unit', label: 'Ед.', type: 'builtin', builtin_field: 'unit', width: 60, editable: true, visible: true, formula: null, decimal_places: null, aggregatable: false, options: null },
   { key: 'quantity', label: 'Кол-во', type: 'builtin', builtin_field: 'quantity', width: 80, editable: true, visible: true, formula: null, decimal_places: 3, aggregatable: false, options: null },
-  { key: 'material_unit_price', label: 'Цена мат.', type: 'builtin', builtin_field: 'material_unit_price', width: 100, editable: true, visible: true, formula: null, decimal_places: 2, aggregatable: false, options: null },
-  { key: 'work_unit_price', label: 'Цена раб.', type: 'builtin', builtin_field: 'work_unit_price', width: 100, editable: true, visible: true, formula: null, decimal_places: 2, aggregatable: false, options: null },
-  { key: 'material_total', label: 'Итого мат.', type: 'builtin', builtin_field: 'material_total', width: 110, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
-  { key: 'work_total', label: 'Итого раб.', type: 'builtin', builtin_field: 'work_total', width: 110, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
-  { key: 'line_total', label: 'Итого', type: 'builtin', builtin_field: 'line_total', width: 120, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
+  { key: 'material_unit_price', label: 'Закупка мат.', type: 'builtin', builtin_field: 'material_unit_price', width: 100, editable: true, visible: true, formula: null, decimal_places: 2, aggregatable: false, options: null },
+  { key: 'work_unit_price', label: 'Закупка раб.', type: 'builtin', builtin_field: 'work_unit_price', width: 100, editable: true, visible: true, formula: null, decimal_places: 2, aggregatable: false, options: null },
+  { key: 'material_total', label: 'Итого закупка мат.', type: 'builtin', builtin_field: 'material_total', width: 110, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
+  { key: 'work_total', label: 'Итого закупка раб.', type: 'builtin', builtin_field: 'work_total', width: 110, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
+  { key: 'line_total', label: 'Итого закупка', type: 'builtin', builtin_field: 'line_total', width: 120, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
+  // Наценки (скрыты по умолчанию)
+  { key: 'effective_material_markup_percent', label: 'Наценка мат. %', type: 'builtin', builtin_field: 'effective_material_markup_percent', width: 90, editable: false, visible: false, formula: null, decimal_places: 2, aggregatable: false, options: null },
+  { key: 'effective_work_markup_percent', label: 'Наценка раб. %', type: 'builtin', builtin_field: 'effective_work_markup_percent', width: 90, editable: false, visible: false, formula: null, decimal_places: 2, aggregatable: false, options: null },
+  // Продажные цены
+  { key: 'material_sale_unit_price', label: 'Продажа мат.', type: 'builtin', builtin_field: 'material_sale_unit_price', width: 100, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: false, options: null },
+  { key: 'work_sale_unit_price', label: 'Продажа раб.', type: 'builtin', builtin_field: 'work_sale_unit_price', width: 100, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: false, options: null },
+  { key: 'material_sale_total', label: 'Итого продажа мат.', type: 'builtin', builtin_field: 'material_sale_total', width: 120, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
+  { key: 'work_sale_total', label: 'Итого продажа раб.', type: 'builtin', builtin_field: 'work_sale_total', width: 120, editable: false, visible: true, formula: null, decimal_places: 2, aggregatable: true, options: null },
 ];
 
 export interface EstimateList {
@@ -127,6 +160,16 @@ export interface EstimateDetail extends EstimateList {
     id: number;
     cipher: string;
     name: string;
+    file?: string;
+    project_files: Array<{
+      id: number;
+      file: string;
+      file_type: number;
+      file_type_name: string;
+      file_type_code: string;
+      title: string;
+      original_filename: string;
+    }>;
   }>;
   price_list?: number;
   price_list_name?: string;
@@ -156,6 +199,8 @@ export interface EstimateDetail extends EstimateList {
   total_with_vat: string;
   profit_amount: string;
   profit_percent: string;
+  default_material_markup_percent: string;
+  default_work_markup_percent: string;
 }
 
 export interface EstimateSection {
@@ -170,6 +215,8 @@ export interface EstimateSection {
   total_works_purchase: string;
   total_sale: string;
   total_purchase: string;
+  material_markup_percent: string | null;
+  work_markup_percent: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -317,4 +364,75 @@ export interface CreateMountingConditionData {
   is_active?: boolean;
   is_default?: boolean;
   sort_order?: number;
+}
+
+// ==================== ASYNC WORK MATCHING ====================
+
+export interface WorkMatchingSession {
+  session_id: string;
+  total_items: number;
+}
+
+export type WorkMatchingStatus = 'processing' | 'completed' | 'error' | 'cancelled';
+
+export type WorkMatchingSource =
+  | 'default'
+  | 'history'
+  | 'pricelist'
+  | 'knowledge'
+  | 'category'
+  | 'fuzzy'
+  | 'llm'
+  | 'web'
+  | 'unmatched';
+
+export interface WorkMatchingMatchedWork {
+  id: number;
+  name: string;
+  article: string;
+  section_name: string;
+  hours: string;
+  required_grade: string;
+  unit: string;
+  calculated_cost: string | null;
+}
+
+export interface WorkMatchingAlternative {
+  id: number;
+  name: string;
+  article: string;
+  confidence: number;
+}
+
+export interface WorkMatchingResult {
+  item_id: number;
+  item_name: string;
+  matched_work: WorkMatchingMatchedWork | null;
+  alternatives: WorkMatchingAlternative[];
+  confidence: number;
+  source: WorkMatchingSource;
+  llm_reasoning: string;
+}
+
+export interface WorkMatchingProgress {
+  session_id: string;
+  status: WorkMatchingStatus;
+  total_items: number;
+  current_item: number;
+  current_tier: string;
+  results: WorkMatchingResult[];
+  stats: Record<string, number>;
+  errors: Array<{ error: string }>;
+  man_hours_total: string;
+}
+
+export interface WorkMatchingApplyItem {
+  item_id: number;
+  work_item_id: number | null;
+  work_price?: string;
+}
+
+export interface WorkMatchingApplyResult {
+  applied: number;
+  man_hours: string;
 }

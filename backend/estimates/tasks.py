@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -12,8 +14,9 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-SESSION_TTL = 3600  # 1 час
-PAGE_DPI = 100
+from django.conf import settings as django_settings
+SESSION_TTL = getattr(django_settings, 'ESTIMATE_SESSION_TTL', 3600)
+PAGE_DPI = getattr(django_settings, 'ESTIMATE_IMPORT_PAGE_DPI', 100)
 
 SINGLE_PAGE_SYSTEM_PROMPT = """Ты — эксперт по строительным сметам.
 Тебе дана ОДНА СТРАНИЦА из многостраничной сметы (конвертирована в изображение).
@@ -37,12 +40,9 @@ SINGLE_PAGE_SYSTEM_PROMPT = """Ты — эксперт по строительн
 
 
 def _get_redis():
-    # B16: обработка ошибки подключения
-    try:
-        return redis.from_url(settings.CELERY_BROKER_URL, decode_responses=True)
-    except redis.ConnectionError as e:
-        logger.error('Redis connection failed: %s', e)
-        raise RuntimeError(f'Redis unavailable: {e}') from e
+    """Подключение к Redis. Делегирует в общий get_redis()."""
+    from estimates.services.redis_session import get_redis
+    return get_redis()
 
 
 def _json_default(obj):

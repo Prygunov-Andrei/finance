@@ -37,4 +37,21 @@ urlpatterns = [
         views.estimate_request_callback,
         name='estimate-request-callback',
     ),
+
+    # Work Matching
+    path(
+        'estimate-requests/<str:access_token>/match-works/',
+        views.public_start_work_matching,
+        name='public-start-work-matching',
+    ),
+    path(
+        'estimate-requests/<str:access_token>/match-progress/<str:session_id>/',
+        views.public_work_matching_progress,
+        name='public-work-matching-progress',
+    ),
+    path(
+        'estimate-requests/<str:access_token>/apply-works/',
+        views.public_apply_work_matching,
+        name='public-apply-work-matching',
+    ),
 ]

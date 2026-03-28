@@ -233,6 +233,18 @@ export interface ContractEstimateItem {
   is_analog: boolean;
   analog_reason: string;
   original_name: string;
+  material_markup_type: 'percent' | 'fixed_price' | 'fixed_amount' | null;
+  material_markup_value: string | null;
+  work_markup_type: 'percent' | 'fixed_price' | 'fixed_amount' | null;
+  work_markup_value: string | null;
+  material_sale_unit_price: string;
+  work_sale_unit_price: string;
+  material_purchase_total: string;
+  work_purchase_total: string;
+  material_sale_total: string;
+  work_sale_total: string;
+  effective_material_markup_percent: string;
+  effective_work_markup_percent: string;
   item_type: 'regular' | 'consumable' | 'additional';
   sort_order: number;
   created_at: string;
@@ -303,6 +315,18 @@ export interface EstimateItem {
   is_analog: boolean;
   analog_reason: string;
   original_name: string;
+  material_markup_type: 'percent' | 'fixed_price' | 'fixed_amount' | null;
+  material_markup_value: string | null;
+  work_markup_type: 'percent' | 'fixed_price' | 'fixed_amount' | null;
+  work_markup_value: string | null;
+  material_sale_unit_price: string;
+  work_sale_unit_price: string;
+  material_purchase_total: string;
+  work_purchase_total: string;
+  material_sale_total: string;
+  work_sale_total: string;
+  effective_material_markup_percent: string;
+  effective_work_markup_percent: string;
   source_price_history: number | null;
   custom_data?: Record<string, string>;
   computed_values?: Record<string, string | null>;
@@ -327,6 +351,10 @@ export interface CreateEstimateItemData {
   is_analog?: boolean;
   analog_reason?: string;
   original_name?: string;
+  material_markup_type?: string | null;
+  material_markup_value?: string | null;
+  work_markup_type?: string | null;
+  work_markup_value?: string | null;
 }
 
 export interface AutoMatchOffer {
@@ -357,23 +385,6 @@ export interface AutoMatchResult {
     invoice_id: number | null;
   } | null;
   source_price_history_id: number | null;
-}
-
-export interface WorkMatchResult {
-  item_id: number;
-  name: string;
-  matched_work: {
-    id: number;
-    name: string;
-    article: string;
-    section_name: string;
-    hours: string;
-    required_grade: string;
-    unit: string;
-  } | null;
-  work_price: string | null;
-  work_confidence: number;
-  source: string;
 }
 
 export interface EstimateImportPreview {

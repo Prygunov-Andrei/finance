@@ -9,7 +9,7 @@ import type {
   FNSEnrichResponse, FNSQuickCheckResponse, FNSReport,
   FNSReportCreateResponse, FNSReportListItem, FNSStats, FNSSuggestResponse,
 } from '../types';
-import type { LLMProvider, ParseInvoiceResponse } from '../types';
+import type { LLMProvider, LLMTaskConfig, ParseInvoiceResponse } from '../types';
 
 const API_BASE_URL = '/api/erp';
 
@@ -324,6 +324,21 @@ export function createCoreService(request: RequestFn) {
     async setDefaultLLMProvider(id: number) {
       return request<LLMProvider>(`/llm-providers/${id}/set_default/`, {
         method: 'POST',
+      });
+    },
+
+    async getLLMTaskConfigs() {
+      const response = await request<PaginatedResponse<LLMTaskConfig> | LLMTaskConfig[]>('/llm-task-configs/');
+      if (response && typeof response === 'object' && 'results' in response) {
+        return response.results;
+      }
+      return response as LLMTaskConfig[];
+    },
+
+    async updateLLMTaskConfig(id: number, data: { provider?: number | null; is_enabled?: boolean }) {
+      return request<LLMTaskConfig>(`/llm-task-configs/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
       });
     },
 

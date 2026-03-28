@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, ClipboardPaste, Loader2, Upload, Wand2, Hammer, ArrowDownToLine, Settings2 } from 'lucide-react';
+import { Plus, Trash2, ClipboardPaste, Loader2, Upload, Wand2, Hammer, ArrowDownToLine, Settings2, Percent } from 'lucide-react';
 
 type EditorToolbarProps = {
   itemsCount: number;
@@ -13,11 +13,14 @@ type EditorToolbarProps = {
   onPasteClick: () => void;
   onImportClick: () => void;
   onAutoMatchClick: () => void;
-  onAutoMatchWorksClick: () => void;
+  onWorkMatchingClick: () => void;
   onMoveSelected: () => void;
+  onMergeSelected: () => void;
   onDeleteSelected: () => void;
+  onBulkMarkupClick?: () => void;
   onOpenColumnConfig?: () => void;
   bulkMovePending: boolean;
+  mergePending: boolean;
 };
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -29,11 +32,14 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onPasteClick,
   onImportClick,
   onAutoMatchClick,
-  onAutoMatchWorksClick,
+  onWorkMatchingClick,
   onMoveSelected,
+  onMergeSelected,
   onDeleteSelected,
+  onBulkMarkupClick,
   onOpenColumnConfig,
   bulkMovePending,
+  mergePending,
 }) => {
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -55,7 +61,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <Wand2 className="h-4 w-4 mr-1" />
             Подобрать цены
           </Button>
-          <Button size="sm" variant="outline" onClick={onAutoMatchWorksClick}>
+          <Button size="sm" variant="outline" onClick={onWorkMatchingClick}>
             <Hammer className="h-4 w-4 mr-1" />
             Подобрать работы
           </Button>
@@ -84,6 +90,20 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               {bulkMovePending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Перенести (${selectedCount})`}
             </Button>
           </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onMergeSelected}
+            disabled={mergePending || selectedCount < 2}
+          >
+            {mergePending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Объединить (${selectedCount})`}
+          </Button>
+          {onBulkMarkupClick && (
+            <Button size="sm" variant="outline" onClick={onBulkMarkupClick}>
+              <Percent className="h-4 w-4 mr-1" />
+              Наценка ({selectedCount})
+            </Button>
+          )}
           <Button size="sm" variant="destructive" onClick={onDeleteSelected}>
             <Trash2 className="h-4 w-4 mr-1" />
             Удалить ({selectedCount})

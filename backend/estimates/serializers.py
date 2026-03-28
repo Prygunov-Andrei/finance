@@ -3,9 +3,11 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 
 from .models import (
-    Project, ProjectNote, Estimate, EstimateSection,
+    Project, ProjectNote, ProjectFileType, ProjectFile,
+    Estimate, EstimateSection,
     EstimateSubsection, EstimateCharacteristic, EstimateItem,
-    MountingEstimate, ColumnConfigTemplate,
+    MountingEstimate, ColumnConfigTemplate, EstimateMarkupDefaults,
+    MARKUP_TYPE_CHOICES,
 )
 from .column_defaults import DEFAULT_COLUMN_CONFIG
 from .formula_engine import (
@@ -35,19 +37,51 @@ class ProjectNoteSerializer(serializers.ModelSerializer):
         }
 
 
+class ProjectFileTypeSerializer(serializers.ModelSerializer):
+    """Сериализатор для типов файлов проекта"""
+
+    class Meta:
+        model = ProjectFileType
+        fields = [
+            'id', 'name', 'code', 'sort_order', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ProjectFileSerializer(serializers.ModelSerializer):
+    """Сериализатор для файлов проекта"""
+
+    file_type_name = serializers.CharField(source='file_type.name', read_only=True)
+    uploaded_by_username = serializers.CharField(
+        source='uploaded_by.username', read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = ProjectFile
+        fields = [
+            'id', 'project', 'file', 'file_type', 'file_type_name',
+            'title', 'original_filename', 'uploaded_by', 'uploaded_by_username',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'uploaded_by', 'original_filename', 'created_at', 'updated_at']
+
+
 class ProjectListSerializer(serializers.ModelSerializer):
     """Упрощённый сериализатор для списков проектов"""
-    
+
     object_name = serializers.CharField(source='object.name', read_only=True)
     stage_display = serializers.CharField(source='get_stage_display', read_only=True)
-    
+    project_files = ProjectFileSerializer(many=True, read_only=True)
+
     class Meta:
         model = Project
         fields = [
             'id', 'cipher', 'name', 'date', 'stage', 'stage_display',
             'object', 'object_name', 'is_approved_for_production',
             'primary_check_done', 'secondary_check_done',
-            'version_number', 'is_current', 'created_at', 'updated_at'
+            'version_number', 'is_current', 'project_files',
+            'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'version_number', 'is_current', 'created_at', 'updated_at'
@@ -56,8 +90,9 @@ class ProjectListSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     """Полный сериализатор для проекта"""
-    
+
     project_notes = ProjectNoteSerializer(many=True, read_only=True)
+    project_files = ProjectFileSerializer(many=True, read_only=True)
     object_name = serializers.CharField(source='object.name', read_only=True)
     stage_display = serializers.CharField(source='get_stage_display', read_only=True)
     primary_check_by_username = serializers.CharField(
@@ -82,7 +117,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             'primary_check_date', 'secondary_check_done',
             'secondary_check_by', 'secondary_check_by_username',
             'secondary_check_date', 'parent_version', 'version_number',
-            'is_current', 'project_notes', 'created_at', 'updated_at'
+            'is_current', 'project_notes', 'project_files',
+            'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'version_number', 'is_current', 'parent_version',
@@ -153,6 +189,7 @@ class EstimateSectionSerializer(serializers.ModelSerializer):
         model = EstimateSection
         fields = [
             'id', 'estimate', 'name', 'sort_order', 'subsections',
+            'material_markup_percent', 'work_markup_percent',
             'total_materials_sale', 'total_works_sale',
             'total_materials_purchase', 'total_works_purchase',
             'total_sale', 'total_purchase', 'created_at', 'updated_at'
@@ -202,6 +239,24 @@ class EstimateItemSerializer(serializers.ModelSerializer):
     line_total = serializers.SerializerMethodField()
     computed_values = serializers.SerializerMethodField()
 
+    # Продажные цены (read-only, вычисляемые)
+    material_sale_unit_price = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True)
+    work_sale_unit_price = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True)
+    material_purchase_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True)
+    work_purchase_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True)
+    material_sale_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True)
+    work_sale_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True)
+    effective_material_markup_percent = serializers.DecimalField(
+        max_digits=7, decimal_places=2, read_only=True)
+    effective_work_markup_percent = serializers.DecimalField(
+        max_digits=7, decimal_places=2, read_only=True)
+
     def get_material_total(self, obj):
         val = getattr(obj, '_material_total', None)
         if val is not None:
@@ -248,6 +303,15 @@ class EstimateItemSerializer(serializers.ModelSerializer):
             'material_total': self.get_material_total(obj) or Decimal('0'),
             'work_total': self.get_work_total(obj) or Decimal('0'),
             'line_total': self.get_line_total(obj) or Decimal('0'),
+            # Поля наценок и продажных цен
+            'material_sale_unit_price': obj.material_sale_unit_price or Decimal('0'),
+            'work_sale_unit_price': obj.work_sale_unit_price or Decimal('0'),
+            'material_purchase_total': obj.material_purchase_total or Decimal('0'),
+            'work_purchase_total': obj.work_purchase_total or Decimal('0'),
+            'material_sale_total': obj.material_sale_total or Decimal('0'),
+            'work_sale_total': obj.work_sale_total or Decimal('0'),
+            'effective_material_markup_percent': obj.effective_material_markup_percent or Decimal('0'),
+            'effective_work_markup_percent': obj.effective_work_markup_percent or Decimal('0'),
         }
         custom_data = obj.custom_data or {}
 
@@ -287,6 +351,12 @@ class EstimateItemSerializer(serializers.ModelSerializer):
             'id', 'estimate', 'section', 'subsection', 'sort_order',
             'item_number', 'name', 'model_name', 'unit', 'quantity',
             'material_unit_price', 'work_unit_price',
+            'material_markup_type', 'material_markup_value',
+            'work_markup_type', 'work_markup_value',
+            'material_sale_unit_price', 'work_sale_unit_price',
+            'material_purchase_total', 'work_purchase_total',
+            'material_sale_total', 'work_sale_total',
+            'effective_material_markup_percent', 'effective_work_markup_percent',
             'product', 'product_name', 'work_item', 'work_item_name',
             'supplier_product', 'supplier_product_name',
             'supplier_counterparty_name',
@@ -323,8 +393,31 @@ class EstimateItemBulkCreateSerializer(serializers.Serializer):
         return EstimateItem.objects.bulk_create(items)
 
 
+class EstimateListSerializer(serializers.ModelSerializer):
+    """Лёгкий сериализатор для списка смет (без вложенных sections/characteristics)."""
+
+    object_name = serializers.CharField(source='object.name', read_only=True)
+    legal_entity_name = serializers.CharField(source='legal_entity.short_name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    price_list_name = serializers.CharField(source='price_list.name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = Estimate
+        fields = [
+            'id', 'number', 'name', 'object', 'object_name',
+            'legal_entity', 'legal_entity_name', 'price_list', 'price_list_name',
+            'status', 'status_display', 'man_hours',
+            'with_vat', 'vat_rate',
+            'approved_by_customer', 'approved_date',
+            'created_by', 'created_by_username',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class EstimateSerializer(serializers.ModelSerializer):
-    """Полный сериализатор для сметы"""
+    """Полный сериализатор для сметы (detail view)"""
     
     sections = EstimateSectionSerializer(many=True, read_only=True)
     characteristics = EstimateCharacteristicSerializer(many=True, read_only=True)
@@ -462,6 +555,7 @@ class EstimateSerializer(serializers.ModelSerializer):
             'created_by', 'created_by_username', 'checked_by',
             'checked_by_username', 'approved_by', 'approved_by_username',
             'parent_version', 'version_number', 'column_config',
+            'default_material_markup_percent', 'default_work_markup_percent',
             'sections', 'characteristics',
             'total_materials_sale', 'total_works_sale',
             'total_materials_purchase', 'total_works_purchase',
@@ -478,35 +572,49 @@ class EstimateSerializer(serializers.ModelSerializer):
         return _validate_column_config(value)
 
     def get_projects(self, obj):
-        """Возвращает краткую информацию о проектах"""
+        """Возвращает краткую информацию о проектах с файлами"""
         request = self.context.get('request')
-        return [
-            {
+        result = []
+        for p in obj.projects.all():
+            project_data = {
                 'id': p.id,
                 'cipher': p.cipher,
                 'name': p.name,
                 'file': request.build_absolute_uri(p.file.url) if p.file and request else (p.file.url if p.file else None),
+                'project_files': [
+                    {
+                        'id': pf.id,
+                        'file': request.build_absolute_uri(pf.file.url) if pf.file and request else (pf.file.url if pf.file else None),
+                        'file_type': pf.file_type_id,
+                        'file_type_name': pf.file_type.name if pf.file_type else None,
+                        'file_type_code': pf.file_type.code if pf.file_type else None,
+                        'title': pf.title,
+                        'original_filename': pf.original_filename,
+                    }
+                    for pf in p.project_files.all()
+                ],
             }
-            for p in obj.projects.all()
-        ]
+            result.append(project_data)
+        return result
 
 
 class EstimateCreateSerializer(serializers.ModelSerializer):
     """Сериализатор для создания сметы"""
-    
+
     projects = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Project.objects.all(),
         required=False
     )
-    number = serializers.CharField(read_only=True)  # Добавляем number как read_only
-    
+    number = serializers.CharField(read_only=True)
+
     class Meta:
         model = Estimate
         fields = [
             'id', 'object', 'legal_entity', 'name', 'with_vat', 'vat_rate',
             'projects', 'price_list', 'man_hours', 'usd_rate', 'eur_rate',
-            'cny_rate', 'number'
+            'cny_rate', 'number',
+            'default_material_markup_percent', 'default_work_markup_percent',
         ]
         read_only_fields = ['id', 'number']
     
@@ -612,3 +720,48 @@ class MountingEstimateCreateFromEstimateSerializer(serializers.Serializer):
         estimate = Estimate.objects.get(id=validated_data['estimate_id'])
         created_by = self.context['request'].user
         return MountingEstimate.create_from_estimate(estimate, created_by)
+
+
+class EstimateMarkupDefaultsSerializer(serializers.ModelSerializer):
+    """Сериализатор для глобальных дефолтных наценок"""
+
+    class Meta:
+        model = EstimateMarkupDefaults
+        fields = ['material_markup_percent', 'work_markup_percent']
+
+
+class BulkSetMarkupSerializer(serializers.Serializer):
+    """Сериализатор для массовой установки наценки на строки сметы"""
+
+    item_ids = serializers.ListField(
+        child=serializers.IntegerField(), min_length=1
+    )
+    material_markup_type = serializers.ChoiceField(
+        choices=[c[0] for c in MARKUP_TYPE_CHOICES] + ['clear'],
+        required=False, allow_null=True,
+    )
+    material_markup_value = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, allow_null=True,
+    )
+    work_markup_type = serializers.ChoiceField(
+        choices=[c[0] for c in MARKUP_TYPE_CHOICES] + ['clear'],
+        required=False, allow_null=True,
+    )
+    work_markup_value = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, allow_null=True,
+    )
+
+    def validate(self, data):
+        mat_type = data.get('material_markup_type')
+        work_type = data.get('work_markup_type')
+        if mat_type and mat_type != 'clear' and data.get('material_markup_value') is None:
+            raise serializers.ValidationError({
+                'material_markup_value': 'Необходимо указать значение для типа наценки на материалы'
+            })
+        if work_type and work_type != 'clear' and data.get('work_markup_value') is None:
+            raise serializers.ValidationError({
+                'work_markup_value': 'Необходимо указать значение для типа наценки на работы'
+            })
+        if not mat_type and not work_type:
+            raise serializers.ValidationError('Укажите хотя бы один тип наценки')
+        return data

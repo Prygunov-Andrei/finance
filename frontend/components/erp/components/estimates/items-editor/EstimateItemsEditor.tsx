@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { createSelectColumn } from '@/components/ui/data-table';
 import { DataTable } from '@/components/ui/data-table';
@@ -8,21 +10,63 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Trash2, Loader2, FolderOpen, ChevronUp, ChevronDown, ArrowRightFromLine } from 'lucide-react';
+import { toast } from 'sonner';
 import { EstimateImportDialog } from '../EstimateImportDialog';
 import { AutoMatchDialog } from '../AutoMatchDialog';
-import { AutoMatchWorksDialog } from '../AutoMatchWorksDialog';
+import { WorkMatchingDialog } from '../work-matching/WorkMatchingDialog';
 import { type EstimateItemsEditorProps, type TableRow } from './types';
 import { useEstimateItems } from './useEstimateItems';
 import { useEditorColumns } from './useEditorColumns';
 import { EditorToolbar } from './EditorToolbar';
+import { BulkMarkupDialog, type BulkMarkupData } from './BulkMarkupDialog';
 
 export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
   estimateId,
   readOnly = false,
   columnConfig,
   onOpenColumnConfig,
+  projectFiles,
 }) => {
+  const queryClient = useQueryClient();
+  const [isBulkMarkupOpen, setIsBulkMarkupOpen] = useState(false);
   const state = useEstimateItems(estimateId, readOnly, columnConfig);
+
+  const bulkMarkupMutation = useMutation({
+    mutationFn: (data: BulkMarkupData) => api.estimates.bulkSetMarkup(data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
+      queryClient.invalidateQueries({ queryKey: ['estimate', String(estimateId)] });
+      state.setRowSelection({});
+      toast.success(`Наценка применена к ${result.updated} строкам`);
+    },
+    onError: (error) => {
+      toast.error(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+    },
+  });
+
+  // Refs for stable column definitions — cell renderers read latest state without causing column rebuild
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Pre-compute isFirst/isLast per item — O(n) instead of O(n²) per render
+  const boundaryMapRef = useRef<Map<number, { isFirst: boolean; isLast: boolean }>>(new Map());
+  const boundaryMap = useMemo(() => {
+    const map = new Map<number, { isFirst: boolean; isLast: boolean }>();
+    const bySection = new Map<number, { id: number; sort_order: number; item_number: number }[]>();
+    for (const item of state.items) {
+      let list = bySection.get(item.section);
+      if (!list) { list = []; bySection.set(item.section, list); }
+      list.push({ id: item.id, sort_order: item.sort_order, item_number: item.item_number });
+    }
+    for (const sectionItems of bySection.values()) {
+      sectionItems.sort((a, b) => a.sort_order - b.sort_order || a.item_number - b.item_number);
+      for (let i = 0; i < sectionItems.length; i++) {
+        map.set(sectionItems[i].id, { isFirst: i === 0, isLast: i === sectionItems.length - 1 });
+      }
+    }
+    return map;
+  }, [state.items]);
+  boundaryMapRef.current = boundaryMap;
 
   const dataColumns = useEditorColumns({
     readOnly,
@@ -51,10 +95,9 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
           if (isSection) {
             return (
               <button
-                onClick={() => state.demoteMutation.mutate(sectionId!)}
+                onClick={() => stateRef.current.demoteMutation.mutate(sectionId!)}
                 className="p-1 rounded bg-blue-100 dark:bg-blue-900/30 text-primary hover:bg-blue-200 transition-colors"
                 title="Снять раздел"
-                disabled={state.demoteMutation.isPending}
               >
                 <FolderOpen className="h-4 w-4" />
               </button>
@@ -63,10 +106,9 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
 
           return (
             <button
-              onClick={() => state.promoteMutation.mutate(row.original.id)}
+              onClick={() => stateRef.current.promoteMutation.mutate(row.original.id)}
               className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
               title="Назначить разделом"
-              disabled={state.promoteMutation.isPending}
             >
               <FolderOpen className="h-4 w-4" />
             </button>
@@ -84,30 +126,26 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
           if (row.original._isSection) return null;
 
           const itemId = row.original.id;
-          const sectionId = row.original.section;
 
-          const sectionItems = state.items
-            .filter((i) => i.section === sectionId)
-            .sort((a, b) => a.sort_order - b.sort_order || a.item_number - b.item_number);
-          const idx = sectionItems.findIndex((i) => i.id === itemId);
-          const isFirst = idx === 0;
-          const isLast = idx === sectionItems.length - 1;
+          const bounds = boundaryMapRef.current.get(itemId);
+          const isFirst = bounds?.isFirst ?? true;
+          const isLast = bounds?.isLast ?? true;
 
           return (
             <div className="flex flex-col gap-0">
               <button
-                onClick={() => state.moveMutation.mutate({ itemId, direction: 'up' })}
+                onClick={() => stateRef.current.moveMutation.mutate({ itemId, direction: 'up' })}
                 className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-20 disabled:cursor-default"
                 title="Переместить вверх"
-                disabled={isFirst || state.moveMutation.isPending}
+                disabled={isFirst}
               >
                 <ChevronUp className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => state.moveMutation.mutate({ itemId, direction: 'down' })}
+                onClick={() => stateRef.current.moveMutation.mutate({ itemId, direction: 'down' })}
                 className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-20 disabled:cursor-default"
                 title="Переместить вниз"
-                disabled={isLast || state.moveMutation.isPending}
+                disabled={isLast}
               >
                 <ChevronDown className="h-3.5 w-3.5" />
               </button>
@@ -132,7 +170,7 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => state.deleteItemMutation.mutate(row.original.id)}
+              onClick={() => stateRef.current.deleteItemMutation.mutate(row.original.id)}
               aria-label="Удалить строку"
             >
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -143,7 +181,7 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
     }
 
     return cols;
-  }, [readOnly, dataColumns, state.demoteMutation, state.promoteMutation, state.moveMutation, state.deleteItemMutation, state.items]);
+  }, [readOnly, dataColumns]);
 
   if (state.isLoading) {
     return (
@@ -165,11 +203,14 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
           onPasteClick={() => state.setPasteDialogOpen(true)}
           onImportClick={() => state.setImportDialogOpen(true)}
           onAutoMatchClick={() => state.setAutoMatchOpen(true)}
-          onAutoMatchWorksClick={() => state.setAutoMatchWorksOpen(true)}
+          onWorkMatchingClick={() => state.setWorkMatchingOpen(true)}
           onMoveSelected={state.handleMoveSelected}
+          onMergeSelected={state.handleMergeSelected}
           onDeleteSelected={state.handleDeleteSelected}
+          onBulkMarkupClick={() => setIsBulkMarkupOpen(true)}
           onOpenColumnConfig={onOpenColumnConfig}
           bulkMovePending={state.bulkMoveMutation.isPending}
+          mergePending={state.mergeItemsMutation.isPending}
         />
       )}
 
@@ -344,10 +385,10 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
         estimateId={estimateId}
       />
 
-      {/* AutoMatch Works Dialog */}
-      <AutoMatchWorksDialog
-        open={state.isAutoMatchWorksOpen}
-        onOpenChange={state.setAutoMatchWorksOpen}
+      {/* Async Work Matching Dialog */}
+      <WorkMatchingDialog
+        open={state.isWorkMatchingOpen}
+        onOpenChange={state.setWorkMatchingOpen}
         estimateId={estimateId}
       />
 
@@ -356,6 +397,15 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
         open={state.isImportDialogOpen}
         onOpenChange={state.setImportDialogOpen}
         estimateId={estimateId}
+        projectFiles={projectFiles}
+      />
+
+      {/* Bulk Markup Dialog */}
+      <BulkMarkupDialog
+        open={isBulkMarkupOpen}
+        onOpenChange={setIsBulkMarkupOpen}
+        selectedItemIds={Object.keys(state.rowSelection).filter((k) => state.rowSelection[k]).map(Number).filter((id) => id > 0)}
+        onApply={(data) => bulkMarkupMutation.mutate(data)}
       />
 
       {/* Paste from Excel Dialog */}

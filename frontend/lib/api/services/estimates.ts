@@ -5,7 +5,9 @@ import type {
   EstimateImportPreview, EstimateImportProgress, EstimateItem, EstimateList,
   EstimatePdfImportSession, EstimateSection, EstimateSubsection,
   MountingEstimateCreateRequest, MountingEstimateDetail, MountingEstimateList,
-  PaginatedResponse, ProjectDetail, ProjectList, ProjectNote, WorkMatchResult,
+  PaginatedResponse, ProjectDetail, ProjectFile, ProjectFileType, ProjectList,
+  ProjectNote,
+  WorkMatchingSession, WorkMatchingProgress, WorkMatchingApplyItem, WorkMatchingApplyResult,
 } from '../types';
 
 const API_BASE_URL = '/api/erp';
@@ -109,6 +111,66 @@ export function createEstimatesService(request: RequestFn) {
 
     async deleteProjectNote(id: number) {
       return request<void>(`/project-notes/${id}/`, { method: 'DELETE' });
+    },
+
+    // ==================== PROJECT FILE TYPES ====================
+
+    async getProjectFileTypes(params?: { is_active?: boolean }) {
+      const queryParams = new URLSearchParams();
+      if (params?.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
+      const url = `/project-file-types/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await request<PaginatedResponse<ProjectFileType> | ProjectFileType[]>(url);
+      if (response && typeof response === 'object' && 'results' in response) {
+        return response.results;
+      }
+      return response as ProjectFileType[];
+    },
+
+    async createProjectFileType(data: { name: string; code: string; sort_order?: number; is_active?: boolean }) {
+      return request<ProjectFileType>('/project-file-types/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+
+    async updateProjectFileType(id: number, data: Partial<{ name: string; code: string; sort_order: number; is_active: boolean }>) {
+      return request<ProjectFileType>(`/project-file-types/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+
+    async deleteProjectFileType(id: number) {
+      return request<void>(`/project-file-types/${id}/`, { method: 'DELETE' });
+    },
+
+    // ==================== PROJECT FILES ====================
+
+    async getProjectFiles(projectId: number) {
+      const url = `/project-files/?project=${projectId}`;
+      const response = await request<PaginatedResponse<ProjectFile> | ProjectFile[]>(url);
+      if (response && typeof response === 'object' && 'results' in response) {
+        return response.results;
+      }
+      return response as ProjectFile[];
+    },
+
+    async uploadProjectFile(data: FormData) {
+      return request<ProjectFile>('/project-files/', {
+        method: 'POST',
+        body: data,
+      });
+    },
+
+    async updateProjectFile(id: number, data: Partial<{ title: string; file_type: number }>) {
+      return request<ProjectFile>(`/project-files/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+
+    async deleteProjectFile(id: number) {
+      return request<void>(`/project-files/${id}/`, { method: 'DELETE' });
     },
 
     // ==================== ESTIMATES ====================
@@ -302,8 +364,8 @@ export function createEstimatesService(request: RequestFn) {
       );
     },
 
-    async exportEstimate(id: number): Promise<Blob> {
-      const url = `${API_BASE_URL}/estimates/${id}/export/`;
+    async exportEstimate(id: number, mode?: 'internal' | 'external'): Promise<Blob> {
+      const url = `${API_BASE_URL}/estimates/${id}/export/${mode ? `?mode=${mode}` : ''}`;
       const token = localStorage.getItem('access_token');
       const res = await fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -362,6 +424,13 @@ export function createEstimatesService(request: RequestFn) {
       });
     },
 
+    async mergeEstimateItems(itemIds: number[]) {
+      return request<{ merged_into: number; deleted_ids: number[] }>('/estimate-items/bulk-merge/', {
+        method: 'POST',
+        body: JSON.stringify({ item_ids: itemIds }),
+      });
+    },
+
     async autoMatchEstimateItems(
       estimateId: number,
       options?: { priceListId?: number; supplierIds?: number[]; priceStrategy?: string },
@@ -376,20 +445,34 @@ export function createEstimatesService(request: RequestFn) {
       });
     },
 
-    async autoMatchWorksForEstimate(estimateId: number, priceListId?: number) {
-      const body: Record<string, number> = { estimate_id: estimateId };
-      if (priceListId) body.price_list_id = priceListId;
-      return request<WorkMatchResult[]>('/estimate-items/auto-match-works/', {
+    // ==================== Async Work Matching ====================
+
+    async startWorkMatching(estimateId: number) {
+      return request<WorkMatchingSession>('/estimate-items/start-work-matching/', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify({ estimate_id: estimateId }),
       });
     },
 
-    async applyMatchedWorks(items: Array<{ item_id: number; work_item_id: number; work_price?: string }>) {
-      return request<{ applied: number }>('/estimate-items/apply-match-works/', {
-        method: 'POST',
-        body: JSON.stringify({ items }),
-      });
+    async getWorkMatchingProgress(sessionId: string, signal?: AbortSignal) {
+      return request<WorkMatchingProgress>(
+        `/estimate-items/work-matching-progress/${sessionId}/`,
+        signal ? { signal } : undefined,
+      );
+    },
+
+    async cancelWorkMatching(sessionId: string) {
+      return request<{ status: string }>(
+        `/estimate-items/cancel-work-matching/${sessionId}/`,
+        { method: 'POST' },
+      );
+    },
+
+    async applyWorkMatching(sessionId: string, items: WorkMatchingApplyItem[]) {
+      return request<WorkMatchingApplyResult>(
+        '/estimate-items/apply-work-matching/',
+        { method: 'POST', body: JSON.stringify({ session_id: sessionId, items }) },
+      );
     },
 
     // F11: отдельная функция для preview — всегда возвращает EstimateImportPreview
@@ -401,6 +484,38 @@ export function createEstimatesService(request: RequestFn) {
       return request<EstimateImportPreview>(
         '/estimate-items/import/',
         { method: 'POST', body: formData },
+      );
+    },
+
+    async importFromProjectFilePreview(estimateId: number, projectFileIds: number[]) {
+      return request<EstimateImportPreview>(
+        '/estimate-items/import-project-file/',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            estimate_id: estimateId,
+            project_file_ids: projectFileIds,
+            preview: 'true',
+          }),
+        },
+      );
+    },
+
+    async startProjectFilePdfImport(
+      estimateId: number,
+      projectFileIds: number[],
+    ): Promise<EstimatePdfImportSession> {
+      return request<EstimatePdfImportSession>(
+        '/estimate-items/import-project-file-pdf/',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            estimate_id: estimateId,
+            project_file_ids: projectFileIds,
+          }),
+        },
       );
     },
 
@@ -474,6 +589,30 @@ export function createEstimatesService(request: RequestFn) {
         `/estimate-items/${itemId}/move/`,
         { method: 'POST', body: JSON.stringify(data) },
       );
+    },
+
+    async bulkSetMarkup(data: {
+      item_ids: number[];
+      material_markup_type?: string | null;
+      material_markup_value?: string | null;
+      work_markup_type?: string | null;
+      work_markup_value?: string | null;
+    }): Promise<{ status: string; updated: number }> {
+      return request<{ status: string; updated: number }>('/estimate-items/bulk-set-markup/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+
+    async getMarkupDefaults(): Promise<{ material_markup_percent: string; work_markup_percent: string }> {
+      return request<{ material_markup_percent: string; work_markup_percent: string }>('/estimate-markup-defaults/');
+    },
+
+    async updateMarkupDefaults(data: { material_markup_percent?: string; work_markup_percent?: string }): Promise<unknown> {
+      return request<unknown>('/estimate-markup-defaults/1/', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
     },
 
     // ==================== MOUNTING ESTIMATES ====================

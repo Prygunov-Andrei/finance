@@ -6,11 +6,12 @@ from core.models import TimestampedModel
 
 class LLMProvider(TimestampedModel):
     """Настройка LLM-провайдера"""
-    
+
     class ProviderType(models.TextChoices):
         OPENAI = 'openai', 'OpenAI'
         GEMINI = 'gemini', 'Google Gemini'
         GROK = 'grok', 'xAI Grok'
+        LOCAL = 'local', 'Local LLM'
     
     provider_type = models.CharField(
         max_length=20,
@@ -29,6 +30,11 @@ class LLMProvider(TimestampedModel):
     )
     is_active = models.BooleanField(default=True, verbose_name='Активен')
     is_default = models.BooleanField(default=False, verbose_name='По умолчанию')
+    supports_web_search = models.BooleanField(
+        default=False,
+        verbose_name='Поддерживает web search',
+        help_text='Gemini с Google Search Grounding, Perplexity и т.п.'
+    )
     
     class Meta:
         verbose_name = 'LLM-провайдер'
@@ -156,3 +162,62 @@ class ParsedDocument(TimestampedModel):
     
     def __str__(self):
         return f"{self.original_filename} ({self.get_status_display()})"
+
+
+class LLMTaskConfig(TimestampedModel):
+    """Настройка: какой LLM-провайдер обслуживает какую задачу.
+
+    Позволяет использовать дешёвую модель для fuzzy-подтверждений,
+    мощную для semantic match, Gemini для web search, а в будущем —
+    локальную LLM для приватных данных.
+    """
+
+    class TaskType(models.TextChoices):
+        INVOICE_PARSING = 'invoice_parsing', 'Распознавание счетов'
+        PRODUCT_MATCHING = 'product_matching', 'Подбор товаров'
+        WORK_MATCHING_SEMANTIC = 'work_matching_semantic', 'Подбор работ (semantic)'
+        WORK_MATCHING_WEB = 'work_matching_web', 'Подбор работ (web search)'
+        ESTIMATE_IMPORT = 'estimate_import', 'Импорт сметы из PDF'
+
+    task_type = models.CharField(
+        max_length=50,
+        unique=True,
+        choices=TaskType.choices,
+        verbose_name='Задача'
+    )
+    provider = models.ForeignKey(
+        LLMProvider,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='task_configs',
+        verbose_name='Провайдер'
+    )
+    is_enabled = models.BooleanField(
+        default=True,
+        verbose_name='Включена'
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name='Заметки оператора'
+    )
+
+    class Meta:
+        verbose_name = 'Настройка LLM для задачи'
+        verbose_name_plural = 'Настройки LLM для задач'
+        ordering = ['task_type']
+
+    def __str__(self):
+        provider_name = self.provider.model_name if self.provider else 'default'
+        return f"{self.get_task_type_display()} → {provider_name}"
+
+    @classmethod
+    def get_provider_for_task(cls, task_type: str) -> 'LLMProvider':
+        """Возвращает провайдер для задачи. Fallback на default."""
+        config = cls.objects.filter(
+            task_type=task_type,
+            is_enabled=True,
+        ).select_related('provider').first()
+        if config and config.provider and config.provider.is_active:
+            return config.provider
+        return LLMProvider.get_default()

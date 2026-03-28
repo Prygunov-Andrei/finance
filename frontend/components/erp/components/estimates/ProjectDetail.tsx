@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useNavigate } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ProjectNote } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { CONSTANTS } from '@/constants';
+import { useProjectFileTypes } from '@/hooks/useReferenceData';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Loader2, FileText, Download, Plus, Edit2, Trash2, Check, Calendar, Users, Info, History } from 'lucide-react';
+import { ArrowLeft, Loader2, FileText, Download, Plus, Edit2, Trash2, Check, Calendar, Users, Info, History, Upload, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function ProjectDetail() {
@@ -35,6 +36,14 @@ export function ProjectDetail() {
   const [noteText, setNoteText] = useState('');
   const [deleteNoteTarget, setDeleteNoteTarget] = useState<number | null>(null);
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
+  const [isUploadFileDialogOpen, setUploadFileDialogOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFileType, setUploadFileType] = useState<number>(0);
+  const [uploadFileTitle, setUploadFileTitle] = useState('');
+  const [deleteFileTarget, setDeleteFileTarget] = useState<number | null>(null);
+  const uploadFileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: fileTypes } = useProjectFileTypes();
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', id],
@@ -60,6 +69,7 @@ export function ProjectDetail() {
     mutationFn: () => api.estimates.primaryCheckProject(Number(id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Первичная проверка выполнена');
     },
     onError: (error) => {
@@ -71,6 +81,7 @@ export function ProjectDetail() {
     mutationFn: () => api.estimates.secondaryCheckProject(Number(id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Вторичная проверка выполнена');
     },
     onError: (error) => {
@@ -82,6 +93,7 @@ export function ProjectDetail() {
     mutationFn: (file: File) => api.estimates.approveProduction(Number(id), file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       setApprovalDialogOpen(false);
       setApprovalFile(null);
       toast.success('Разрешение в производство получено');
@@ -141,6 +153,49 @@ export function ProjectDetail() {
       toast.error(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     },
   });
+
+  const uploadFileMutation = useMutation({
+    mutationFn: (formData: FormData) => api.estimates.uploadProjectFile(formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', id] });
+      setUploadFileDialogOpen(false);
+      setUploadFile(null);
+      setUploadFileType(0);
+      setUploadFileTitle('');
+      toast.success('Файл загружен');
+    },
+    onError: (error) => {
+      toast.error(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+    },
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: (fileId: number) => api.estimates.deleteProjectFile(fileId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', id] });
+      toast.success('Файл удалён');
+    },
+    onError: (error) => {
+      toast.error(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+    },
+  });
+
+  const handleUploadFileSubmit = () => {
+    if (!uploadFile) {
+      toast.error('Выберите файл');
+      return;
+    }
+    if (!uploadFileType) {
+      toast.error('Выберите тип файла');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('project', id!);
+    formData.append('file', uploadFile);
+    formData.append('file_type', uploadFileType.toString());
+    if (uploadFileTitle) formData.append('title', uploadFileTitle);
+    uploadFileMutation.mutate(formData);
+  };
 
   const handleNoteSubmit = () => {
     if (!noteText.trim()) {
@@ -303,16 +358,109 @@ export function ProjectDetail() {
               </div>
             )}
 
-            <div className="mt-6">
-              <a
-                href={project.file}
-                download
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          </div>
+
+          {/* Файлы проекта */}
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <Paperclip className="w-4 h-4" />
+                Файлы проекта
+                {project.project_files && project.project_files.length > 0 && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    ({project.project_files.length})
+                  </span>
+                )}
+              </h3>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setUploadFileType(fileTypes?.[0]?.id ?? 0);
+                  setUploadFileDialogOpen(true);
+                }}
+                className="bg-blue-600 hover:bg-blue-700"
               >
-                <Download className="w-4 h-4 mr-2" />
-                Скачать файл проекта
-              </a>
+                <Upload className="w-4 h-4 mr-2" />
+                Загрузить файл
+              </Button>
             </div>
+
+            {project.project_files && project.project_files.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-muted border-b border-border">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Тип</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Файл</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Название</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Загрузил</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Дата</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {project.project_files.map((pf) => (
+                      <tr key={pf.id} className="hover:bg-muted/50">
+                        <td className="px-4 py-3">
+                          <span className="inline-flex px-2 py-1 text-xs font-medium rounded-md bg-blue-100 dark:bg-blue-900/30 text-primary">
+                            {pf.file_type_name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-foreground">
+                          {pf.original_filename}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {pf.title || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {pf.uploaded_by_username || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {formatDate(pf.created_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <a
+                              href={pf.file}
+                              download
+                              className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors"
+                              title="Скачать"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                              onClick={() => setDeleteFileTarget(pf.id)}
+                              title="Удалить"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : project.file ? (
+              <div className="py-4">
+                <a
+                  href={project.file}
+                  download
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Скачать файл проекта (legacy)
+                </a>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-muted-foreground">
+                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Нет загруженных файлов</p>
+              </div>
+            )}
           </div>
         </TabsContent>
 
@@ -657,6 +805,98 @@ export function ProjectDetail() {
             <AlertDialogCancel>Отмена</AlertDialogCancel>
             <AlertDialogAction onClick={() => { createVersionMutation.mutate(); setIsVersionDialogOpen(false); }}>
               Создать
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Upload File Dialog */}
+      <Dialog open={isUploadFileDialogOpen} onOpenChange={(open) => { if (!open) { setUploadFileDialogOpen(false); setUploadFile(null); setUploadFileTitle(''); } }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Загрузить файл</DialogTitle>
+            <DialogDescription>
+              Добавьте файл к проекту
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="upload-file">Файл *</Label>
+              <Input
+                id="upload-file"
+                type="file"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="upload-file-type">Тип файла *</Label>
+              <select
+                id="upload-file-type"
+                value={uploadFileType}
+                onChange={(e) => setUploadFileType(Number(e.target.value))}
+                className="mt-1.5 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value={0}>Выберите тип</option>
+                {fileTypes?.map((ft) => (
+                  <option key={ft.id} value={ft.id}>{ft.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="upload-file-title">Название (опционально)</Label>
+              <Input
+                id="upload-file-title"
+                value={uploadFileTitle}
+                onChange={(e) => setUploadFileTitle(e.target.value)}
+                placeholder="Описание файла"
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setUploadFileDialogOpen(false); setUploadFile(null); setUploadFileTitle(''); }}>
+              Отмена
+            </Button>
+            <Button
+              onClick={handleUploadFileSubmit}
+              disabled={uploadFileMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {uploadFileMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Загрузка...
+                </>
+              ) : (
+                'Загрузить'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete File AlertDialog */}
+      <AlertDialog open={deleteFileTarget !== null} onOpenChange={(open) => { if (!open) setDeleteFileTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить файл</AlertDialogTitle>
+            <AlertDialogDescription>
+              Удалить этот файл проекта? Действие необратимо.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (deleteFileTarget !== null) {
+                  deleteFileMutation.mutate(deleteFileTarget);
+                  setDeleteFileTarget(null);
+                }
+              }}
+            >
+              Удалить
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

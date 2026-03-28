@@ -8,7 +8,8 @@ from decimal import Decimal
 from datetime import date
 
 from estimates.models import (
-    Project, ProjectNote, Estimate, EstimateSection,
+    Project, ProjectNote, ProjectFileType, ProjectFile,
+    Estimate, EstimateSection,
     EstimateSubsection, EstimateCharacteristic, MountingEstimate,
     EstimateItem,
 )
@@ -381,9 +382,141 @@ class ProjectNoteAPITests(BaseAPITestCase):
         self.assertEqual(response.data['results'][0]['id'], note1.id)
 
 
+class ProjectFileTypeAPITests(BaseAPITestCase):
+    """Тесты API для типов файлов проектов"""
+
+    def test_list_file_types(self):
+        """Тест получения списка типов файлов"""
+        response = self.client.get('/api/v1/project-file-types/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data['results'] if 'results' in response.data else response.data
+        self.assertGreaterEqual(len(data), 4)
+
+    def test_seed_data_exists(self):
+        """Тест что seed-данные доступны через API"""
+        response = self.client.get('/api/v1/project-file-types/')
+        data = response.data['results'] if 'results' in response.data else response.data
+        codes = [ft['code'] for ft in data]
+        for expected in ['full_project', 'graphics', 'specification', 'technique']:
+            self.assertIn(expected, codes)
+
+    def test_create_file_type(self):
+        """Тест создания нового типа файла"""
+        response = self.client.post('/api/v1/project-file-types/', {
+            'name': 'Новый тип', 'code': 'new_type', 'sort_order': 10,
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['name'], 'Новый тип')
+
+    def test_update_file_type(self):
+        """Тест обновления типа файла"""
+        ft = ProjectFileType.objects.first()
+        response = self.client.patch(f'/api/v1/project-file-types/{ft.id}/', {
+            'sort_order': 99,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['sort_order'], 99)
+
+    def test_delete_file_type_without_files(self):
+        """Тест удаления типа файла без привязанных файлов"""
+        ft = ProjectFileType.objects.create(name='Удаляемый', code='deletable')
+        response = self.client.delete(f'/api/v1/project-file-types/{ft.id}/')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_filter_active(self):
+        """Тест фильтрации по is_active"""
+        ProjectFileType.objects.create(name='Неактивный', code='inactive', is_active=False)
+        response = self.client.get('/api/v1/project-file-types/?is_active=true')
+        data = response.data['results'] if 'results' in response.data else response.data
+        for ft in data:
+            self.assertTrue(ft['is_active'])
+
+
+class ProjectFileAPITests(BaseAPITestCase):
+    """Тесты API для файлов проектов"""
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(
+            cipher='ПР-2025-FILE', name='Проект для файлов',
+            date=date.today(), stage=Project.Stage.P,
+            object=self.object, file=self.test_file,
+        )
+        self.file_type = ProjectFileType.objects.get(code='full_project')
+
+    def test_upload_file(self):
+        """Тест загрузки файла к проекту"""
+        response = self.client.post('/api/v1/project-files/', {
+            'project': self.project.id,
+            'file': SimpleUploadedFile('spec.pdf', b'pdf content'),
+            'file_type': self.file_type.id,
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['original_filename'], 'spec.pdf')
+        self.assertEqual(response.data['file_type'], self.file_type.id)
+        self.assertEqual(response.data['uploaded_by'], self.user.id)
+
+    def test_list_files_by_project(self):
+        """Тест списка файлов проекта"""
+        ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('a.pdf', b'a'),
+            file_type=self.file_type,
+            original_filename='a.pdf',
+        )
+        ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('b.pdf', b'b'),
+            file_type=self.file_type,
+            original_filename='b.pdf',
+        )
+        response = self.client.get(f'/api/v1/project-files/?project={self.project.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data['results'] if 'results' in response.data else response.data
+        self.assertEqual(len(data), 2)
+
+    def test_delete_file(self):
+        """Тест удаления файла"""
+        pf = ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('del.pdf', b'del'),
+            file_type=self.file_type,
+            original_filename='del.pdf',
+        )
+        response = self.client.delete(f'/api/v1/project-files/{pf.id}/')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ProjectFile.objects.filter(id=pf.id).exists())
+
+    def test_project_detail_includes_files(self):
+        """Тест что деталь проекта включает project_files"""
+        ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('inc.pdf', b'inc'),
+            file_type=self.file_type,
+            original_filename='inc.pdf',
+            title='Included File',
+        )
+        response = self.client.get(f'/api/v1/projects/{self.project.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('project_files', response.data)
+        self.assertEqual(len(response.data['project_files']), 1)
+        self.assertEqual(response.data['project_files'][0]['title'], 'Included File')
+
+    def test_upload_with_title(self):
+        """Тест загрузки файла с названием"""
+        response = self.client.post('/api/v1/project-files/', {
+            'project': self.project.id,
+            'file': SimpleUploadedFile('tech.dwg', b'dwg'),
+            'file_type': self.file_type.id,
+            'title': 'Техническая документация',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['title'], 'Техническая документация')
+
+
 class EstimateAPITests(BaseAPITestCase):
     """Тесты API для смет"""
-    
+
     def test_create_estimate(self):
         """Тест создания сметы — НДС берётся из налоговой системы компании"""
         data = {
@@ -640,6 +773,415 @@ class EstimateAPITests(BaseAPITestCase):
         self.assertEqual(response.data['vat_amount'], Decimal('30000.00'))
         self.assertEqual(response.data['total_with_vat'], Decimal('180000.00'))
         self.assertEqual(response.data['profit_amount'], Decimal('40000.00'))
+
+
+class EstimateProjectFilesAPITests(BaseAPITestCase):
+    """Тесты отображения файлов проектов в сметах и импорта из ProjectFile"""
+
+    def test_estimate_detail_includes_project_files(self):
+        """project_files отображаются в деталях сметы через связанные проекты"""
+        project = Project.objects.create(
+            cipher='ПР-2025-010', name='Проект с файлами',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        file_type = ProjectFileType.objects.get(code='specification')
+        ProjectFile.objects.create(
+            project=project, file=SimpleUploadedFile('spec.xlsx', b'content'),
+            file_type=file_type, original_filename='spec.xlsx'
+        )
+        estimate = Estimate.objects.create(
+            name='Смета', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project)
+
+        response = self.client.get(f'/api/v1/estimates/{estimate.id}/')
+        self.assertEqual(response.status_code, 200)
+        projects = response.data['projects']
+        self.assertEqual(len(projects), 1)
+        self.assertEqual(len(projects[0]['project_files']), 1)
+        pf_data = projects[0]['project_files'][0]
+        self.assertEqual(pf_data['file_type_code'], 'specification')
+        self.assertEqual(pf_data['original_filename'], 'spec.xlsx')
+        self.assertIn('file_type_name', pf_data)
+        self.assertIn('file', pf_data)
+
+    def test_estimate_detail_multiple_project_files(self):
+        """Все файлы проекта отображаются в деталях сметы"""
+        project = Project.objects.create(
+            cipher='ПР-2025-013', name='Проект с несколькими файлами',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        spec_type = ProjectFileType.objects.get(code='specification')
+        graphics_type = ProjectFileType.objects.get(code='graphics')
+        ProjectFile.objects.create(
+            project=project, file=SimpleUploadedFile('spec.xlsx', b'spec'),
+            file_type=spec_type, original_filename='spec.xlsx'
+        )
+        ProjectFile.objects.create(
+            project=project, file=SimpleUploadedFile('drawings.pdf', b'drawings'),
+            file_type=graphics_type, original_filename='drawings.pdf'
+        )
+        estimate = Estimate.objects.create(
+            name='Смета multi', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project)
+
+        response = self.client.get(f'/api/v1/estimates/{estimate.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['projects'][0]['project_files']), 2)
+
+    def test_import_from_project_file_preview(self):
+        """Импорт строк сметы из файла проекта в режиме предпросмотра"""
+        from openpyxl import Workbook
+        import io
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(['Наименование', 'Ед.', 'Кол-во', 'Цена'])
+        ws.append(['Кондиционер', 'шт', '2', '50000'])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        project = Project.objects.create(
+            cipher='ПР-2025-011', name='Проект для импорта',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        file_type = ProjectFileType.objects.get(code='specification')
+        pf = ProjectFile.objects.create(
+            project=project, file=SimpleUploadedFile('spec.xlsx', buf.read()),
+            file_type=file_type, original_filename='spec.xlsx'
+        )
+        estimate = Estimate.objects.create(
+            name='Смета импорт', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project)
+
+        response = self.client.post('/api/v1/estimate-items/import-project-file/', {
+            'estimate_id': estimate.id,
+            'project_file_id': pf.id,
+            'preview': 'true',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('rows', response.data)
+        self.assertGreaterEqual(len(response.data['rows']), 1)
+
+    def test_import_from_unlinked_project_file_rejected(self):
+        """Нельзя импортировать из файла проекта, не связанного со сметой"""
+        project = Project.objects.create(
+            cipher='ПР-2025-012', name='Чужой проект',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        file_type = ProjectFileType.objects.get(code='specification')
+        pf = ProjectFile.objects.create(
+            project=project, file=SimpleUploadedFile('spec.xlsx', b'content'),
+            file_type=file_type, original_filename='spec.xlsx'
+        )
+        estimate = Estimate.objects.create(
+            name='Смета без проекта', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        # НЕ связываем estimate.projects.add(project)
+
+        response = self.client.post('/api/v1/estimate-items/import-project-file/', {
+            'estimate_id': estimate.id,
+            'project_file_id': pf.id,
+            'preview': 'true',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('не связанному', response.data['error'])
+
+    def test_import_from_project_file_unsupported_format(self):
+        """Нельзя импортировать файл неподдерживаемого формата"""
+        project = Project.objects.create(
+            cipher='ПР-2025-014', name='Проект с DWG',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        file_type = ProjectFileType.objects.get(code='graphics')
+        pf = ProjectFile.objects.create(
+            project=project, file=SimpleUploadedFile('drawing.dwg', b'dwg content'),
+            file_type=file_type, original_filename='drawing.dwg'
+        )
+        estimate = Estimate.objects.create(
+            name='Смета DWG', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project)
+
+        response = self.client.post('/api/v1/estimate-items/import-project-file/', {
+            'estimate_id': estimate.id,
+            'project_file_id': pf.id,
+            'preview': 'true',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Excel', response.data['error'])
+
+    def test_import_from_multiple_project_files_preview(self):
+        """Импорт из нескольких файлов проекта — строки объединяются"""
+        from openpyxl import Workbook
+        import io
+
+        def make_xlsx(items):
+            wb = Workbook()
+            ws = wb.active
+            ws.append(['Наименование', 'Ед.', 'Кол-во', 'Цена'])
+            for item in items:
+                ws.append(item)
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            return buf.read()
+
+        project1 = Project.objects.create(
+            cipher='ПР-2025-020', name='Проект 1',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        project2 = Project.objects.create(
+            cipher='ПР-2025-021', name='Проект 2',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        file_type = ProjectFileType.objects.get(code='specification')
+        pf1 = ProjectFile.objects.create(
+            project=project1,
+            file=SimpleUploadedFile('spec1.xlsx', make_xlsx([['Кондиционер', 'шт', '2', '50000']])),
+            file_type=file_type, original_filename='spec1.xlsx'
+        )
+        pf2 = ProjectFile.objects.create(
+            project=project2,
+            file=SimpleUploadedFile('spec2.xlsx', make_xlsx([['Вентилятор', 'шт', '3', '30000']])),
+            file_type=file_type, original_filename='spec2.xlsx'
+        )
+        estimate = Estimate.objects.create(
+            name='Смета multi-import', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project1, project2)
+
+        response = self.client.post('/api/v1/estimate-items/import-project-file/', {
+            'estimate_id': estimate.id,
+            'project_file_ids': [pf1.id, pf2.id],
+            'preview': 'true',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('rows', response.data)
+        # Должны быть строки из обоих файлов
+        self.assertGreaterEqual(len(response.data['rows']), 2)
+        names = [r['name'] for r in response.data['rows']]
+        self.assertTrue(any('Кондиционер' in n for n in names))
+        self.assertTrue(any('Вентилятор' in n for n in names))
+
+
+class EstimateProjectFilePdfAsyncTests(BaseAPITestCase):
+    """Тесты async-импорта PDF из файлов проекта (import-project-file-pdf)"""
+
+    @staticmethod
+    def _make_pdf(pages=1):
+        """Создаёт минимальный валидный PDF с заданным числом страниц."""
+        import fitz
+        doc = fitz.open()
+        for i in range(pages):
+            page = doc.new_page(width=595, height=842)
+            page.insert_text((72, 72), f'Page {i + 1}')
+        content = doc.tobytes()
+        doc.close()
+        return content
+
+    def _create_project_with_pdf(self, cipher, filename='spec.pdf', pages=1):
+        project = Project.objects.create(
+            cipher=cipher, name=f'Проект {cipher}',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        file_type = ProjectFileType.objects.get(code='specification')
+        pf = ProjectFile.objects.create(
+            project=project,
+            file=SimpleUploadedFile(filename, self._make_pdf(pages), content_type='application/pdf'),
+            file_type=file_type, original_filename=filename
+        )
+        return project, pf
+
+    def test_import_project_file_pdf_starts_async_session(self):
+        """POST import-project-file-pdf возвращает session_id и total_pages (HTTP 202)"""
+        import sys
+        from unittest.mock import patch, MagicMock
+
+        project, pf = self._create_project_with_pdf('ПР-PDF-001', pages=3)
+        estimate = Estimate.objects.create(
+            name='Смета PDF', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project)
+
+        mock_tasks = MagicMock()
+        mock_tasks.create_import_session = MagicMock(return_value={'session_id': 'a' * 16, 'total_pages': 3})
+        mock_tasks.process_estimate_pdf_pages = MagicMock()
+
+        with patch.dict(sys.modules, {'estimates.tasks': mock_tasks}):
+            response = self.client.post('/api/v1/estimate-items/import-project-file-pdf/', {
+                'estimate_id': estimate.id,
+                'project_file_ids': [pf.id],
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertIn('session_id', response.data)
+        self.assertEqual(response.data['total_pages'], 3)
+        self.assertEqual(len(response.data['session_id']), 16)
+
+    def test_import_project_file_pdf_unlinked_rejected(self):
+        """Файл из непривязанного проекта отклоняется"""
+        project, pf = self._create_project_with_pdf('ПР-PDF-002')
+        estimate = Estimate.objects.create(
+            name='Смета без проекта', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        # НЕ привязываем: estimate.projects.add(project)
+
+        response = self.client.post('/api/v1/estimate-items/import-project-file-pdf/', {
+            'estimate_id': estimate.id,
+            'project_file_ids': [pf.id],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('не связанному', response.data['error'])
+
+    def test_import_project_file_pdf_non_pdf_rejected(self):
+        """Файл с расширением не .pdf отклоняется"""
+        project = Project.objects.create(
+            cipher='ПР-PDF-003', name='Проект Excel',
+            date=date.today(), stage=Project.Stage.P, object=self.object
+        )
+        file_type = ProjectFileType.objects.get(code='specification')
+        pf = ProjectFile.objects.create(
+            project=project,
+            file=SimpleUploadedFile('spec.xlsx', b'excel content'),
+            file_type=file_type, original_filename='spec.xlsx'
+        )
+        estimate = Estimate.objects.create(
+            name='Смета xlsx', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project)
+
+        response = self.client.post('/api/v1/estimate-items/import-project-file-pdf/', {
+            'estimate_id': estimate.id,
+            'project_file_ids': [pf.id],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_import_project_file_pdf_multiple_files_combined(self):
+        """Несколько PDF объединяются — total_pages = сумма страниц"""
+        import sys
+        from unittest.mock import patch, MagicMock
+
+        project1, pf1 = self._create_project_with_pdf('ПР-PDF-004', 'spec1.pdf', pages=2)
+        project2, pf2 = self._create_project_with_pdf('ПР-PDF-005', 'spec2.pdf', pages=3)
+        estimate = Estimate.objects.create(
+            name='Смета multi-PDF', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        estimate.projects.add(project1, project2)
+
+        mock_tasks = MagicMock()
+        mock_tasks.create_import_session = MagicMock(return_value={'session_id': 'b' * 16, 'total_pages': 5})
+        mock_tasks.process_estimate_pdf_pages = MagicMock()
+
+        with patch.dict(sys.modules, {'estimates.tasks': mock_tasks}):
+            response = self.client.post('/api/v1/estimate-items/import-project-file-pdf/', {
+                'estimate_id': estimate.id,
+                'project_file_ids': [pf1.id, pf2.id],
+            }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(response.data['total_pages'], 5)
+
+    def test_import_project_file_pdf_missing_estimate(self):
+        """Несуществующая смета → 404"""
+        response = self.client.post('/api/v1/estimate-items/import-project-file-pdf/', {
+            'estimate_id': 999999,
+            'project_file_ids': [1],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_import_project_file_pdf_missing_file(self):
+        """Несуществующий файл проекта → ошибка в ответе"""
+        estimate = Estimate.objects.create(
+            name='Смета пустая', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user
+        )
+        response = self.client.post('/api/v1/estimate-items/import-project-file-pdf/', {
+            'estimate_id': estimate.id,
+            'project_file_ids': [999999],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class EstimateExportAPITests(BaseAPITestCase):
+    """Тесты эндпоинта GET /api/v1/estimates/{id}/export/"""
+
+    def _create_estimate_with_items(self):
+        estimate = Estimate.objects.create(
+            name='Смета для экспорта', object=self.object,
+            legal_entity=self.legal_entity, created_by=self.user,
+        )
+        section = EstimateSection.objects.create(estimate=estimate, name='Раздел-1')
+        subsection = EstimateSubsection.objects.create(section=section, name='Подраздел-1')
+        EstimateItem.objects.create(
+            estimate=estimate, section=section, subsection=subsection,
+            name='Товар-1', unit='шт', quantity=Decimal('2'),
+            material_unit_price=Decimal('1000'), work_unit_price=Decimal('500'),
+        )
+        return estimate
+
+    def test_export_internal_mode(self):
+        estimate = self._create_estimate_with_items()
+        resp = self.client.get(f'/api/v1/estimates/{estimate.id}/export/?mode=internal')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            resp['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    def test_export_external_mode(self):
+        estimate = self._create_estimate_with_items()
+        resp = self.client.get(f'/api/v1/estimates/{estimate.id}/export/?mode=external')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('Content-Disposition', resp)
+
+    def test_export_default_mode_is_internal(self):
+        estimate = self._create_estimate_with_items()
+        resp = self.client.get(f'/api/v1/estimates/{estimate.id}/export/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('Content-Disposition', resp)
+
+    def test_export_nonexistent_estimate(self):
+        resp = self.client.get('/api/v1/estimates/999999/export/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AutoMatchAPITests(BaseAPITestCase):
+    """Тесты API для автоподбора"""
+
+    def test_auto_match_requires_estimate_id(self):
+        """auto-match без estimate_id → 400."""
+        resp = self.client.post('/api/v1/estimate-items/auto-match/', {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_auto_match_nonexistent_estimate(self):
+        """auto-match с несуществующей сметой → 404."""
+        resp = self.client.post(
+            '/api/v1/estimate-items/auto-match/',
+            {'estimate_id': 999999},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    # Тесты для auto-match-works и apply-match-works удалены — endpoints заменены
+    # новым async work matching (start-work-matching / apply-work-matching).
+
+        # Подраздел пересчитан
+        subsection.refresh_from_db()
+        self.assertGreater(subsection.works_sale, Decimal('0'))
 
 
 class EstimateSectionAPITests(BaseAPITestCase):
@@ -1354,3 +1896,52 @@ class EstimateItemMoveTests(BaseAPITestCase):
         item1 = self.items[0]
         response = self.client.post(f'/api/v1/estimate-items/{item1.id}/move/', {})
         self.assertEqual(response.status_code, 400)
+
+    def test_move_up_item_number_integrity(self):
+        """move up через API корректно свопает item_number обеих строк"""
+        item3 = self.items[2]  # sort_order=3, item_number=3
+        item2 = self.items[1]  # sort_order=2, item_number=2
+
+        response = self.client.post(f'/api/v1/estimate-items/{item3.id}/move/', {'direction': 'up'})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['moved'])
+
+        item3.refresh_from_db()
+        item2.refresh_from_db()
+        self.assertEqual(item3.sort_order, 2)
+        self.assertEqual(item3.item_number, 2)
+        self.assertEqual(item2.sort_order, 3)
+        self.assertEqual(item2.item_number, 3)
+
+    def test_rapid_sequential_moves(self):
+        """5 move_down подряд — финальный порядок корректен"""
+        item1 = self.items[0]  # Позиция 1, sort_order=1
+
+        # Двигаем Позицию 1 вниз 2 раза (максимум в секции из 3 элементов)
+        for _ in range(2):
+            response = self.client.post(
+                f'/api/v1/estimate-items/{item1.id}/move/', {'direction': 'down'},
+            )
+            self.assertEqual(response.status_code, 200)
+
+        # Третий move вниз — noop (уже последний)
+        response = self.client.post(
+            f'/api/v1/estimate-items/{item1.id}/move/', {'direction': 'down'},
+        )
+        self.assertFalse(response.data['moved'])
+
+        # Финальный порядок: Позиция 2, Позиция 3, Позиция 1
+        ordered = list(
+            EstimateItem.objects.filter(section=self.section1)
+            .order_by('sort_order')
+            .values_list('name', flat=True)
+        )
+        self.assertEqual(ordered, ['Позиция 2', 'Позиция 3', 'Позиция 1'])
+
+        # item_number последовательный
+        numbers = list(
+            EstimateItem.objects.filter(section=self.section1)
+            .order_by('sort_order')
+            .values_list('item_number', flat=True)
+        )
+        self.assertEqual(sorted(numbers), [1, 2, 3])

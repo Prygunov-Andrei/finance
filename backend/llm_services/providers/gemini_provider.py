@@ -79,6 +79,82 @@ class GeminiProvider(BaseLLMProvider):
         parsed = ParsedInvoice(**data)
         return parsed, processing_time
 
+    def chat_completion(self, system_prompt: str, user_prompt: str,
+                        response_format: str = 'json', **kwargs) -> dict:
+        parts = [{"text": system_prompt + "\n\n" + user_prompt}]
+        payload = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {"temperature": 0.1},
+        }
+        if response_format == 'json':
+            payload["generationConfig"]["responseMimeType"] = "application/json"
+
+        url = f"{self.BASE_URL}/models/{self.model_name}:generateContent?key={self.api_key}"
+
+        try:
+            with httpx.Client(timeout=self.REQUEST_TIMEOUT) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                raise RateLimitError(str(e))
+            raise
+        except httpx.ReadTimeout as e:
+            raise RateLimitError(f"Gemini timeout: {e}")
+
+        resp_data = response.json()
+        candidates = resp_data.get("candidates", [])
+        if not candidates:
+            raise ValueError(f"Пустой ответ от Gemini API: {resp_data}")
+
+        text = candidates[0]["content"]["parts"][0]["text"]
+        if response_format != 'json':
+            return {"text": text}
+        return json.loads(text)
+
+    def chat_completion_with_search(self, system_prompt: str, user_prompt: str) -> dict:
+        """Gemini с Google Search Grounding — поиск в интернете."""
+        parts = [{"text": system_prompt + "\n\n" + user_prompt}]
+        payload = {
+            "contents": [{"parts": parts}],
+            "tools": [{"google_search_retrieval": {
+                "dynamic_retrieval_config": {"mode": "MODE_DYNAMIC"}
+            }}],
+            "generationConfig": {
+                "temperature": 0.1,
+                "responseMimeType": "application/json",
+            },
+        }
+
+        url = f"{self.BASE_URL}/models/{self.model_name}:generateContent?key={self.api_key}"
+
+        try:
+            with httpx.Client(timeout=self.REQUEST_TIMEOUT) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                raise RateLimitError(str(e))
+            raise
+        except httpx.ReadTimeout as e:
+            raise RateLimitError(f"Gemini timeout: {e}")
+
+        resp_data = response.json()
+        candidates = resp_data.get("candidates", [])
+        if not candidates:
+            raise ValueError(f"Пустой ответ от Gemini API: {resp_data}")
+
+        candidate = candidates[0]
+        text = candidate["content"]["parts"][0]["text"]
+        result = json.loads(text)
+
+        # Добавляем grounding metadata если есть
+        grounding = candidate.get("groundingMetadata", {})
+        if grounding:
+            result["_grounding_sources"] = grounding.get("webSearchQueries", [])
+
+        return result
+
     def parse_with_prompt(self, file_content: bytes, file_type: str, system_prompt: str, user_prompt: str = "Распарси этот документ:") -> dict:
         if file_type.lower() == 'pdf':
             images_b64 = self.pdf_to_images_base64(file_content)

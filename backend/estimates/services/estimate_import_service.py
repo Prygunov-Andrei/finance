@@ -468,10 +468,15 @@ class EstimateImportService:
         items = list(
             EstimateItem.objects.filter(estimate=estimate)
             .order_by('section__sort_order', 'sort_order', 'item_number')
-            .values_list('pk', flat=True)
+            .only('pk', 'item_number')
         )
-        for i, pk in enumerate(items, 1):
-            EstimateItem.objects.filter(pk=pk).update(item_number=i)
+        to_update = []
+        for i, item in enumerate(items, 1):
+            if item.item_number != i:
+                item.item_number = i
+                to_update.append(item)
+        if to_update:
+            EstimateItem.objects.bulk_update(to_update, ['item_number'])
 
     @transaction.atomic
     def promote_item_to_section(self, item_id: int) -> Dict[str, Any]:
@@ -622,12 +627,12 @@ class EstimateImportService:
         if not prev_item:
             return {'moved': False}
 
-        # Swap sort_order
+        # Swap sort_order AND item_number (adjacent swap — no full renumber needed)
         item.sort_order, prev_item.sort_order = prev_item.sort_order, item.sort_order
-        item.save(update_fields=['sort_order'])
-        prev_item.save(update_fields=['sort_order'])
+        item.item_number, prev_item.item_number = prev_item.item_number, item.item_number
+        item.save(update_fields=['sort_order', 'item_number'])
+        prev_item.save(update_fields=['sort_order', 'item_number'])
 
-        self._renumber_items(item.estimate)
         return {'moved': True}
 
     @transaction.atomic
@@ -646,12 +651,12 @@ class EstimateImportService:
         if not next_item:
             return {'moved': False}
 
-        # Swap sort_order
+        # Swap sort_order AND item_number (adjacent swap — no full renumber needed)
         item.sort_order, next_item.sort_order = next_item.sort_order, item.sort_order
-        item.save(update_fields=['sort_order'])
-        next_item.save(update_fields=['sort_order'])
+        item.item_number, next_item.item_number = next_item.item_number, item.item_number
+        item.save(update_fields=['sort_order', 'item_number'])
+        next_item.save(update_fields=['sort_order', 'item_number'])
 
-        self._renumber_items(item.estimate)
         return {'moved': True}
 
     @transaction.atomic
@@ -726,3 +731,57 @@ class EstimateImportService:
 
         self._renumber_items(estimate)
         return {'moved': len(moving)}
+
+    @transaction.atomic
+    def merge_items(self, item_ids: List[int]) -> Dict[str, Any]:
+        """Объединяет несколько строк сметы в одну.
+
+        Первая строка (по sort_order) становится целевой:
+        - name, model_name, original_name — конкатенация через пробел (пустые пропускаются)
+        - quantity, unit, prices, product, work_item — берутся из первой строки
+        - custom_data — shallow merge (первая строка приоритетнее)
+        Остальные строки удаляются. Нумерация пересчитывается.
+        """
+        if len(item_ids) < 2:
+            raise ValueError('Для объединения нужно минимум 2 строки')
+
+        items = list(
+            EstimateItem.objects.filter(id__in=item_ids)
+            .order_by('section__sort_order', 'sort_order', 'item_number')
+        )
+
+        if len(items) < 2:
+            raise ValueError('Не все строки найдены')
+
+        sections = set(item.section_id for item in items)
+        if len(sections) > 1:
+            raise ValueError('Все объединяемые строки должны быть в одном разделе')
+
+        target = items[0]
+        rest = items[1:]
+
+        # Конкатенация текстовых полей (пустые пропускаются)
+        names = [item.name for item in items if item.name.strip()]
+        target.name = ' '.join(names)[:1000]
+
+        model_names = [item.model_name for item in items if item.model_name.strip()]
+        target.model_name = ' '.join(model_names)[:300]
+
+        original_names = [item.original_name for item in items if item.original_name.strip()]
+        target.original_name = ' '.join(original_names)[:1000]
+
+        # Shallow merge custom_data (первая строка приоритетнее)
+        merged_custom = {}
+        for item in reversed(items):
+            if item.custom_data:
+                merged_custom.update(item.custom_data)
+        target.custom_data = merged_custom
+
+        target.save(update_fields=['name', 'model_name', 'original_name', 'custom_data'])
+
+        rest_ids = [item.id for item in rest]
+        EstimateItem.objects.filter(id__in=rest_ids).delete()
+
+        self._renumber_items(target.estimate)
+
+        return {'merged_into': target.id, 'deleted_ids': rest_ids}

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import LLMProvider, ParsedDocument
+from .models import LLMProvider, LLMTaskConfig, ParsedDocument
 
 
 class LLMProviderSerializer(serializers.ModelSerializer):
@@ -18,6 +18,27 @@ class LLMProviderSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'provider_type_display', 'created_at', 'updated_at']
+
+
+class LLMTaskConfigSerializer(serializers.ModelSerializer):
+    """Сериализатор настройки LLM для задачи."""
+
+    task_type_display = serializers.CharField(
+        source='get_task_type_display', read_only=True,
+    )
+    provider_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LLMTaskConfig
+        fields = [
+            'id', 'task_type', 'task_type_display', 'provider', 'provider_name',
+            'is_enabled', 'notes',
+        ]
+
+    def get_provider_name(self, obj):
+        if obj.provider:
+            return f"{obj.provider.get_provider_type_display()}: {obj.provider.model_name}"
+        return None
 
 
 class ParsedDocumentSerializer(serializers.ModelSerializer):

@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
+from django.db import transaction
 from django.db.models import F, ExpressionWrapper, DecimalField, Sum
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
@@ -12,7 +13,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 logger = logging.getLogger(__name__)
 
 # Лимит размера файла для импорта (50 МБ)
-MAX_IMPORT_FILE_SIZE = 50 * 1024 * 1024
+from django.conf import settings as django_settings
+MAX_IMPORT_FILE_SIZE = getattr(django_settings, 'ESTIMATE_IMPORT_MAX_FILE_SIZE', 50 * 1024 * 1024)
 
 ALLOWED_EXCEL_CONTENT_TYPES = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -32,12 +34,30 @@ from estimates.models import (
     MountingEstimate,
 )
 from estimates.serializers import (
-    EstimateSerializer, EstimateCreateSerializer,
+    EstimateSerializer, EstimateListSerializer, EstimateCreateSerializer,
     EstimateSectionSerializer, EstimateSubsectionSerializer,
     EstimateCharacteristicSerializer,
     EstimateItemSerializer, EstimateItemBulkCreateSerializer,
     MountingEstimateSerializer,
+    EstimateMarkupDefaultsSerializer, BulkSetMarkupSerializer,
 )
+from estimates.models import EstimateMarkupDefaults
+
+
+class EstimateMarkupDefaultsViewSet(viewsets.ViewSet):
+    """ViewSet для глобальных дефолтных наценок (синглтон)"""
+
+    def list(self, request):
+        defaults = EstimateMarkupDefaults.get()
+        serializer = EstimateMarkupDefaultsSerializer(defaults)
+        return Response(serializer.data)
+
+    def partial_update(self, request, pk=None):
+        defaults = EstimateMarkupDefaults.get()
+        serializer = EstimateMarkupDefaultsSerializer(defaults, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class EstimateViewSet(VersioningMixin, viewsets.ModelViewSet):
@@ -48,6 +68,8 @@ class EstimateViewSet(VersioningMixin, viewsets.ModelViewSet):
         'checked_by', 'approved_by', 'parent_version'
     ).prefetch_related(
         'projects',
+        'projects__project_files',
+        'projects__project_files__file_type',
         'sections',
         'sections__subsections',
         'characteristics'
@@ -61,6 +83,8 @@ class EstimateViewSet(VersioningMixin, viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return EstimateCreateSerializer
+        if self.action == 'list':
+            return EstimateListSerializer
         return EstimateSerializer
 
     def get_queryset(self):
@@ -77,6 +101,17 @@ class EstimateViewSet(VersioningMixin, viewsets.ModelViewSet):
 
     # Методы versions() и create_version() наследуются от VersioningMixin
 
+    def perform_update(self, serializer):
+        old_instance = self.get_object()
+        old_mat = old_instance.default_material_markup_percent
+        old_work = old_instance.default_work_markup_percent
+        instance = serializer.save()
+        # При изменении дефолтных наценок — пересчитать все подразделы
+        if (instance.default_material_markup_percent != old_mat or
+                instance.default_work_markup_percent != old_work):
+            from estimates.services.markup_service import recalculate_estimate_subsections
+            recalculate_estimate_subsections(instance.id)
+
     @action(detail=True, methods=['post'], url_path='create-mounting-estimate')
     def create_mounting_estimate(self, request, pk=None):
         """Создать монтажную смету из обычной сметы"""
@@ -88,18 +123,20 @@ class EstimateViewSet(VersioningMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='export')
     def export(self, request, pk=None):
-        """Экспорт сметы в Excel с учётом column_config."""
+        """Экспорт сметы в Excel. mode=internal|external (по умолчанию internal)."""
         from estimates.services.estimate_excel_exporter import EstimateExcelExporter
 
         estimate = self.get_object()
+        mode = request.query_params.get('mode', 'internal')
         exporter = EstimateExcelExporter(estimate)
-        buffer = exporter.export_with_column_config()
+        buffer = exporter.export_with_column_config(mode=mode)
 
+        suffix = 'внутр' if mode == 'internal' else 'клиент'
         response = HttpResponse(
             buffer.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        filename = f'Смета_{estimate.number}.xlsx'
+        filename = f'Смета_{estimate.number}_{suffix}.xlsx'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
@@ -111,6 +148,16 @@ class EstimateSectionViewSet(viewsets.ModelViewSet):
     serializer_class = EstimateSectionSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['estimate']
+
+    def perform_update(self, serializer):
+        old_instance = self.get_object()
+        old_mat = old_instance.material_markup_percent
+        old_work = old_instance.work_markup_percent
+        instance = serializer.save()
+        if (instance.material_markup_percent != old_mat or
+                instance.work_markup_percent != old_work):
+            from estimates.services.markup_service import recalculate_section_subsections
+            recalculate_section_subsections(instance.id)
 
     @action(detail=True, methods=['post'], url_path='demote-to-item')
     def demote_to_item(self, request, pk=None):
@@ -289,38 +336,105 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
         result = EstimateImportService().bulk_move_items(item_ids, target_position)
         return Response(result)
 
+    @action(detail=False, methods=['post'], url_path='bulk-merge')
+    def bulk_merge(self, request):
+        """Объединить выбранные строки сметы в одну."""
+        item_ids = request.data.get('item_ids', [])
+
+        if not item_ids or not isinstance(item_ids, list) or len(item_ids) < 2:
+            return Response(
+                {'error': 'Необходим массив item_ids с минимум 2 элементами'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from estimates.services.estimate_import_service import EstimateImportService
+        try:
+            result = EstimateImportService().merge_items(item_ids)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(result)
+
+    @action(detail=False, methods=['post'], url_path='bulk-set-markup')
+    def bulk_set_markup(self, request):
+        """Массовая установка наценки на выбранные строки сметы."""
+        serializer = BulkSetMarkupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        from estimates.services.markup_service import bulk_set_item_markup
+        bulk_set_item_markup(
+            item_ids=data['item_ids'],
+            material_markup_type=data.get('material_markup_type'),
+            material_markup_value=data.get('material_markup_value'),
+            work_markup_type=data.get('work_markup_type'),
+            work_markup_value=data.get('work_markup_value'),
+        )
+        return Response({'status': 'ok', 'updated': len(data['item_ids'])})
+
+    # Поля, разрешённые для массового обновления через bulk-update
+    BULK_UPDATE_ALLOWED_FIELDS = frozenset({
+        'name', 'model_name', 'unit', 'quantity',
+        'material_unit_price', 'work_unit_price',
+        'sort_order', 'item_number',
+        'is_analog', 'analog_reason', 'original_name',
+        'material_markup_type', 'material_markup_value',
+        'work_markup_type', 'work_markup_value',
+        'custom_data',
+    })
+
     @action(detail=False, methods=['post'], url_path='bulk-update')
     def bulk_update_items(self, request):
         """Обновить множество строк сметы за одну операцию.
         Ожидает массив объектов с обязательным полем 'id'."""
         items_data = request.data
-        if not isinstance(items_data, list):
+        if not isinstance(items_data, list) or not items_data:
             return Response(
-                {'error': 'Ожидается массив объектов'},
+                {'error': 'Ожидается непустой массив объектов'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         ids = [item.get('id') for item in items_data if item.get('id')]
-        existing = {item.id: item for item in EstimateItem.objects.filter(id__in=ids)}
-        updated = []
+        existing = {
+            item.id: item
+            for item in EstimateItem.objects.filter(id__in=ids)
+            .select_related('subsection__section__estimate')
+        }
 
+        # Собираем update_fields из ВСЕХ items (не только первого)
+        all_fields = set()
         for item_data in items_data:
-            item_id = item_data.get('id')
-            if not item_id or item_id not in existing:
-                continue
-            obj = existing[item_id]
-            for field, value in item_data.items():
-                if field == 'id':
+            all_fields.update(k for k in item_data.keys() if k != 'id')
+        allowed_fields = all_fields & self.BULK_UPDATE_ALLOWED_FIELDS
+
+        if not allowed_fields:
+            return Response(
+                {'error': 'Нет разрешённых полей для обновления'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            updated = []
+            for item_data in items_data:
+                item_id = item_data.get('id')
+                if not item_id or item_id not in existing:
                     continue
-                setattr(obj, field, value)
-            updated.append(obj)
+                obj = existing[item_id]
+                for field, value in item_data.items():
+                    if field == 'id' or field not in self.BULK_UPDATE_ALLOWED_FIELDS:
+                        continue
+                    setattr(obj, field, value)
+                updated.append(obj)
 
+            if updated:
+                EstimateItem.objects.bulk_update(updated, list(allowed_fields))
+                # bulk_update не вызывает post_save сигналы — пересчитываем вручную
+                from estimates.services.markup_service import recalculate_subsections_for_items
+                recalculate_subsections_for_items([obj.id for obj in updated])
+
+        # Перечитываем из БД для корректной типизации полей в сериализаторе
         if updated:
-            update_fields = [
-                k for k in items_data[0].keys() if k != 'id'
-            ]
-            EstimateItem.objects.bulk_update(updated, update_fields)
-
+            updated = list(self.get_queryset().filter(id__in=[o.id for o in updated]))
         return Response(
             EstimateItemSerializer(updated, many=True).data,
         )
@@ -357,73 +471,92 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
         )
         return Response(results)
 
-    @action(detail=False, methods=['post'], url_path='auto-match-works')
-    def auto_match_works(self, request):
-        """Preview-подбор работ для строк сметы (без сохранения)"""
-        estimate_id = request.data.get('estimate_id')
-        price_list_id = request.data.get('price_list_id')
+    # ====================== Async Work Matching ======================
 
+    @action(detail=False, methods=['post'], url_path='start-work-matching')
+    def start_work_matching(self, request):
+        """Запустить фоновый подбор работ для сметы."""
+        estimate_id = request.data.get('estimate_id')
         if not estimate_id:
             return Response(
-                {'error': 'Не указан estimate_id'},
+                {'error': 'Необходим estimate_id'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        from estimates.services.work_matching import WorkMatchingService
+        svc = WorkMatchingService()
 
         try:
-            estimate = Estimate.objects.get(pk=estimate_id)
-        except Estimate.DoesNotExist:
+            result = svc.start_matching(
+                estimate_id=int(estimate_id),
+                user_id=request.user.id,
+            )
+        except ValueError as e:
+            msg = str(e)
+            if msg.startswith('ALREADY_RUNNING:'):
+                existing_session = msg.split(':')[1]
+                return Response(
+                    {'error': 'Подбор уже запущен', 'session_id': existing_session},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            raise
+
+        return Response(result, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=False, methods=['get'],
+            url_path='work-matching-progress/(?P<session_id>[a-f0-9]+)')
+    def work_matching_progress(self, request, session_id=None):
+        """Получить прогресс подбора работ."""
+        from estimates.services.work_matching import WorkMatchingService
+        svc = WorkMatchingService()
+        progress = svc.get_progress(session_id)
+        if not progress:
             return Response(
-                {'error': 'Смета не найдена'},
+                {'error': 'Сессия не найдена или истекла'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        return Response(progress)
 
-        from estimates.services.estimate_auto_matcher import EstimateAutoMatcher
-        matcher = EstimateAutoMatcher()
-        results = matcher.preview_works(estimate, price_list_id=price_list_id)
-        return Response(results)
+    @action(detail=False, methods=['post'],
+            url_path='cancel-work-matching/(?P<session_id>[a-f0-9]+)')
+    def cancel_work_matching(self, request, session_id=None):
+        """Отменить подбор работ."""
+        from estimates.services.work_matching import WorkMatchingService
+        svc = WorkMatchingService()
+        cancelled = svc.cancel(session_id)
+        if cancelled:
+            return Response({'status': 'cancelled'})
+        return Response(
+            {'error': 'Сессия не найдена'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
-    @action(detail=False, methods=['post'], url_path='apply-match-works')
-    def apply_match_works(self, request):
-        """Применить выбранные совпадения работ и записать маппинги"""
+    @action(detail=False, methods=['post'], url_path='apply-work-matching')
+    def apply_work_matching(self, request):
+        """Применить результаты подбора работ."""
+        session_id = request.data.get('session_id')
         items_data = request.data.get('items', [])
-        if not items_data:
+        if not session_id or not items_data:
             return Response(
-                {'error': 'Пустой список'},
+                {'error': 'Необходимы session_id и items'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from pricelists.models import WorkItem
-        from estimates.services.estimate_auto_matcher import EstimateAutoMatcher
+        from estimates.services.work_matching import WorkMatchingService
+        svc = WorkMatchingService()
+        result = svc.apply_results(
+            session_id=session_id,
+            items=items_data,
+            user=request.user,
+        )
 
-        ids = [d['item_id'] for d in items_data if d.get('item_id')]
-        existing = {
-            item.id: item
-            for item in EstimateItem.objects.filter(id__in=ids).select_related('product')
-        }
+        # Пересчёт наценок для обновлённых строк
+        item_ids = [d['item_id'] for d in items_data if d.get('work_item_id')]
+        if item_ids:
+            from estimates.services.markup_service import recalculate_subsections_for_items
+            recalculate_subsections_for_items(item_ids)
 
-        work_ids = [d['work_item_id'] for d in items_data if d.get('work_item_id')]
-        works = {wi.id: wi for wi in WorkItem.objects.filter(id__in=work_ids)}
-
-        updated = []
-        for d in items_data:
-            item = existing.get(d.get('item_id'))
-            wi = works.get(d.get('work_item_id'))
-            if not item or not wi:
-                continue
-
-            item.work_item = wi
-            if d.get('work_price') and item.work_unit_price == 0:
-                item.work_unit_price = d['work_price']
-            updated.append(item)
-
-            # Записываем маппинг для обучения системы
-            if item.product:
-                EstimateAutoMatcher.record_manual_correction(item.product, wi)
-
-        if updated:
-            EstimateItem.objects.bulk_update(updated, ['work_item', 'work_unit_price'])
-
-        return Response({'applied': len(updated)})
+        return Response(result)
 
     @action(detail=False, methods=['post'], url_path='import',
             parser_classes=[MultiPartParser])
@@ -511,6 +644,212 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
             EstimateItemSerializer(created_items, many=True).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=False, methods=['post'], url_path='import-project-file')
+    def import_from_project_file(self, request):
+        """Импорт строк сметы из файлов проекта (ProjectFile).
+        Принимает estimate_id и project_file_ids (массив) или project_file_id (одиночный),
+        preview=true для предпросмотра."""
+        from estimates.models import ProjectFile, Estimate
+
+        estimate_id = request.data.get('estimate_id')
+        preview_mode = str(request.data.get('preview', '')).lower() in ('true', '1')
+
+        # Поддержка массива и одиночного ID
+        project_file_ids = request.data.get('project_file_ids', [])
+        single_id = request.data.get('project_file_id')
+        if single_id and not project_file_ids:
+            project_file_ids = [single_id]
+
+        if not estimate_id or not project_file_ids:
+            return Response(
+                {'error': 'Необходимы estimate_id и project_file_ids'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            estimate = Estimate.objects.get(pk=estimate_id)
+        except Estimate.DoesNotExist:
+            return Response({'error': 'Смета не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+        linked_project_ids = set(estimate.projects.values_list('pk', flat=True))
+
+        from estimates.services.estimate_import_service import EstimateImportService
+        importer = EstimateImportService()
+
+        all_rows = []
+        all_sections = []
+        all_warnings = []
+        min_confidence = 1.0
+        errors = []
+
+        for pf_id in project_file_ids:
+            try:
+                project_file = ProjectFile.objects.select_related('file_type', 'project').get(pk=pf_id)
+            except ProjectFile.DoesNotExist:
+                errors.append(f'Файл {pf_id} не найден')
+                continue
+
+            if project_file.project_id not in linked_project_ids:
+                errors.append(f'Файл «{project_file.original_filename}» принадлежит проекту, не связанному с этой сметой')
+                continue
+
+            try:
+                project_file.file.open('rb')
+                file_content = project_file.file.read()
+                project_file.file.close()
+            except Exception:
+                logger.exception('Не удалось прочитать файл проекта %s', pf_id)
+                errors.append(f'Не удалось прочитать файл «{project_file.original_filename}»')
+                continue
+
+            filename = project_file.original_filename or project_file.file.name
+            ext = filename.lower().rsplit('.', 1)[-1] if '.' in filename else ''
+
+            if ext not in ('xlsx', 'xls', 'pdf'):
+                errors.append(f'Файл «{filename}»: поддерживаются только Excel (.xlsx) и PDF')
+                continue
+
+            try:
+                if ext in ('xlsx', 'xls'):
+                    parsed = importer.import_from_excel(file_content, filename)
+                else:
+                    parsed = importer.import_from_pdf(file_content, filename)
+            except Exception:
+                logger.exception('Ошибка парсинга файла проекта %s для сметы %s', pf_id, estimate_id)
+                errors.append(f'Не удалось распознать файл «{filename}»')
+                continue
+
+            # Добавляем source_file к каждой строке для идентификации источника
+            for row in parsed.rows:
+                row_dict = row.model_dump()
+                row_dict['source_file'] = filename
+                all_rows.append(row_dict)
+
+            for s in parsed.sections:
+                if s not in all_sections:
+                    all_sections.append(s)
+
+            if parsed.confidence is not None:
+                min_confidence = min(min_confidence, parsed.confidence)
+
+            if parsed.warnings:
+                all_warnings.extend(parsed.warnings)
+
+        if not all_rows and errors:
+            return Response(
+                {'error': '; '.join(errors)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if preview_mode:
+            result = {
+                'rows': all_rows,
+                'sections': all_sections,
+                'total_rows': len(all_rows),
+                'confidence': min_confidence if all_rows else 0,
+            }
+            if all_warnings:
+                result['warnings'] = all_warnings
+            if errors:
+                result['errors'] = errors
+            return Response(result)
+
+        # Для non-preview: сохраняем строки
+        from estimates.services.estimate_import_schemas import EstimateImportRow, ParsedEstimate
+        parsed_combined = ParsedEstimate(
+            rows=[EstimateImportRow(**{k: v for k, v in row.items() if k != 'source_file'}) for row in all_rows],
+            sections=all_sections,
+            total_rows=len(all_rows),
+            confidence=min_confidence,
+        )
+        created_items = importer.save_imported_items(int(estimate_id), parsed_combined)
+        return Response(
+            EstimateItemSerializer(created_items, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=['post'], url_path='import-project-file-pdf')
+    def import_project_file_pdf(self, request):
+        """Async-импорт PDF из файлов проекта через Celery.
+        Принимает estimate_id и project_file_ids (массив ID ProjectFile).
+        Возвращает session_id для polling прогресса."""
+        import fitz
+        from estimates.models import ProjectFile, Estimate
+
+        estimate_id = request.data.get('estimate_id')
+        project_file_ids = request.data.get('project_file_ids', [])
+
+        if not estimate_id or not project_file_ids:
+            return Response(
+                {'error': 'Необходимы estimate_id и project_file_ids'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            estimate = Estimate.objects.get(pk=estimate_id)
+        except Estimate.DoesNotExist:
+            return Response({'error': 'Смета не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+        linked_project_ids = set(estimate.projects.values_list('pk', flat=True))
+
+        combined_doc = fitz.open()
+        errors = []
+
+        for pf_id in project_file_ids:
+            try:
+                project_file = ProjectFile.objects.select_related('file_type', 'project').get(pk=pf_id)
+            except ProjectFile.DoesNotExist:
+                errors.append(f'Файл {pf_id} не найден')
+                continue
+
+            if project_file.project_id not in linked_project_ids:
+                errors.append(f'Файл «{project_file.original_filename}» принадлежит проекту, не связанному с этой сметой')
+                continue
+
+            filename = project_file.original_filename or project_file.file.name
+            ext = filename.lower().rsplit('.', 1)[-1] if '.' in filename else ''
+            if ext != 'pdf':
+                errors.append(f'Файл «{filename}»: ожидается PDF, получен .{ext}')
+                continue
+
+            try:
+                project_file.file.open('rb')
+                file_content = project_file.file.read()
+                project_file.file.close()
+            except Exception:
+                logger.exception('Не удалось прочитать файл проекта %s', pf_id)
+                errors.append(f'Не удалось прочитать файл «{filename}»')
+                continue
+
+            try:
+                src_doc = fitz.open(stream=file_content, filetype='pdf')
+                combined_doc.insert_pdf(src_doc)
+                src_doc.close()
+            except Exception:
+                logger.exception('Не удалось открыть PDF %s', pf_id)
+                errors.append(f'Не удалось открыть PDF «{filename}»')
+                continue
+
+        if len(combined_doc) == 0:
+            combined_doc.close()
+            return Response(
+                {'error': '; '.join(errors) if errors else 'Не найдено PDF файлов для обработки'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        combined_bytes = combined_doc.tobytes()
+        combined_doc.close()
+
+        from estimates.tasks import create_import_session, process_estimate_pdf_pages
+        session = create_import_session(combined_bytes, int(estimate_id), user_id=request.user.id)
+        process_estimate_pdf_pages.delay(session['session_id'])
+
+        result = session
+        if errors:
+            result['warnings'] = errors
+
+        return Response(result, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=False, methods=['post'], url_path='import-rows')
     def import_rows(self, request):

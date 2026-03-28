@@ -151,6 +151,15 @@ class Product(TimestampedModel):
         verbose_name='Технические характеристики',
         help_text='Словарь ТХ: {"Мощность": "2.5 кВт", ...}'
     )
+    default_work_item = models.ForeignKey(
+        'pricelists.WorkItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='default_for_products',
+        verbose_name='Расценка по умолчанию',
+        help_text='Если указана — используется при подборе работ без дополнительного поиска'
+    )
 
     class Meta:
         verbose_name = 'Товар/Услуга'
@@ -322,6 +331,113 @@ class ProductWorkMapping(TimestampedModel):
 
     def __str__(self):
         return f"{self.product.name} → {self.work_item.name} ({self.usage_count}x)"
+
+
+class ProductKnowledge(TimestampedModel):
+    """База знаний: какие работы нужны для каких товаров/позиций сметы.
+
+    Накапливается автоматически через LLM и веб-поиск, используется при
+    будущих подборах работ (Уровень 3 pipeline). Двойное хранение:
+    БД (для быстрого поиска) + .md файлы (для ручного редактирования операторами).
+    """
+
+    class Source(models.TextChoices):
+        LLM = 'llm', 'LLM semantic match'
+        WEB = 'web', 'Web search'
+        MANUAL = 'manual', 'Ручной ввод'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Ожидает проверки'
+        VERIFIED = 'verified', 'Подтверждено сметчиком'
+        REJECTED = 'rejected', 'Отклонено'
+
+    item_name_pattern = models.CharField(
+        max_length=500,
+        db_index=True,
+        verbose_name='Нормализованное имя позиции',
+        help_text='Normalized form через Product.normalize_name()'
+    )
+    work_item = models.ForeignKey(
+        'pricelists.WorkItem',
+        on_delete=models.CASCADE,
+        related_name='knowledge_entries',
+        verbose_name='Подходящая работа'
+    )
+    work_section = models.ForeignKey(
+        'pricelists.WorkSection',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='knowledge_entries',
+        verbose_name='Раздел работ'
+    )
+
+    confidence = models.FloatField(
+        default=0.5,
+        verbose_name='Уверенность (0.0-1.0)'
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        verbose_name='Источник знания'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        verbose_name='Статус верификации'
+    )
+
+    llm_reasoning = models.TextField(
+        blank=True,
+        verbose_name='Обоснование LLM',
+        help_text='Почему LLM выбрал эту работу'
+    )
+    web_search_query = models.TextField(
+        blank=True,
+        verbose_name='Поисковый запрос'
+    )
+    web_search_result_summary = models.TextField(
+        blank=True,
+        verbose_name='Результат поиска',
+        help_text='Краткое содержание найденной информации'
+    )
+
+    md_file_path = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name='Путь к .md файлу',
+        help_text='Относительный путь в data/knowledge/'
+    )
+
+    usage_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Количество использований'
+    )
+    last_used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Последнее использование'
+    )
+    verified_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Подтвердил'
+    )
+
+    class Meta:
+        verbose_name = 'Знание о товаре → работе'
+        verbose_name_plural = 'База знаний (товар → работа)'
+        unique_together = ('item_name_pattern', 'work_item')
+        indexes = [
+            models.Index(fields=['item_name_pattern', '-confidence']),
+            models.Index(fields=['status', '-usage_count']),
+        ]
+
+    def __str__(self):
+        return f"{self.item_name_pattern} → {self.work_item.name} ({self.get_source_display()})"
 
 
 class SupplierCatalog(TimestampedModel):

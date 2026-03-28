@@ -47,4 +47,13 @@ app.conf.beat_schedule = {
         'task': 'supply.tasks.recover_stuck_recognition',
         'schedule': 300.0,  # Каждые 5 минут
     },
+    # --- Work Matching ---
+    'recover-stuck-work-matching': {
+        'task': 'estimates.tasks_work_matching.recover_stuck_work_matching',
+        'schedule': 300.0,  # Каждые 5 минут
+    },
+    'sync-knowledge-md': {
+        'task': 'estimates.tasks_work_matching.sync_knowledge_md_task',
+        'schedule': 1800.0,  # Каждые 30 минут
+    },
 }

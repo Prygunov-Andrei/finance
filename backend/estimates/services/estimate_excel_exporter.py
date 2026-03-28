@@ -322,11 +322,20 @@ class EstimateExcelExporter:
 
     # ── Экспорт с column_config ─────────────────────────────────────
 
-    def export_with_column_config(self) -> BytesIO:
+    # Колонки, скрываемые в external-режиме (закупочные цены, наценки)
+    _INTERNAL_ONLY_KEYS = {
+        'material_unit_price', 'work_unit_price',
+        'material_total', 'work_total', 'line_total',
+        'material_purchase_total', 'work_purchase_total',
+        'effective_material_markup_percent', 'effective_work_markup_percent',
+    }
+
+    def export_with_column_config(self, mode: str = 'internal') -> BytesIO:
         """Генерирует Excel-файл сметы с учётом column_config.
 
-        Использует видимые столбцы из estimate.column_config (или DEFAULT),
-        поддерживает builtin/formula/custom-типы и агрегатные итоги.
+        Args:
+            mode: 'internal' — все колонки (закупка + наценка + продажа).
+                  'external' — только продажные цены, без закупок и наценок.
 
         Returns:
             BytesIO с .xlsx файлом.
@@ -338,11 +347,14 @@ class EstimateExcelExporter:
         config = estimate.column_config or DEFAULT_COLUMN_CONFIG
         visible_cols = [c for c in config if c.get('visible', True)]
 
-        items = EstimateItem.objects.filter(
+        if mode == 'external':
+            visible_cols = [c for c in visible_cols if c['key'] not in self._INTERNAL_ONLY_KEYS]
+
+        items = list(EstimateItem.objects.filter(
             estimate=estimate,
-        ).select_related('section').order_by(
+        ).select_related('section', 'estimate').order_by(
             'section__sort_order', 'sort_order', 'item_number',
-        )
+        ))
 
         sections = EstimateSection.objects.filter(
             estimate=estimate,
@@ -372,7 +384,11 @@ class EstimateExcelExporter:
 
         # Column headers (row 3)
         for col_idx, col_def in enumerate(visible_cols, 1):
-            cell = ws.cell(row=3, column=col_idx, value=col_def.get('label', col_def['key']))
+            label = col_def.get('label', col_def['key'])
+            # В external-режиме "продажные" колонки отображаются как просто "Цена мат." и т.д.
+            if mode == 'external':
+                label = label.replace('Продажа ', 'Цена ').replace('Итого продажа ', 'Итого ')
+            cell = ws.cell(row=3, column=col_idx, value=label)
             cell.font = bold
             cell.alignment = center
             cell.border = thin_border
@@ -400,6 +416,15 @@ class EstimateExcelExporter:
                     'material_total': item.material_total or Decimal('0'),
                     'work_total': item.work_total or Decimal('0'),
                     'line_total': item.line_total or Decimal('0'),
+                    # Новые builtin-поля для наценок
+                    'material_sale_unit_price': item.material_sale_unit_price or Decimal('0'),
+                    'work_sale_unit_price': item.work_sale_unit_price or Decimal('0'),
+                    'material_purchase_total': item.material_purchase_total or Decimal('0'),
+                    'work_purchase_total': item.work_purchase_total or Decimal('0'),
+                    'material_sale_total': item.material_sale_total or Decimal('0'),
+                    'work_sale_total': item.work_sale_total or Decimal('0'),
+                    'effective_material_markup_percent': item.effective_material_markup_percent or Decimal('0'),
+                    'effective_work_markup_percent': item.effective_work_markup_percent or Decimal('0'),
                 }
                 custom_data = item.custom_data or {}
                 computed = compute_all_formulas(config, builtin_values, custom_data)
@@ -411,7 +436,11 @@ class EstimateExcelExporter:
 
                     if col_type == 'builtin':
                         field = col_def.get('builtin_field', key)
-                        value = getattr(item, field, None)
+                        # Сначала проверяем builtin_values (включает новые поля)
+                        if key in builtin_values:
+                            value = builtin_values[key]
+                        else:
+                            value = getattr(item, field, None)
                     elif col_type == 'formula':
                         value = computed.get(key)
                     elif col_type.startswith('custom_'):

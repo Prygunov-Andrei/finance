@@ -10,8 +10,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.throttling import UserRateThrottle
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
-from .models import LLMProvider
-from .serializers import LLMProviderSerializer
+from .models import LLMProvider, LLMTaskConfig
+from .serializers import LLMProviderSerializer, LLMTaskConfigSerializer
 from .services.document_parser import DocumentParser
 from .services.exceptions import RateLimitError
 
@@ -45,9 +45,17 @@ def detect_file_type(content: bytes) -> Optional[str]:
 
 class LLMProviderViewSet(viewsets.ModelViewSet):
     """ViewSet для управления LLM-провайдерами"""
-    
+
     queryset = LLMProvider.objects.all()
     serializer_class = LLMProviderSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class LLMTaskConfigViewSet(viewsets.ModelViewSet):
+    """ViewSet для настройки LLM-провайдеров по задачам."""
+
+    queryset = LLMTaskConfig.objects.select_related('provider').all()
+    serializer_class = LLMTaskConfigSerializer
     permission_classes = [IsAuthenticated]
     
     @extend_schema(summary='Установить провайдер по умолчанию', tags=['LLM'])

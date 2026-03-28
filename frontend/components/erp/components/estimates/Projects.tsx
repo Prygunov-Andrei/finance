@@ -1,22 +1,33 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@/hooks/erp-router';
-import { api, ProjectList, ConstructionObject, unwrapResults } from '@/lib/api';
+import { api, ProjectList, unwrapResults } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { CONSTANTS } from '@/constants';
 import { useObjects } from '@/hooks/useReferenceData';
+import { useProjectFileTypes } from '@/hooks/useReferenceData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Search, FileText, Loader2, Filter, X } from 'lucide-react';
+import { Plus, PlusCircle, Search, FileText, Loader2, Filter, X, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { QuickCreateObjectDialog } from '../kanban/QuickCreateObjectDialog';
+
+type FileEntry = {
+  file: File;
+  file_type: number;
+  title: string;
+};
 
 export function Projects() {
   const navigate = useNavigate();
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
+  const [isCreateObjectOpen, setCreateObjectOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Фильтры
   const [filters, setFilters] = useState({
     object: undefined as number | undefined,
@@ -34,8 +45,9 @@ export function Projects() {
     stage: 'П' as 'П' | 'РД',
     object: 0,
     notes: '',
-    file: null as File | null,
   });
+
+  const [fileEntries, setFileEntries] = useState<FileEntry[]>([]);
 
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ['projects', filters],
@@ -46,25 +58,60 @@ export function Projects() {
   const { data: objectsData } = useObjects();
   const objects = unwrapResults(objectsData);
 
+  const { data: fileTypes } = useProjectFileTypes();
+  const defaultFileTypeId = fileTypes?.[0]?.id ?? 0;
+
+  const handleAddFiles = (files: FileList | null) => {
+    if (!files) return;
+    const newEntries: FileEntry[] = Array.from(files).map((file) => ({
+      file,
+      file_type: defaultFileTypeId,
+      title: '',
+    }));
+    setFileEntries((prev) => [...prev, ...newEntries]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setFileEntries((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFileEntryChange = (index: number, field: keyof FileEntry, value: string | number) => {
+    setFileEntries((prev) =>
+      prev.map((entry, i) => (i === index ? { ...entry, [field]: value } : entry))
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.file) {
-      toast.error('Необходимо загрузить файл проекта');
+
+    if (formData.object === 0) {
+      toast.error('Выберите объект');
       return;
     }
 
-    const formDataToSend = new FormData();
-    formDataToSend.append('cipher', formData.cipher);
-    formDataToSend.append('name', formData.name);
-    formDataToSend.append('date', formData.date);
-    formDataToSend.append('stage', formData.stage);
-    formDataToSend.append('object', formData.object.toString());
-    if (formData.notes) formDataToSend.append('notes', formData.notes);
-    formDataToSend.append('file', formData.file);
-
+    setIsSubmitting(true);
     try {
-      const created = await api.estimates.createProject(formDataToSend);
+      // 1. Создаём проект (без файлов)
+      const projectFormData = new FormData();
+      projectFormData.append('cipher', formData.cipher);
+      projectFormData.append('name', formData.name);
+      projectFormData.append('date', formData.date);
+      projectFormData.append('stage', formData.stage);
+      projectFormData.append('object', formData.object.toString());
+      if (formData.notes) projectFormData.append('notes', formData.notes);
+
+      const created = await api.estimates.createProject(projectFormData);
+
+      // 2. Загружаем файлы (последовательно)
+      for (const entry of fileEntries) {
+        const fileFormData = new FormData();
+        fileFormData.append('project', created.id.toString());
+        fileFormData.append('file', entry.file);
+        fileFormData.append('file_type', entry.file_type.toString());
+        if (entry.title) fileFormData.append('title', entry.title);
+        await api.estimates.uploadProjectFile(fileFormData);
+      }
+
       toast.success('Проект создан');
       setCreateDialogOpen(false);
       resetForm();
@@ -72,6 +119,8 @@ export function Projects() {
       navigate(`/estimates/projects/${created.id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Ошибка при создании проекта');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -83,8 +132,8 @@ export function Projects() {
       stage: 'П',
       object: 0,
       notes: '',
-      file: null,
     });
+    setFileEntries([]);
   };
 
   const clearFilters = () => {
@@ -313,12 +362,12 @@ export function Projects() {
       </div>
 
       {/* Create Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => { if (!open) { setCreateDialogOpen(false); resetForm(); } }}>
+        <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Создать проект</DialogTitle>
             <DialogDescription>
-              Создайте новый проект с загрузкой ZIP-архива документации
+              Создайте новый проект с загрузкой документации
             </DialogDescription>
           </DialogHeader>
 
@@ -378,33 +427,117 @@ export function Projects() {
 
               <div>
                 <Label htmlFor="object">Объект *</Label>
-                <select
-                  id="object"
-                  value={formData.object}
-                  onChange={(e) => setFormData({ ...formData, object: Number(e.target.value) })}
-                  className="mt-1.5 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-                  required
-                >
-                  <option value={0}>Выберите объект</option>
-                  {objects.map((obj) => (
-                    <option key={obj.id} value={obj.id}>{obj.name}</option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <select
+                    id="object"
+                    value={formData.object}
+                    onChange={(e) => setFormData({ ...formData, object: Number(e.target.value) })}
+                    className="flex-1 px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                    required
+                  >
+                    <option value={0}>Выберите объект</option>
+                    {objects.map((obj) => (
+                      <option key={obj.id} value={obj.id}>{obj.name}</option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCreateObjectOpen(true)}
+                    title="Создать новый объект"
+                    className="shrink-0"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="file">Файл проекта *</Label>
-              <Input
-                id="file"
-                type="file"
-                onChange={(e) => setFormData({ ...formData, file: e.target.files?.[0] || null })}
-                required
-                className="mt-1.5"
-              />
-              <p className="text-xs text-muted-foreground mt-1.5">
-                Загрузите файл проектной документации (PDF, ZIP, DWG и др.)
-              </p>
+            {/* Файлы проекта */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Файлы проекта</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-1"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Добавить файлы
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={(e) => { handleAddFiles(e.target.files); e.target.value = ''; }}
+                  className="hidden"
+                />
+              </div>
+
+              {fileEntries.length === 0 ? (
+                <div
+                  className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleAddFiles(e.dataTransfer.files); }}
+                >
+                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Перетащите файлы сюда или нажмите для выбора
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    PDF, ZIP, DWG и другие форматы
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {fileEntries.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-2 p-2 border border-border rounded-lg bg-muted/30">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate min-w-0 flex-shrink" title={entry.file.name}>
+                        {entry.file.name}
+                      </span>
+                      <select
+                        value={entry.file_type}
+                        onChange={(e) => handleFileEntryChange(index, 'file_type', Number(e.target.value))}
+                        className="px-2 py-1 text-sm border border-border rounded focus:outline-none focus:ring-1 focus:ring-ring shrink-0"
+                      >
+                        {fileTypes?.map((ft) => (
+                          <option key={ft.id} value={ft.id}>{ft.name}</option>
+                        ))}
+                      </select>
+                      <Input
+                        value={entry.title}
+                        onChange={(e) => handleFileEntryChange(index, 'title', e.target.value)}
+                        placeholder="Название (опц.)"
+                        className="h-8 text-sm w-36 shrink-0"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-500"
+                        onClick={() => handleRemoveFile(index)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Ещё файл
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div>
@@ -430,13 +563,29 @@ export function Projects() {
               >
                 Отмена
               </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                Создать проект
+              <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Создание...
+                  </>
+                ) : (
+                  'Создать проект'
+                )}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Quick Create Object Dialog */}
+      <QuickCreateObjectDialog
+        open={isCreateObjectOpen}
+        onOpenChange={setCreateObjectOpen}
+        onCreated={(obj) => {
+          setFormData((prev) => ({ ...prev, object: obj.id }));
+        }}
+      />
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { FileText, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { FileText, Download, RefreshCw } from 'lucide-react';
 import { UseMutationResult } from '@tanstack/react-query';
 
 interface EstimateInfoTabProps {
@@ -82,22 +83,39 @@ export function EstimateInfoTab({
         {estimate.projects.length > 0 && (
           <div className="mt-4 pt-4 border-t">
             <div className="text-sm text-muted-foreground mb-2">Проекты-основания</div>
-            <div className="space-y-1">
-              {estimate.projects.map((project: { id: number; cipher: string; name: string; file?: string }) => (
-                <div key={project.id} className="text-sm">
-                  {project.file ? (
+            <div className="space-y-3">
+              {estimate.projects.map((project) => (
+                <div key={project.id} className="border rounded-lg p-3">
+                  <div className="font-medium text-sm text-foreground mb-2">
+                    {project.cipher} — {project.name}
+                  </div>
+                  {project.project_files && project.project_files.length > 0 ? (
+                    <div className="space-y-1 pl-2">
+                      {project.project_files.map((pf) => (
+                        <div key={pf.id} className="text-sm flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs shrink-0">{pf.file_type_name}</Badge>
+                          <a
+                            href={pf.file}
+                            download
+                            className="text-primary hover:underline inline-flex items-center gap-1 min-w-0"
+                          >
+                            <Download className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{pf.title || pf.original_filename}</span>
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  ) : project.file ? (
                     <a
                       href={project.file}
                       download
-                      className="text-primary hover:underline inline-flex items-center gap-1"
+                      className="text-sm text-primary hover:underline inline-flex items-center gap-1 pl-2"
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      {project.cipher} - {project.name}
+                      Файл проекта
                     </a>
                   ) : (
-                    <span className="text-muted-foreground">
-                      {project.cipher} - {project.name} (файл отсутствует)
-                    </span>
+                    <span className="text-sm text-muted-foreground pl-2">Файлы не прикреплены</span>
                   )}
                 </div>
               ))}
@@ -146,6 +164,50 @@ export function EstimateInfoTab({
                 <option key={pl.id} value={pl.id}>{pl.number} - {pl.name}</option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t">
+          <Label className="text-sm text-muted-foreground">Наценки по умолчанию</Label>
+          <div className="grid grid-cols-2 gap-3 mt-1 max-w-[400px]">
+            <div>
+              <Label htmlFor="detail-default-material-markup" className="text-xs text-muted-foreground">Наценка на материалы, %</Label>
+              <Input
+                id="detail-default-material-markup"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                defaultValue={estimate.default_material_markup_percent || ''}
+                onBlur={(e) => {
+                  const newVal = e.target.value || undefined;
+                  if (newVal !== (estimate.default_material_markup_percent || undefined)) {
+                    updateFieldMutation.mutate({ default_material_markup_percent: newVal || null });
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                }}
+              />
+            </div>
+            <div>
+              <Label htmlFor="detail-default-work-markup" className="text-xs text-muted-foreground">Наценка на работы, %</Label>
+              <Input
+                id="detail-default-work-markup"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                defaultValue={estimate.default_work_markup_percent || ''}
+                onBlur={(e) => {
+                  const newVal = e.target.value || undefined;
+                  if (newVal !== (estimate.default_work_markup_percent || undefined)) {
+                    updateFieldMutation.mutate({ default_work_markup_percent: newVal || null });
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                }}
+              />
+            </div>
           </div>
         </div>
 

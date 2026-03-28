@@ -6,6 +6,7 @@
 """
 import logging
 
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -257,3 +258,62 @@ def estimate_request_callback(request, access_token):
     logger.info('Callback request #%d для запроса #%d', callback.id, req.id)
 
     return Response({'detail': 'Заявка на звонок отправлена.'}, status=status.HTTP_201_CREATED)
+
+
+# =============================================================================
+# Work Matching (публичный API)
+# =============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def public_start_work_matching(request, access_token):
+    """Запустить фоновый подбор работ для публичного запроса сметы."""
+    req = get_object_or_404(EstimateRequest, access_token=access_token)
+    if not req.estimate_id:
+        return Response({'error': 'Смета ещё не создана'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from estimates.services.work_matching import WorkMatchingService
+    svc = WorkMatchingService()
+
+    try:
+        result = svc.start_matching(estimate_id=req.estimate_id, user_id=0)
+    except ValueError as e:
+        msg = str(e)
+        if msg.startswith('ALREADY_RUNNING:'):
+            return Response(
+                {'error': 'Подбор уже запущен', 'session_id': msg.split(':')[1]},
+                status=status.HTTP_409_CONFLICT,
+            )
+        raise
+
+    return Response(result, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_work_matching_progress(request, access_token, session_id):
+    """Прогресс подбора работ для публичного запроса."""
+    get_object_or_404(EstimateRequest, access_token=access_token)
+
+    from estimates.services.work_matching import WorkMatchingService
+    svc = WorkMatchingService()
+    progress = svc.get_progress(session_id)
+    if not progress:
+        return Response({'error': 'Сессия не найдена'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(progress)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def public_apply_work_matching(request, access_token):
+    """Применить результаты подбора работ для публичного запроса."""
+    req = get_object_or_404(EstimateRequest, access_token=access_token)
+    session_id = request.data.get('session_id')
+    items_data = request.data.get('items', [])
+    if not session_id or not items_data:
+        return Response({'error': 'Необходимы session_id и items'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from estimates.services.work_matching import WorkMatchingService
+    svc = WorkMatchingService()
+    result = svc.apply_results(session_id=session_id, items=items_data)
+    return Response(result)

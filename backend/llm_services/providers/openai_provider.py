@@ -95,6 +95,44 @@ class OpenAIProvider(BaseLLMProvider):
         parsed = ParsedInvoice(**data)
         return parsed, processing_time
 
+    def chat_completion(self, system_prompt: str, user_prompt: str,
+                        response_format: str = 'json', **kwargs) -> dict:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        is_gpt5 = 'gpt-5' in self.model_name.lower()
+        is_gpt5_nano_or_mini = 'gpt-5-nano' in self.model_name.lower() or 'gpt-5-mini' in self.model_name.lower()
+
+        request_params = {
+            "model": self.model_name,
+            "messages": messages,
+        }
+        if response_format == 'json':
+            request_params["response_format"] = {"type": "json_object"}
+
+        if is_gpt5:
+            request_params["max_completion_tokens"] = 4096
+            if not is_gpt5_nano_or_mini:
+                request_params["temperature"] = 0.1
+        else:
+            request_params["max_tokens"] = 4096
+            request_params["temperature"] = 0.1
+
+        response = self.client.chat.completions.create(**request_params)
+        content = response.choices[0].message.content
+
+        if response_format != 'json':
+            return {"text": content}
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            cleaned = re.sub(r'^```(?:json)?\s*', '', content.strip())
+            cleaned = re.sub(r'\s*```$', '', cleaned)
+            return json.loads(cleaned)
+
     def parse_with_prompt(self, file_content: bytes, file_type: str, system_prompt: str, user_prompt: str = "Распарси этот документ:") -> dict:
         if file_type.lower() == 'pdf':
             images = self.pdf_to_images_base64(file_content)

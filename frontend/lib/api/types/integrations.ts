@@ -16,6 +16,16 @@ export interface LLMProvider {
   updated_at: string;
 }
 
+export interface LLMTaskConfig {
+  id: number;
+  task_type: string;
+  task_type_display: string;
+  provider: number | null;
+  provider_name: string | null;
+  is_enabled: boolean;
+  notes: string;
+}
+
 // ============================================
 // Invoice Parsing Interfaces
 // ============================================

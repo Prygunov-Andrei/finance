@@ -423,6 +423,11 @@ CELERY_TASK_TIME_LIMIT = 300  # 5 минут
 CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'false').lower() in ('1', 'true', 'yes')
 CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
+# --- Estimates ---
+ESTIMATE_SESSION_TTL = int(os.environ.get('ESTIMATE_SESSION_TTL', '3600'))
+ESTIMATE_IMPORT_PAGE_DPI = int(os.environ.get('ESTIMATE_IMPORT_PAGE_DPI', '100'))
+ESTIMATE_IMPORT_MAX_FILE_SIZE = int(os.environ.get('ESTIMATE_IMPORT_MAX_FILE_SIZE', str(50 * 1024 * 1024)))
+
 # Celery Beat — расписание периодических задач
 from celery.schedules import crontab  # noqa: E402
 

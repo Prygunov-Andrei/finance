@@ -1,11 +1,35 @@
-from django.db import models
-from django.core.exceptions import ValidationError
-from django.contrib.auth.models import User
-from django.db.models.signals import post_save, post_delete
-from django.dispatch import receiver
-from django.db.models import Sum
+import threading
+from contextlib import contextmanager
 from decimal import Decimal
 from functools import cached_property
+
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.db.models import Sum
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+
+# ---------------------------------------------------------------------------
+# Подавление сигналов при batch-операциях
+# ---------------------------------------------------------------------------
+_signal_suppression = threading.local()
+
+
+@contextmanager
+def suppress_item_signals():
+    """Контекстный менеджер для подавления post_save/post_delete сигналов EstimateItem.
+
+    Используется в batch-операциях (импорт, bulk update) чтобы избежать
+    N пересчётов подразделов. После выхода из контекста вызывающий код
+    должен вызвать recalculate_subsections_for_items() один раз.
+    """
+    _signal_suppression.active = True
+    try:
+        yield
+    finally:
+        _signal_suppression.active = False
 
 from core.models import TimestampedModel
 from core.cached import CachedPropertyMixin
@@ -65,7 +89,9 @@ class Project(TimestampedModel):
     )
     file = models.FileField(
         upload_to=project_file_path,
-        verbose_name='Файл проекта'
+        blank=True,
+        null=True,
+        verbose_name='Файл проекта (устаревшее — используйте ProjectFile)'
     )
     notes = models.TextField(
         blank=True,
@@ -236,6 +262,87 @@ class ProjectNote(TimestampedModel):
         return f"Замечание к {self.project.cipher} от {self.author.username}"
 
 
+class ProjectFileType(TimestampedModel):
+    """Тип файла проекта (настраиваемый справочник)"""
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name='Название'
+    )
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name='Код'
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Порядок сортировки'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='Активен'
+    )
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+        verbose_name = 'Тип файла проекта'
+        verbose_name_plural = 'Типы файлов проектов'
+
+    def __str__(self):
+        return self.name
+
+
+def project_multi_file_path(instance, filename):
+    """Путь для файлов ProjectFile"""
+    return f'projects/{instance.project.object_id}/{instance.project.cipher}/files/{filename}'
+
+
+class ProjectFile(TimestampedModel):
+    """Файл, прикреплённый к проекту"""
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='project_files',
+        verbose_name='Проект'
+    )
+    file = models.FileField(
+        upload_to=project_multi_file_path,
+        verbose_name='Файл'
+    )
+    file_type = models.ForeignKey(
+        ProjectFileType,
+        on_delete=models.PROTECT,
+        related_name='project_files',
+        verbose_name='Тип файла'
+    )
+    title = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Название файла'
+    )
+    original_filename = models.CharField(
+        max_length=255,
+        verbose_name='Оригинальное имя файла'
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='uploaded_project_files',
+        verbose_name='Кто загрузил'
+    )
+
+    class Meta:
+        ordering = ['file_type__sort_order', 'created_at']
+        verbose_name = 'Файл проекта'
+        verbose_name_plural = 'Файлы проекта'
+
+    def __str__(self):
+        return f"{self.title or self.original_filename} ({self.project.cipher})"
+
+
 def generate_estimate_number() -> str:
     """
     Генерация номера сметы.
@@ -246,9 +353,45 @@ def generate_estimate_number() -> str:
     return generate_sequential_number(Estimate, prefix='СМ', digits=3)
 
 
+MARKUP_TYPE_CHOICES = [
+    ('percent', 'Процент'),
+    ('fixed_price', 'Продажная цена'),
+    ('fixed_amount', 'Фикс. сумма'),
+]
+
+
+class EstimateMarkupDefaults(TimestampedModel):
+    """Синглтон: глобальные дефолтные наценки для новых смет"""
+
+    material_markup_percent = models.DecimalField(
+        max_digits=7, decimal_places=2, default=Decimal('30.00'),
+        verbose_name='Наценка на материалы по умолчанию (%)'
+    )
+    work_markup_percent = models.DecimalField(
+        max_digits=7, decimal_places=2, default=Decimal('300.00'),
+        verbose_name='Наценка на работы по умолчанию (%)'
+    )
+
+    class Meta:
+        verbose_name = 'Наценки по умолчанию'
+        verbose_name_plural = 'Наценки по умолчанию'
+
+    def __str__(self):
+        return f'Наценки: мат. {self.material_markup_percent}%, раб. {self.work_markup_percent}%'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class Estimate(CachedPropertyMixin, TimestampedModel):
     """Смета на работы и материалы для Заказчика"""
-    
+
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Черновик'
         IN_PROGRESS = 'in_progress', 'В работе'
@@ -391,6 +534,14 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
         verbose_name='Конфигурация столбцов',
         help_text='Список определений столбцов. Пустой список = дефолтные столбцы.'
     )
+    default_material_markup_percent = models.DecimalField(
+        max_digits=7, decimal_places=2, default=Decimal('30.00'),
+        verbose_name='Наценка на материалы по умолчанию (%)'
+    )
+    default_work_markup_percent = models.DecimalField(
+        max_digits=7, decimal_places=2, default=Decimal('300.00'),
+        verbose_name='Наценка на работы по умолчанию (%)'
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -403,6 +554,13 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
     def save(self, *args, **kwargs):
         if not self.number:
             self.number = generate_estimate_number()
+        # При создании: копировать дефолтные наценки из глобальных настроек
+        if not self.pk:
+            defaults = EstimateMarkupDefaults.get()
+            if self.default_material_markup_percent == Decimal('30.00'):
+                self.default_material_markup_percent = defaults.material_markup_percent
+            if self.default_work_markup_percent == Decimal('300.00'):
+                self.default_work_markup_percent = defaults.work_markup_percent
         super().save(*args, **kwargs)
 
     @cached_property
@@ -471,82 +629,132 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
         """
         Создать новую версию сметы.
         1. Копирует все поля (кроме файла, статуса, согласований)
-        2. Копирует все разделы, подразделы и характеристики
+        2. Копирует все разделы, подразделы, строки и характеристики
         3. Новая версия: parent_version = self, version_number++, status = draft
         """
-        # Создаём новую версию сметы
-        new_estimate = Estimate.objects.create(
-            number=generate_estimate_number(),  # Новый номер
-            name=self.name,
-            object=self.object,
-            legal_entity=self.legal_entity,
-            with_vat=self.with_vat,
-            vat_rate=self.vat_rate,
-            price_list=self.price_list,
-            man_hours=self.man_hours,
-            usd_rate=self.usd_rate,
-            eur_rate=self.eur_rate,
-            cny_rate=self.cny_rate,
-            status=Estimate.Status.DRAFT,
-            approved_by_customer=False,
-            approved_date=None,
-            created_by=self.created_by,
-            checked_by=None,
-            approved_by=None,
-            parent_version=self,
-            version_number=self.version_number + 1,
-            column_config=self.column_config,
-        )
+        with transaction.atomic():
+            # Создаём новую версию сметы
+            new_estimate = Estimate.objects.create(
+                number=generate_estimate_number(),  # Новый номер
+                name=self.name,
+                object=self.object,
+                legal_entity=self.legal_entity,
+                with_vat=self.with_vat,
+                vat_rate=self.vat_rate,
+                price_list=self.price_list,
+                man_hours=self.man_hours,
+                usd_rate=self.usd_rate,
+                eur_rate=self.eur_rate,
+                cny_rate=self.cny_rate,
+                status=Estimate.Status.DRAFT,
+                approved_by_customer=False,
+                approved_date=None,
+                created_by=self.created_by,
+                checked_by=None,
+                approved_by=None,
+                parent_version=self,
+                version_number=self.version_number + 1,
+                column_config=self.column_config,
+                default_material_markup_percent=self.default_material_markup_percent,
+                default_work_markup_percent=self.default_work_markup_percent,
+            )
 
-        # Копируем проекты-основания
-        new_estimate.projects.set(self.projects.all())
-        
-        # Копируем разделы через bulk_create
-        old_sections = list(self.sections.all().prefetch_related('subsections'))
-        new_sections = [
-            EstimateSection(
-                estimate=new_estimate,
-                name=section.name,
-                sort_order=section.sort_order
-            )
-            for section in old_sections
-        ]
-        EstimateSection.objects.bulk_create(new_sections)
-        
-        # Копируем подразделы через bulk_create
-        new_subsections = []
-        for old_section, new_section in zip(old_sections, new_sections):
-            for subsection in old_section.subsections.all():
-                new_subsections.append(
-                    EstimateSubsection(
-                        section=new_section,
-                        name=subsection.name,
-                        materials_sale=subsection.materials_sale,
-                        works_sale=subsection.works_sale,
-                        materials_purchase=subsection.materials_purchase,
-                        works_purchase=subsection.works_purchase,
-                        sort_order=subsection.sort_order
-                    )
+            # Копируем проекты-основания
+            new_estimate.projects.set(self.projects.all())
+
+            # Копируем разделы через bulk_create
+            old_sections = list(self.sections.all().prefetch_related('subsections'))
+            new_sections = [
+                EstimateSection(
+                    estimate=new_estimate,
+                    name=section.name,
+                    sort_order=section.sort_order,
+                    material_markup_percent=section.material_markup_percent,
+                    work_markup_percent=section.work_markup_percent,
                 )
-        if new_subsections:
-            EstimateSubsection.objects.bulk_create(new_subsections)
-        
-        # Копируем характеристики через bulk_create
-        new_characteristics = [
-            EstimateCharacteristic(
-                estimate=new_estimate,
-                name=char.name,
-                purchase_amount=char.purchase_amount,
-                sale_amount=char.sale_amount,
-                is_auto_calculated=char.is_auto_calculated,
-                source_type=char.source_type,
-                sort_order=char.sort_order
+                for section in old_sections
+            ]
+            EstimateSection.objects.bulk_create(new_sections)
+
+            # Маппинг old_section_id → new_section
+            old_sec_to_new = {
+                old.id: new for old, new in zip(old_sections, new_sections)
+            }
+
+            # Копируем подразделы через bulk_create
+            old_sub_to_new = {}
+            new_subsections = []
+            old_subsections_ordered = []
+            for old_section, new_section in zip(old_sections, new_sections):
+                for subsection in old_section.subsections.all():
+                    old_subsections_ordered.append(subsection)
+                    new_subsections.append(
+                        EstimateSubsection(
+                            section=new_section,
+                            name=subsection.name,
+                            materials_sale=subsection.materials_sale,
+                            works_sale=subsection.works_sale,
+                            materials_purchase=subsection.materials_purchase,
+                            works_purchase=subsection.works_purchase,
+                            sort_order=subsection.sort_order
+                        )
+                    )
+            if new_subsections:
+                EstimateSubsection.objects.bulk_create(new_subsections)
+                for old_sub, new_sub in zip(old_subsections_ordered, new_subsections):
+                    old_sub_to_new[old_sub.id] = new_sub
+
+            # Копируем строки сметы (EstimateItem)
+            old_items = list(
+                EstimateItem.objects.filter(estimate=self)
+                .order_by('section__sort_order', 'sort_order', 'item_number')
             )
-            for char in self.characteristics.all()
-        ]
-        if new_characteristics:
-            EstimateCharacteristic.objects.bulk_create(new_characteristics)
-        
+            if old_items:
+                new_items = []
+                for item in old_items:
+                    new_items.append(EstimateItem(
+                        estimate=new_estimate,
+                        section=old_sec_to_new.get(item.section_id),
+                        subsection=old_sub_to_new.get(item.subsection_id),
+                        sort_order=item.sort_order,
+                        item_number=item.item_number,
+                        name=item.name,
+                        model_name=item.model_name,
+                        unit=item.unit,
+                        quantity=item.quantity,
+                        material_unit_price=item.material_unit_price,
+                        work_unit_price=item.work_unit_price,
+                        product=item.product,
+                        work_item=item.work_item,
+                        is_analog=item.is_analog,
+                        analog_reason=item.analog_reason,
+                        original_name=item.original_name,
+                        supplier_product=item.supplier_product,
+                        source_price_history=item.source_price_history,
+                        custom_data=item.custom_data,
+                        material_markup_type=item.material_markup_type,
+                        material_markup_value=item.material_markup_value,
+                        work_markup_type=item.work_markup_type,
+                        work_markup_value=item.work_markup_value,
+                    ))
+                EstimateItem.objects.bulk_create(new_items)
+
+            # Копируем характеристики через bulk_create
+            new_characteristics = [
+                EstimateCharacteristic(
+                    estimate=new_estimate,
+                    name=char.name,
+                    purchase_amount=char.purchase_amount,
+                    sale_amount=char.sale_amount,
+                    is_auto_calculated=char.is_auto_calculated,
+                    source_type=char.source_type,
+                    sort_order=char.sort_order
+                )
+                for char in self.characteristics.all()
+            ]
+            if new_characteristics:
+                EstimateCharacteristic.objects.bulk_create(new_characteristics)
+
         return new_estimate
 
     def create_initial_characteristics(self):
@@ -600,7 +808,7 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
 
 class EstimateSection(CachedPropertyMixin, TimestampedModel):
     """Раздел сметы (первый уровень иерархии)"""
-    
+
     estimate = models.ForeignKey(
         Estimate,
         on_delete=models.CASCADE,
@@ -614,6 +822,16 @@ class EstimateSection(CachedPropertyMixin, TimestampedModel):
     sort_order = models.PositiveIntegerField(
         default=0,
         verbose_name='Порядок сортировки'
+    )
+    material_markup_percent = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True,
+        verbose_name='Наценка на материалы (%)',
+        help_text='Пусто = наследовать от сметы'
+    )
+    work_markup_percent = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True,
+        verbose_name='Наценка на работы (%)',
+        help_text='Пусто = наследовать от сметы'
     )
 
     class Meta:
@@ -711,9 +929,8 @@ class EstimateSubsection(TimestampedModel):
 @receiver(post_save, sender=EstimateSubsection)
 @receiver(post_delete, sender=EstimateSubsection)
 def update_estimate_characteristics(sender, instance, **kwargs):
-    """При изменении подраздела обновить автоматические характеристики сметы"""
+    """При изменении подраздела обновить автоматические характеристики сметы."""
     estimate = instance.section.estimate
-    estimate.refresh_from_db()
     estimate.update_auto_characteristics()
 
 
@@ -772,13 +989,13 @@ class EstimateItem(TimestampedModel):
         max_digits=14,
         decimal_places=2,
         default=0,
-        verbose_name='Цена материала за ед.'
+        verbose_name='Цена материала за ед. (закупка)'
     )
     work_unit_price = models.DecimalField(
         max_digits=14,
         decimal_places=2,
         default=0,
-        verbose_name='Цена работы за ед.'
+        verbose_name='Цена работы за ед. (закупка)'
     )
     
     product = models.ForeignKey(
@@ -835,6 +1052,24 @@ class EstimateItem(TimestampedModel):
         help_text='Ключ = key столбца из column_config, значение = строковое представление.'
     )
 
+    # --- Наценки (null = наследовать от раздела/сметы) ---
+    material_markup_type = models.CharField(
+        max_length=20, choices=MARKUP_TYPE_CHOICES, null=True, blank=True,
+        verbose_name='Тип наценки на материалы'
+    )
+    material_markup_value = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name='Значение наценки на материалы'
+    )
+    work_markup_type = models.CharField(
+        max_length=20, choices=MARKUP_TYPE_CHOICES, null=True, blank=True,
+        verbose_name='Тип наценки на работы'
+    )
+    work_markup_value = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        verbose_name='Значение наценки на работы'
+    )
+
     class Meta:
         ordering = ['section__sort_order', 'sort_order', 'item_number']
         verbose_name = 'Строка сметы'
@@ -868,36 +1103,120 @@ class EstimateItem(TimestampedModel):
 
     @property
     def material_total(self) -> Decimal:
-        return (self.quantity * self.material_unit_price).quantize(Decimal('0.01'))
+        """Итого материалы (закупка) — алиас для обратной совместимости"""
+        return self.material_purchase_total
 
     @property
     def work_total(self) -> Decimal:
-        return (self.quantity * self.work_unit_price).quantize(Decimal('0.01'))
+        """Итого работы (закупка) — алиас для обратной совместимости"""
+        return self.work_purchase_total
 
     @property
     def line_total(self) -> Decimal:
         return self.material_total + self.work_total
 
+    # --- Закупочные итоги ---
+
+    @property
+    def material_purchase_total(self) -> Decimal:
+        return (self.quantity * (self.material_unit_price or Decimal('0'))).quantize(Decimal('0.01'))
+
+    @property
+    def work_purchase_total(self) -> Decimal:
+        return (self.quantity * (self.work_unit_price or Decimal('0'))).quantize(Decimal('0.01'))
+
+    # --- Продажные цены (с наценкой) ---
+
+    def _resolve_material_sale_price(self) -> Decimal:
+        """Вычислить продажную цену материала за единицу с учётом каскада наценок"""
+        from estimates.services.markup_service import resolve_material_sale_price
+        return resolve_material_sale_price(
+            purchase=self.material_unit_price or Decimal('0'),
+            markup_type=self.material_markup_type,
+            markup_value=self.material_markup_value,
+            section_pct=self.section.material_markup_percent if self.section_id else None,
+            estimate_pct=(self.estimate.default_material_markup_percent
+                          if self.estimate_id else Decimal('30')),
+        )
+
+    def _resolve_work_sale_price(self) -> Decimal:
+        """Вычислить продажную цену работы за единицу с учётом каскада наценок"""
+        from estimates.services.markup_service import resolve_work_sale_price
+        return resolve_work_sale_price(
+            purchase=self.work_unit_price or Decimal('0'),
+            markup_type=self.work_markup_type,
+            markup_value=self.work_markup_value,
+            section_pct=self.section.work_markup_percent if self.section_id else None,
+            estimate_pct=(self.estimate.default_work_markup_percent
+                          if self.estimate_id else Decimal('300')),
+        )
+
+    @property
+    def material_sale_unit_price(self) -> Decimal:
+        return self._resolve_material_sale_price()
+
+    @property
+    def work_sale_unit_price(self) -> Decimal:
+        return self._resolve_work_sale_price()
+
+    @property
+    def material_sale_total(self) -> Decimal:
+        return (self.quantity * self.material_sale_unit_price).quantize(Decimal('0.01'))
+
+    @property
+    def work_sale_total(self) -> Decimal:
+        return (self.quantity * self.work_sale_unit_price).quantize(Decimal('0.01'))
+
+    @property
+    def effective_material_markup_percent(self) -> Decimal:
+        """Эффективный % наценки на материалы (для отображения)"""
+        purchase = self.material_unit_price or Decimal('0')
+        if not purchase:
+            return Decimal('0')
+        sale = self.material_sale_unit_price
+        return ((sale - purchase) / purchase * 100).quantize(Decimal('0.01'))
+
+    @property
+    def effective_work_markup_percent(self) -> Decimal:
+        """Эффективный % наценки на работы (для отображения)"""
+        purchase = self.work_unit_price or Decimal('0')
+        if not purchase:
+            return Decimal('0')
+        sale = self.work_sale_unit_price
+        return ((sale - purchase) / purchase * 100).quantize(Decimal('0.01'))
+
 
 @receiver(post_save, sender=EstimateItem)
 @receiver(post_delete, sender=EstimateItem)
 def update_subsection_from_items(sender, instance, **kwargs):
-    """При изменении строки сметы пересчитываем агрегаты подраздела"""
+    """При изменении строки сметы пересчитываем агрегаты подраздела (закупка + продажа)"""
+    if getattr(_signal_suppression, 'active', False):
+        return
     subsection = instance.subsection
     if not subsection:
         return
-    
-    from django.db.models import Sum, F
-    aggregates = EstimateItem.objects.filter(
+
+    items = EstimateItem.objects.filter(
         subsection=subsection
-    ).aggregate(
-        materials=Sum(F('quantity') * F('material_unit_price')),
-        works=Sum(F('quantity') * F('work_unit_price')),
-    )
-    
-    subsection.materials_sale = aggregates['materials'] or Decimal('0')
-    subsection.works_sale = aggregates['works'] or Decimal('0')
-    subsection.save(update_fields=['materials_sale', 'works_sale'])
+    ).select_related('section', 'estimate')
+
+    mat_purchase = mat_sale = work_purchase = work_sale = Decimal('0')
+
+    for item in items:
+        qty = item.quantity or Decimal('0')
+        mat_purchase += qty * (item.material_unit_price or Decimal('0'))
+        work_purchase += qty * (item.work_unit_price or Decimal('0'))
+        mat_sale += qty * item.material_sale_unit_price
+        work_sale += qty * item.work_sale_unit_price
+
+    subsection.materials_purchase = mat_purchase.quantize(Decimal('0.01'))
+    subsection.works_purchase = work_purchase.quantize(Decimal('0.01'))
+    subsection.materials_sale = mat_sale.quantize(Decimal('0.01'))
+    subsection.works_sale = work_sale.quantize(Decimal('0.01'))
+    subsection.save(update_fields=[
+        'materials_purchase', 'works_purchase',
+        'materials_sale', 'works_sale',
+    ])
 
 
 class EstimateCharacteristic(TimestampedModel):

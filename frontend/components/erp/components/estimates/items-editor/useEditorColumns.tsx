@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { type ColumnDef as ColumnDefAPI } from '@/lib/api';
 import { type EstimateItem } from '@/lib/api';
@@ -25,6 +25,12 @@ export function useEditorColumns({
   items,
   handleCellEdit,
 }: UseEditorColumnsParams): ColumnDef<TableRow, any>[] {
+  // Refs for stable column definitions — cell renderers read latest data without causing column rebuild
+  const displayRowsRef = useRef(displayRows);
+  const handleCellEditRef = useRef(handleCellEdit);
+  displayRowsRef.current = displayRows;
+  handleCellEditRef.current = handleCellEdit;
+
   return useMemo<ColumnDef<TableRow, any>[]>(() => {
     const cols: ColumnDef<TableRow, any>[] = [];
 
@@ -34,8 +40,19 @@ export function useEditorColumns({
       if (colDef.type === 'builtin') {
         const field = colDef.builtin_field || colDef.key;
         const isNumber = ['quantity', 'material_unit_price', 'work_unit_price'].includes(field);
-        const isCurrency = ['material_unit_price', 'work_unit_price', 'material_total', 'work_total', 'line_total'].includes(field);
-        const isTotal = ['material_total', 'work_total', 'line_total'].includes(field);
+        const isCurrency = [
+          'material_unit_price', 'work_unit_price',
+          'material_total', 'work_total', 'line_total',
+          'material_sale_unit_price', 'work_sale_unit_price',
+          'material_purchase_total', 'work_purchase_total',
+          'material_sale_total', 'work_sale_total',
+          'effective_material_markup_percent', 'effective_work_markup_percent',
+        ].includes(field);
+        const isTotal = [
+          'material_total', 'work_total', 'line_total',
+          'material_sale_total', 'work_sale_total',
+          'material_purchase_total', 'work_purchase_total',
+        ].includes(field);
         const isEditable = colDef.editable && !readOnly;
 
         cols.push({
@@ -84,6 +101,14 @@ export function useEditorColumns({
                 material_total: parseFloat(row.material_total) || 0,
                 work_total: parseFloat(row.work_total) || 0,
                 line_total: parseFloat(row.line_total) || 0,
+                material_sale_unit_price: parseFloat(row.material_sale_unit_price) || 0,
+                work_sale_unit_price: parseFloat(row.work_sale_unit_price) || 0,
+                material_purchase_total: parseFloat(row.material_purchase_total) || 0,
+                work_purchase_total: parseFloat(row.work_purchase_total) || 0,
+                material_sale_total: parseFloat(row.material_sale_total) || 0,
+                work_sale_total: parseFloat(row.work_sale_total) || 0,
+                effective_material_markup_percent: parseFloat(row.effective_material_markup_percent) || 0,
+                effective_work_markup_percent: parseFloat(row.effective_work_markup_percent) || 0,
               };
               const result = computeAllFormulas(effectiveConfig, builtinVars, row.custom_data || {});
               const val = result[colDef.key];
@@ -168,8 +193,8 @@ export function useEditorColumns({
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => {
-                  const idx = displayRows.findIndex((r) => r.id === row.original.id);
-                  if (idx >= 0) handleCellEdit(idx, colDef.key, e.target.checked ? 'true' : 'false');
+                  const idx = displayRowsRef.current.findIndex((r) => r.id === row.original.id);
+                  if (idx >= 0) handleCellEditRef.current(idx, colDef.key, e.target.checked ? 'true' : 'false');
                 }}
                 className="h-4 w-4"
               />
@@ -180,5 +205,5 @@ export function useEditorColumns({
     }
 
     return cols;
-  }, [readOnly, effectiveConfig, displayRows, handleCellEdit]);
+  }, [readOnly, effectiveConfig]);
 }

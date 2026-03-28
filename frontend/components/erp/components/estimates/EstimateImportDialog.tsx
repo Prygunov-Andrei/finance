@@ -13,6 +13,7 @@ import {
   FolderOpen, XCircle, Minimize2, Maximize2, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { type ProjectFileForImport } from './items-editor/types';
 
 type RawImportRow = EstimateImportPreview['rows'][number];
 type ImportRow = RawImportRow & { _index: number };
@@ -21,6 +22,7 @@ type EstimateImportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   estimateId: number;
+  projectFiles?: ProjectFileForImport[];
 };
 
 type Step = 'upload' | 'parsing' | 'progressive' | 'preview' | 'done';
@@ -64,6 +66,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
   open,
   onOpenChange,
   estimateId,
+  projectFiles,
 }) => {
   const queryClient = useQueryClient();
   const excelInputRef = useRef<HTMLInputElement>(null); // F7: раздельные input
@@ -81,6 +84,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [sectionFlags, setSectionFlags] = useState<Set<number>>(new Set());
   const [isMinimized, setIsMinimized] = useState(false); // Фича: сворачиваемый диалог
+  const [selectedProjectFileIds, setSelectedProjectFileIds] = useState<Set<number>>(new Set());
 
   // PDF progressive state
   const [pdfSessionId, setPdfSessionId] = useState<string | null>(null);
@@ -184,6 +188,30 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
     },
   });
 
+  // ── Import from project file (specification) ──
+
+  const specificationFiles = useMemo(() => {
+    if (!projectFiles) return [];
+    return projectFiles.filter(
+      (pf) => pf.file_type_code === 'specification' &&
+        /\.(xlsx|xls|pdf)$/i.test(pf.original_filename || pf.file)
+    );
+  }, [projectFiles]);
+
+  const projectFilePreviewMutation = useMutation({
+    mutationFn: (projectFileIds: number[]) =>
+      api.estimates.importFromProjectFilePreview(estimateIdRef.current, projectFileIds),
+    onSuccess: (data) => {
+      setPreviewData(data);
+      setSectionFlags(new Set());
+      setStep('preview');
+    },
+    onError: (error) => {
+      toast.error(`Ошибка парсинга: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      setStep('upload');
+    },
+  });
+
   // ── Confirm import (общий для Excel и PDF) ──
 
   const importMutation = useMutation({
@@ -214,6 +242,49 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
       abortRef.current = null;
     }
   }, []);
+
+  const handleProjectFilesImport = useCallback(() => {
+    if (selectedProjectFileIds.size === 0) return;
+    stopPolling();
+    setSelectedFile(null);
+    setSectionFlags(new Set());
+    setPreviewData(null);
+    setPdfErrors([]);
+    setIsMinimized(false);
+
+    // Разделяем выбранные файлы по типу
+    const selectedFiles = specificationFiles.filter(pf => selectedProjectFileIds.has(pf.id));
+    const pdfIds = selectedFiles
+      .filter(pf => /\.pdf$/i.test(pf.original_filename || pf.file))
+      .map(pf => pf.id);
+    const excelIds = selectedFiles
+      .filter(pf => /\.(xlsx|xls)$/i.test(pf.original_filename || pf.file))
+      .map(pf => pf.id);
+
+    if (pdfIds.length > 0 && excelIds.length === 0) {
+      // Все PDF → async progressive flow
+      setStep('progressive');
+      setPdfProgress({ current: 0, total: 0 });
+      api.estimates.startProjectFilePdfImport(estimateIdRef.current, pdfIds)
+        .then(({ session_id, total_pages }) => {
+          setPdfSessionId(session_id);
+          setPdfProgress({ current: 0, total: total_pages });
+        })
+        .catch((err) => {
+          toast.error(`Ошибка запуска импорта PDF: ${err instanceof Error ? err.message : 'Неизвестная ошибка'}`);
+          setStep('upload');
+        });
+    } else if (excelIds.length > 0 && pdfIds.length === 0) {
+      // Все Excel → sync flow
+      setStep('parsing');
+      projectFilePreviewMutation.mutate(excelIds);
+    } else {
+      // Смешанный выбор — обрабатываем Excel sync, затем PDF async
+      setStep('parsing');
+      projectFilePreviewMutation.mutate(excelIds);
+      toast.info(`PDF файлы (${pdfIds.length}) будут обработаны отдельно — выберите их после завершения Excel-импорта`);
+    }
+  }, [selectedProjectFileIds, specificationFiles, projectFilePreviewMutation, stopPolling]);
 
   useEffect(() => {
     if (step !== 'progressive' || !pdfSessionId) return;
@@ -392,6 +463,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
     setPdfProgress({ current: 0, total: 0 });
     setPdfErrors([]);
     setIsMinimized(false);
+    setSelectedProjectFileIds(new Set());
   }, [stopPolling, pdfSessionId, step]);
 
   // Фича: сворачивание
@@ -548,6 +620,54 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
                     e.target.value = '';
                   }}
                 />
+
+                {/* Файлы спецификаций из связанных проектов */}
+                {specificationFiles.length > 0 && (
+                  <div className="mt-6 border-t pt-4">
+                    <p className="text-sm font-medium mb-2">Или импортируйте из файлов проекта:</p>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {specificationFiles.map((pf) => {
+                        const isChecked = selectedProjectFileIds.has(pf.id);
+                        return (
+                          <label
+                            key={pf.id}
+                            className={`w-full text-left px-3 py-2 rounded-lg border transition-colors text-sm flex items-center gap-2 cursor-pointer ${
+                              isChecked ? 'bg-primary/10 border-primary/30' : 'hover:bg-accent'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSelectedProjectFileIds(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(pf.id)) next.delete(pf.id);
+                                  else next.add(pf.id);
+                                  return next;
+                                });
+                              }}
+                              className="rounded border-border shrink-0"
+                            />
+                            {/\.pdf$/i.test(pf.original_filename || pf.file)
+                              ? <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                              : <FileSpreadsheet className="h-4 w-4 text-muted-foreground shrink-0" />
+                            }
+                            <span className="truncate">{pf.title || pf.original_filename}</span>
+                            <Badge variant="outline" className="text-xs shrink-0 ml-auto">{pf.projectCipher}</Badge>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      className="mt-2 w-full"
+                      disabled={selectedProjectFileIds.size === 0}
+                      onClick={handleProjectFilesImport}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Импортировать выбранные ({selectedProjectFileIds.size})
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -559,7 +679,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
                   Распознавание файла {selectedFile?.name}...
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Парсинг Excel — несколько секунд
+                  Парсинг файла — несколько секунд
                 </p>
               </div>
             )}
@@ -571,7 +691,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
                   <div className="flex justify-between text-sm mb-1.5">
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Обработка {selectedFile?.name}
+                      Обработка {selectedFile?.name || 'PDF файлов проекта'}
                     </span>
                     <span className="text-muted-foreground">
                       {pdfProgress.current} / {pdfProgress.total} стр. ({progressPercent}%)
