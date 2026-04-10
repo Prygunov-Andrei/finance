@@ -306,6 +306,19 @@ export const STATUS_LABELS: Record<string, string> = {
   
   // Рамочные договоры
   expired: 'Истёк',
+
+  // Маркетинг — Avito листинги
+  new: 'Новое',
+  reviewed: 'Просмотрено',
+  contacted: 'Контакт установлен',
+  converted: 'Конвертирован',
+
+  // Маркетинг — Рассылки
+  sending: 'Отправляется',
+
+  // Маркетинг — Публикации Avito
+  deactivated: 'Деактивировано',
+  error: 'Ошибка',
 };
 
 export const TYPE_LABELS: Record<string, string> = {
@@ -397,3 +410,54 @@ export const DEFAULTS = {
   CURRENCY: 'RUB',
   VAT_RATE: '20',
 } as const;
+
+// ==================== МАРКЕТИНГ ====================
+
+/** Специализации исполнителей */
+export const EXECUTOR_SPECIALIZATIONS = [
+  { value: 'ventilation', label: 'Вентиляция' },
+  { value: 'conditioning', label: 'Кондиционирование' },
+  { value: 'heating', label: 'Отопление' },
+  { value: 'plumbing', label: 'Водоснабжение и канализация' },
+  { value: 'low_voltage', label: 'Слабые токи' },
+  { value: 'electrical', label: 'Электрика' },
+  { value: 'fire_safety', label: 'Пожарная безопасность' },
+  { value: 'automation', label: 'Автоматика' },
+] as const;
+
+/** Источники исполнителей */
+export const EXECUTOR_SOURCE_LABELS: Record<string, string> = {
+  manual: 'Ручной ввод',
+  avito: 'Avito',
+  telegram: 'Telegram',
+  referral: 'Рекомендация',
+};
+
+/** Каналы контактов */
+export const CONTACT_CHANNEL_LABELS: Record<string, string> = {
+  email: 'Email',
+  sms: 'SMS',
+  phone: 'Телефон',
+  avito_msg: 'Avito',
+  telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
+  meeting: 'Встреча',
+};
+
+/** Статусы Avito-листингов */
+export const AVITO_LISTING_STATUS_COLORS: Record<string, string> = {
+  new: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400',
+  reviewed: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400',
+  contacted: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400',
+  converted: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400',
+  rejected: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400',
+};
+
+/** Статусы рассылок */
+export const CAMPAIGN_STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300',
+  scheduled: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400',
+  sending: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400',
+  completed: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400',
+  cancelled: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400',
+};

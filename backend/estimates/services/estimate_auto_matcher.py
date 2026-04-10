@@ -26,11 +26,13 @@ class EstimateAutoMatcher:
         estimate,
         supplier_ids: Optional[List[int]] = None,
         price_strategy: str = 'cheapest',
+        mode: str = 'gaps_only',
     ) -> List[Dict]:
         """Preview-подбор цен из каталога поставщиков и счетов БЕЗ сохранения в БД.
 
         supplier_ids — ID Counterparty для фильтрации (None = все).
         price_strategy — 'cheapest' | 'latest'.
+        mode — 'gaps_only' (только пустые) | 'all' (переподобрать всё).
         """
         from estimates.models import EstimateItem
         from supplier_integrations.models import SupplierProduct
@@ -41,7 +43,7 @@ class EstimateAutoMatcher:
 
         results = []
         for item in items:
-            if item.product and item.material_unit_price > 0:
+            if mode == 'gaps_only' and item.product and item.material_unit_price > 0:
                 continue
 
             try:
@@ -109,7 +111,7 @@ class EstimateAutoMatcher:
 
             product_confidence = 0.85 if best_offer else 0.5
 
-            results.append({
+            result_entry = {
                 'item_id': item.id,
                 'name': item.name,
                 'matched_product': {
@@ -127,6 +129,12 @@ class EstimateAutoMatcher:
                     best_offer.get('source_price_history_id')
                     if best_offer else None
                 ),
-            })
+            }
+
+            # В режиме "all" — включить текущую цену для сравнения
+            if mode == 'all' and item.material_unit_price and item.material_unit_price > 0:
+                result_entry['current_price'] = str(item.material_unit_price)
+
+            results.append(result_entry)
 
         return results

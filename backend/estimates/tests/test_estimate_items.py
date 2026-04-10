@@ -178,6 +178,8 @@ class EstimateItemModelTests(EstimateItemModelTestMixin, TestCase):
 
     # -- signal: recalculate subsection aggregates --
     def test_signal_updates_subsection_on_create(self):
+        # Дефолтная наценка: 30% материалы, 300% работы
+        # sale = purchase * (1 + markup/100)
         EstimateItem.objects.create(
             estimate=self.estimate,
             section=self.section,
@@ -188,8 +190,10 @@ class EstimateItemModelTests(EstimateItemModelTestMixin, TestCase):
             work_unit_price=Decimal('50.00'),
         )
         self.subsection.refresh_from_db()
-        self.assertEqual(self.subsection.materials_sale, Decimal('1000.00'))
-        self.assertEqual(self.subsection.works_sale, Decimal('500.00'))
+        # 100 * 1.3 * 10 = 1300
+        self.assertEqual(self.subsection.materials_sale, Decimal('1300.00'))
+        # 50 * 4.0 * 10 = 2000
+        self.assertEqual(self.subsection.works_sale, Decimal('2000.00'))
 
     def test_signal_updates_subsection_on_save(self):
         item = EstimateItem.objects.create(
@@ -204,8 +208,10 @@ class EstimateItemModelTests(EstimateItemModelTestMixin, TestCase):
         item.quantity = Decimal('5.000')
         item.save()
         self.subsection.refresh_from_db()
-        self.assertEqual(self.subsection.materials_sale, Decimal('500.00'))
-        self.assertEqual(self.subsection.works_sale, Decimal('250.00'))
+        # 100 * 1.3 * 5 = 650
+        self.assertEqual(self.subsection.materials_sale, Decimal('650.00'))
+        # 50 * 4.0 * 5 = 1000
+        self.assertEqual(self.subsection.works_sale, Decimal('1000.00'))
 
     def test_signal_updates_subsection_on_delete(self):
         item = EstimateItem.objects.create(
@@ -223,6 +229,7 @@ class EstimateItemModelTests(EstimateItemModelTestMixin, TestCase):
         self.assertEqual(self.subsection.works_sale, Decimal('0'))
 
     def test_signal_multiple_items_aggregate(self):
+        # Дефолтная наценка: 30% материалы, 300% работы
         EstimateItem.objects.create(
             estimate=self.estimate,
             section=self.section,
@@ -242,13 +249,15 @@ class EstimateItemModelTests(EstimateItemModelTestMixin, TestCase):
             work_unit_price=Decimal('80.00'),
         )
         self.subsection.refresh_from_db()
+        # A: 100*1.3*2=260, B: 200*1.3*3=780 → total: 1040
         self.assertEqual(
             self.subsection.materials_sale,
-            Decimal('200.00') + Decimal('600.00'),
+            Decimal('260.00') + Decimal('780.00'),
         )
+        # A: 50*4.0*2=400, B: 80*4.0*3=960 → total: 1360
         self.assertEqual(
             self.subsection.works_sale,
-            Decimal('100.00') + Decimal('240.00'),
+            Decimal('400.00') + Decimal('960.00'),
         )
 
     def test_signal_no_subsection_no_crash(self):
@@ -615,3 +624,177 @@ class ProductWorkMappingModelTests(EstimateItemModelTestMixin, TestCase):
                 source=src,
             )
             self.assertEqual(mapping.source, src)
+
+
+# ---------------------------------------------------------------------------
+#  EstimateItem — Merge (bulk-merge) API tests
+# ---------------------------------------------------------------------------
+class EstimateItemMergeTests(EstimateItemModelTestMixin, APITestCase):
+
+    def setUp(self):
+        self._create_base_objects()
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.merge_url = '/api/v1/estimate-items/bulk-merge/'
+
+    def _create_items(self, names, section=None, **defaults):
+        """Создаёт items с последовательными sort_order и item_number."""
+        section = section or self.section
+        items = []
+        for i, name in enumerate(names, 1):
+            item = EstimateItem.objects.create(
+                estimate=self.estimate,
+                section=section,
+                sort_order=i,
+                item_number=i,
+                name=name,
+                unit=defaults.get('unit', 'шт'),
+                quantity=defaults.get('quantity', Decimal('1.000')),
+                material_unit_price=defaults.get('material_unit_price', Decimal('0')),
+                work_unit_price=defaults.get('work_unit_price', Decimal('0')),
+                model_name=defaults.get('model_name', ''),
+            )
+            items.append(item)
+        return items
+
+    def test_merge_two_items_concatenates_names(self):
+        items = self._create_items(['Приточная установка', 'Комплект автоматики'])
+        resp = self.client.post(self.merge_url, {'item_ids': [items[0].id, items[1].id]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['merged_into'], items[0].id)
+        self.assertIn(items[1].id, resp.data['deleted_ids'])
+
+        target = EstimateItem.objects.get(id=items[0].id)
+        self.assertEqual(target.name, 'Приточная установка Комплект автоматики')
+        self.assertFalse(EstimateItem.objects.filter(id=items[1].id).exists())
+
+    def test_merge_three_items(self):
+        items = self._create_items(['Приточная установка', 'в том числе', 'Комплект автоматики'])
+        resp = self.client.post(
+            self.merge_url,
+            {'item_ids': [items[0].id, items[1].id, items[2].id]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        target = EstimateItem.objects.get(id=items[0].id)
+        self.assertEqual(target.name, 'Приточная установка в том числе Комплект автоматики')
+        self.assertEqual(EstimateItem.objects.filter(estimate=self.estimate).count(), 1)
+
+    def test_merge_keeps_quantity_from_first(self):
+        items = self._create_items(['Первая', 'Вторая'])
+        items[0].quantity = Decimal('10.000')
+        items[0].save()
+        items[1].quantity = Decimal('5.000')
+        items[1].save()
+
+        self.client.post(self.merge_url, {'item_ids': [items[0].id, items[1].id]}, format='json')
+        target = EstimateItem.objects.get(id=items[0].id)
+        self.assertEqual(target.quantity, Decimal('10.000'))
+
+    def test_merge_keeps_prices_from_first(self):
+        items = self._create_items(
+            ['Первая', 'Вторая'],
+            material_unit_price=Decimal('100.00'),
+            work_unit_price=Decimal('50.00'),
+        )
+        items[1].material_unit_price = Decimal('999.00')
+        items[1].work_unit_price = Decimal('888.00')
+        items[1].save()
+
+        self.client.post(self.merge_url, {'item_ids': [items[0].id, items[1].id]}, format='json')
+        target = EstimateItem.objects.get(id=items[0].id)
+        self.assertEqual(target.material_unit_price, Decimal('100.00'))
+        self.assertEqual(target.work_unit_price, Decimal('50.00'))
+
+    def test_merge_concatenates_model_name(self):
+        items = self._create_items(['A', 'B'])
+        items[0].model_name = 'Model-X'
+        items[0].save()
+        items[1].model_name = 'Model-Y'
+        items[1].save()
+
+        self.client.post(self.merge_url, {'item_ids': [items[0].id, items[1].id]}, format='json')
+        target = EstimateItem.objects.get(id=items[0].id)
+        self.assertEqual(target.model_name, 'Model-X Model-Y')
+
+    def test_merge_skips_empty_names(self):
+        items = self._create_items(['Приточная', '  ', 'Автоматика'])
+        # Пробельная строка пропускается при конкатенации (strip() → пусто)
+        self.client.post(
+            self.merge_url,
+            {'item_ids': [items[0].id, items[1].id, items[2].id]},
+            format='json',
+        )
+        target = EstimateItem.objects.get(id=items[0].id)
+        self.assertEqual(target.name, 'Приточная Автоматика')
+
+    def test_merge_custom_data_shallow_merge(self):
+        items = self._create_items(['A', 'B'])
+        items[0].custom_data = {'brand': 'Daikin', 'color': 'red'}
+        items[0].save()
+        items[1].custom_data = {'voltage': '220V', 'color': 'blue'}
+        items[1].save()
+
+        self.client.post(self.merge_url, {'item_ids': [items[0].id, items[1].id]}, format='json')
+        target = EstimateItem.objects.get(id=items[0].id)
+        # Первый wins при конфликте (color), уникальные ключи сохраняются
+        self.assertEqual(target.custom_data['brand'], 'Daikin')
+        self.assertEqual(target.custom_data['voltage'], '220V')
+        self.assertEqual(target.custom_data['color'], 'red')
+
+    def test_merge_renumbers_items(self):
+        items = self._create_items(['A', 'B', 'C', 'D'])
+        # Объединяем B и C (позиции 2 и 3)
+        self.client.post(self.merge_url, {'item_ids': [items[1].id, items[2].id]}, format='json')
+
+        remaining = list(
+            EstimateItem.objects.filter(estimate=self.estimate)
+            .order_by('item_number')
+            .values_list('item_number', flat=True)
+        )
+        self.assertEqual(remaining, [1, 2, 3])
+
+    def test_merge_deletes_rest_items(self):
+        items = self._create_items(['A', 'B', 'C'])
+        self.client.post(
+            self.merge_url,
+            {'item_ids': [items[0].id, items[1].id, items[2].id]},
+            format='json',
+        )
+        self.assertTrue(EstimateItem.objects.filter(id=items[0].id).exists())
+        self.assertFalse(EstimateItem.objects.filter(id=items[1].id).exists())
+        self.assertFalse(EstimateItem.objects.filter(id=items[2].id).exists())
+
+    def test_merge_different_sections_error(self):
+        section2 = EstimateSection.objects.create(estimate=self.estimate, name='Раздел-2')
+        item1 = EstimateItem.objects.create(
+            estimate=self.estimate, section=self.section, name='A', sort_order=1, item_number=1,
+        )
+        item2 = EstimateItem.objects.create(
+            estimate=self.estimate, section=section2, name='B', sort_order=1, item_number=2,
+        )
+        resp = self.client.post(self.merge_url, {'item_ids': [item1.id, item2.id]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('одном разделе', resp.data['error'])
+
+    def test_merge_single_item_error(self):
+        items = self._create_items(['A'])
+        resp = self.client.post(self.merge_url, {'item_ids': [items[0].id]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_merge_empty_ids_error(self):
+        resp = self.client.post(self.merge_url, {'item_ids': []}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_merge_nonexistent_ids_error(self):
+        items = self._create_items(['A'])
+        resp = self.client.post(self.merge_url, {'item_ids': [items[0].id, 99999]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_merge_truncates_long_name(self):
+        long_name_a = 'A' * 600
+        long_name_b = 'B' * 600
+        items = self._create_items([long_name_a, long_name_b])
+        self.client.post(self.merge_url, {'item_ids': [items[0].id, items[1].id]}, format='json')
+        target = EstimateItem.objects.get(id=items[0].id)
+        self.assertLessEqual(len(target.name), 1000)

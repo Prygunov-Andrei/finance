@@ -230,6 +230,9 @@ const menuItems: MenuItem[] = [
       { id: 'hvac-brands', label: 'Бренды', icon: <Package className="w-4 h-4" />, path: '/hvac/brands', section: 'dashboard' },
       { id: 'hvac-resources', label: 'Ресурсы', icon: <Globe className="w-4 h-4" />, path: '/hvac/resources', section: 'dashboard' },
       { id: 'hvac-search', label: 'Настройки поиска', icon: <Settings className="w-4 h-4" />, path: '/hvac/search-settings', section: 'dashboard' },
+      { id: 'hvac-rating-settings', label: 'Настройки рейтинга', icon: <Settings className="w-4 h-4" />, path: '/hvac/rating-settings', section: 'dashboard' },
+      { id: 'hvac-rating-criteria', label: 'Критерии рейтинга', icon: <FileText className="w-4 h-4" />, path: '/hvac/rating-criteria', section: 'dashboard' },
+      { id: 'hvac-instructions', label: 'Инструкции', icon: <FileText className="w-4 h-4" />, path: '/hvac/instructions', section: 'dashboard' },
     ],
   },
 
@@ -395,12 +398,14 @@ pathToParent['estimates/invoices'] = { label: 'Сметы', path: '/estimates/es
 pathToParent['hvac/news'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/news/create'] = { label: 'Новости', path: '/hvac/news' };
 pathToParent['hvac/news/edit'] = { label: 'Новости', path: '/hvac/news' };
-pathToParent['hvac/drafts'] = { label: 'Новости', path: '/hvac/news' };
 pathToParent['hvac/scheduled'] = { label: 'Новости', path: '/hvac/news' };
 pathToParent['hvac/manufacturers'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/brands'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/resources'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/search-settings'] = { label: 'HVAC-новости', path: '/hvac/news' };
+pathToParent['hvac/rating-settings'] = { label: 'HVAC-новости', path: '/hvac/news' };
+pathToParent['hvac/rating-criteria'] = { label: 'HVAC-новости', path: '/hvac/news' };
+pathToParent['hvac/instructions'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/analytics'] = { label: 'HVAC-новости', path: '/hvac/news' };
 
 export function Layout({ children, onLogout, user }: LayoutProps) {

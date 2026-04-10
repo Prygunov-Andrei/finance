@@ -151,9 +151,27 @@ class TechnicalProposalViewSet(VersioningMixin, viewsets.ModelViewSet):
         tkp = self.get_object()
         tkp.copy_data_from_estimates()
         return Response({'message': 'Данные скопированы из смет'})
-    
+
+    @action(detail=True, methods=['get'], url_path='generate-excel')
+    def generate_excel(self, request, pk=None):
+        """Скачать ТКП в формате Excel."""
+        from django.http import HttpResponse
+        from proposals.services.tkp_excel_generator import TKPExcelGenerator
+
+        tkp = self.get_object()
+        generator = TKPExcelGenerator(tkp)
+        buffer = generator.generate()
+
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        filename = f'TKP_{tkp.number}_{tkp.date or "draft"}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
     # Метод create_version() наследуется от VersioningMixin
-    
+
     @action(detail=True, methods=['post'], url_path='create-mp')
     def create_mp(self, request, pk=None):
         """Создать МП на основе ТКП"""

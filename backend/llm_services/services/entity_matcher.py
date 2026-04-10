@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from accounting.models import Counterparty, LegalEntity
 
 

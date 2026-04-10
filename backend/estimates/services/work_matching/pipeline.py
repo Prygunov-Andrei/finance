@@ -3,10 +3,10 @@ import logging
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from catalog.models import Product
+from catalog.models import Product, ProductKnowledge, ProductWorkMapping
 from pricelists.models import PriceList, PriceListItem, WorkItem
 
-from .tiers import ALL_TIERS, MatchResult
+from .tiers import ALL_TIERS, FAST_TIERS, MatchResult, _wi_grade_str
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +17,12 @@ class MatchingContext:
     Содержит pre-computed данные чтобы избежать N+1 запросов:
     - Все WorkItems с normalized names
     - Все PriceListItems для прайс-листа сметы
+    - History cache (ProductWorkMapping по product_id)
+    - Knowledge cache (ProductKnowledge по normalized name)
     - Ставки прайс-листа (для расчёта calculated_cost)
     """
 
-    def __init__(self, estimate):
+    def __init__(self, estimate, items=None):
         self.estimate = estimate
         self.price_list: Optional[PriceList] = estimate.price_list
 
@@ -64,6 +66,42 @@ class MatchingContext:
 
             logger.info('Loaded %d PriceListItems into cache', len(self.pricelist_items_cache))
 
+        # Prefetch history: product_id → best ProductWorkMapping
+        self.history_cache: Dict[int, ProductWorkMapping] = {}
+        if items:
+            product_ids = [item.product_id for item in items if item.product_id]
+            if product_ids:
+                mappings = (
+                    ProductWorkMapping.objects.filter(
+                        product_id__in=product_ids,
+                        confidence__gte=0.3,  # Исключить многократно отвергнутые
+                    )
+                    .select_related('work_item', 'work_item__section')
+                    .order_by('-usage_count', '-confidence')
+                )
+                for m in mappings:
+                    if m.product_id not in self.history_cache:
+                        self.history_cache[m.product_id] = m
+                logger.info('Loaded %d ProductWorkMappings into history cache', len(self.history_cache))
+
+        # Prefetch knowledge: normalized_name → best ProductKnowledge
+        self.knowledge_cache: Dict[str, ProductKnowledge] = {}
+        knowledge_qs = (
+            ProductKnowledge.objects.filter(
+                status__in=[ProductKnowledge.Status.VERIFIED, ProductKnowledge.Status.PENDING],
+                confidence__gte=0.5,
+            )
+            .select_related('work_item', 'work_item__section')
+            .order_by('-confidence', '-usage_count')
+        )
+        for k in knowledge_qs:
+            if k.item_name_pattern not in self.knowledge_cache:
+                self.knowledge_cache[k.item_name_pattern] = k
+        logger.info('Loaded %d ProductKnowledge into knowledge cache', len(self.knowledge_cache))
+
+        # Отложенные обновления usage_count для knowledge
+        self.knowledge_usage_updates: List[int] = []
+
         # Shared state: fuzzy candidates from Tier 5 → Tier 6
         self.fuzzy_candidates: Dict[int, list] = {}
 
@@ -100,6 +138,25 @@ def match_single_item(item, ctx: MatchingContext) -> Dict:
     }
 
 
+def match_single_item_fast(item, ctx: MatchingContext) -> Optional[Dict]:
+    """Прогнать одну строку только через быстрые тиры (0-5).
+
+    Returns:
+        dict с результатом, или None если быстрые тиры не нашли match.
+    """
+    for tier in FAST_TIERS:
+        try:
+            result = tier.match(item, ctx)
+        except Exception:
+            logger.exception('Tier %s failed for item %d', tier.__class__.__name__, item.id)
+            continue
+
+        if result and result.confidence >= getattr(tier, 'THRESHOLD', 0):
+            return _result_to_dict(item, result, ctx)
+
+    return None
+
+
 def _result_to_dict(item, result: MatchResult, ctx: MatchingContext = None) -> Dict:
     return {
         'item_id': item.id,
@@ -124,10 +181,18 @@ def _result_to_dict(item, result: MatchResult, ctx: MatchingContext = None) -> D
 
 
 def _get_alternatives(item, ctx: MatchingContext) -> List[Dict]:
-    """Top-3 альтернативы для ненайденной позиции."""
+    """Top-3 альтернативы для ненайденной позиции.
+
+    Возвращает полные данные WorkItem для возможности выбора альтернативы.
+    """
     candidates = ctx.fuzzy_candidates.get(item.id, [])
     return [
         {'id': wi.id, 'name': wi.name, 'article': wi.article,
+         'hours': str(wi.hours or 0),
+         'unit': wi.unit,
+         'section_name': wi.section.name if wi.section else '',
+         'required_grade': _wi_grade_str(wi),
+         'calculated_cost': ctx.get_cost_for_work_item(wi) if ctx else None,
          'confidence': round(score * 0.7, 3)}
         for score, wi in candidates[:3]
     ]

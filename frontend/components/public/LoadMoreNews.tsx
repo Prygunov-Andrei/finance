@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NewsCard } from './NewsCard';
 import { NewsListView } from './NewsListView';
+import { NewsFilters, type NewsFilterState } from './NewsFilters';
 import type { NewsItem } from '@/lib/hvac-api';
 
 interface LoadMoreNewsProps {
@@ -12,11 +13,12 @@ interface LoadMoreNewsProps {
 }
 
 export function LoadMoreNews({ initialNews, hasMore, totalCount }: LoadMoreNewsProps) {
-  const [news, setNews] = useState<NewsItem[]>(initialNews);
+  const [news, setNews] = useState<NewsItem[]>(initialNews ?? []);
   const [page, setPage] = useState(2);
   const [loading, setLoading] = useState(false);
   const [canLoadMore, setCanLoadMore] = useState(hasMore);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [filters, setFilters] = useState<NewsFilterState>({ starRating: [5], region: '', month: '' });
 
   useEffect(() => {
     const saved = localStorage.getItem('news_view_mode') as 'list' | 'grid';
@@ -28,19 +30,54 @@ export function LoadMoreNews({ initialNews, hasMore, totalCount }: LoadMoreNewsP
     localStorage.setItem('news_view_mode', mode);
   };
 
+  const buildQueryParams = useCallback((pageNum: number, currentFilters: NewsFilterState) => {
+    const params = new URLSearchParams({ page: String(pageNum) });
+    if (currentFilters.starRating.length > 0) {
+      params.set('star_rating', currentFilters.starRating.join(','));
+    }
+    if (currentFilters.region) {
+      params.set('region', currentFilters.region);
+    }
+    if (currentFilters.month) {
+      params.set('month', currentFilters.month);
+    }
+    return params.toString();
+  }, []);
+
+  const loadFiltered = useCallback(async (newFilters: NewsFilterState) => {
+    setLoading(true);
+    try {
+      const query = buildQueryParams(1, newFilters);
+      const res = await fetch(`/api/hvac/news/?${query}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      const results = Array.isArray(data) ? data : (data.results ?? []);
+      setNews(results);
+      setPage(2);
+      setCanLoadMore(Array.isArray(data) ? false : !!data.next);
+    } catch (err) {
+      console.error('Failed to load filtered news:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildQueryParams]);
+
+  const handleFilterChange = (newFilters: NewsFilterState) => {
+    setFilters(newFilters);
+    loadFiltered(newFilters);
+  };
+
   const loadMore = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/portal/news?page=${page}`);
-
-      if (!res.ok) {
-        throw new Error(`Failed to load news page ${page}: ${res.status} ${res.statusText}`);
-      }
-
+      const query = buildQueryParams(page, filters);
+      const res = await fetch(`/api/hvac/news/?${query}`);
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
-      setNews((prev) => [...prev, ...data.results]);
+      const moreResults = Array.isArray(data) ? data : (data.results ?? []);
+      setNews((prev) => [...prev, ...moreResults]);
       setPage((p) => p + 1);
-      setCanLoadMore(!!data.next);
+      setCanLoadMore(Array.isArray(data) ? false : !!data.next);
     } catch (err) {
       console.error('Failed to load more news:', err);
     } finally {
@@ -50,6 +87,8 @@ export function LoadMoreNews({ initialNews, hasMore, totalCount }: LoadMoreNewsP
 
   return (
     <>
+      <NewsFilters onChange={handleFilterChange} />
+
       {/* View mode toggle */}
       <div className="flex items-center justify-end gap-1 mb-4">
         <button
@@ -79,6 +118,12 @@ export function LoadMoreNews({ initialNews, hasMore, totalCount }: LoadMoreNewsP
           </svg>
         </button>
       </div>
+
+      {news.length === 0 && !loading && (
+        <div className="text-center py-12 text-muted-foreground">
+          Новости не найдены по выбранным фильтрам
+        </div>
+      )}
 
       {viewMode === 'list' ? (
         <div className="space-y-4">

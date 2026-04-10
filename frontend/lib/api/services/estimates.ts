@@ -431,14 +431,22 @@ export function createEstimatesService(request: RequestFn) {
       });
     },
 
+    async bulkDeleteEstimateItems(itemIds: number[]) {
+      return request<{ deleted: number }>('/estimate-items/bulk-delete/', {
+        method: 'POST',
+        body: JSON.stringify({ item_ids: itemIds }),
+      });
+    },
+
     async autoMatchEstimateItems(
       estimateId: number,
-      options?: { priceListId?: number; supplierIds?: number[]; priceStrategy?: string },
+      options?: { priceListId?: number; supplierIds?: number[]; priceStrategy?: string; mode?: string },
     ) {
       const body: Record<string, unknown> = { estimate_id: estimateId };
       if (options?.priceListId) body.price_list_id = options.priceListId;
       if (options?.supplierIds && options.supplierIds.length > 0) body.supplier_ids = options.supplierIds;
       if (options?.priceStrategy) body.price_strategy = options.priceStrategy;
+      if (options?.mode) body.mode = options.mode;
       return request<AutoMatchResult[]>('/estimate-items/auto-match/', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -454,9 +462,10 @@ export function createEstimatesService(request: RequestFn) {
       });
     },
 
-    async getWorkMatchingProgress(sessionId: string, signal?: AbortSignal) {
+    async getWorkMatchingProgress(sessionId: string, signal?: AbortSignal, includeResults?: boolean) {
+      const params = includeResults ? '?include_results=true' : '';
       return request<WorkMatchingProgress>(
-        `/estimate-items/work-matching-progress/${sessionId}/`,
+        `/estimate-items/work-matching-progress/${sessionId}/${params}`,
         signal ? { signal } : undefined,
       );
     },
@@ -468,10 +477,10 @@ export function createEstimatesService(request: RequestFn) {
       );
     },
 
-    async applyWorkMatching(sessionId: string, items: WorkMatchingApplyItem[]) {
+    async applyWorkMatching(sessionId: string, items: WorkMatchingApplyItem[], rejected?: Array<{ item_id: number; work_item_id: number }>) {
       return request<WorkMatchingApplyResult>(
         '/estimate-items/apply-work-matching/',
-        { method: 'POST', body: JSON.stringify({ session_id: sessionId, items }) },
+        { method: 'POST', body: JSON.stringify({ session_id: sessionId, items, rejected_items: rejected }) },
       );
     },
 

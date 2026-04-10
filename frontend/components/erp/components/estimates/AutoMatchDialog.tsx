@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { api, type AutoMatchResult, type AutoMatchOffer , unwrapResults} from '@/lib/api';
+import { useEstimateApi } from '@/lib/api/estimate-api-context';
 import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -31,11 +32,13 @@ export const AutoMatchDialog: React.FC<AutoMatchDialogProps> = ({
   onOpenChange,
   estimateId,
 }) => {
+  const estimateApi = useEstimateApi();
   const queryClient = useQueryClient();
   const [results, setResults] = useState<MatchRow[]>([]);
   const [step, setStep] = useState<'config' | 'results'>('config');
   const [selectedSupplierIds, setSelectedSupplierIds] = useState<number[]>([]);
   const [priceStrategy, setPriceStrategy] = useState<string>('cheapest');
+  const [matchMode, setMatchMode] = useState<string>('gaps_only');
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // Загрузка поставщиков
@@ -48,9 +51,10 @@ export const AutoMatchDialog: React.FC<AutoMatchDialogProps> = ({
 
   const matchMutation = useMutation({
     mutationFn: () =>
-      api.estimates.autoMatchEstimateItems(estimateId, {
+      estimateApi.autoMatchEstimateItems(estimateId, {
         supplierIds: selectedSupplierIds.length > 0 ? selectedSupplierIds : undefined,
         priceStrategy,
+        mode: matchMode,
       }),
     onSuccess: (data) => {
       const rows = (data || []).map((r) => ({
@@ -89,7 +93,7 @@ export const AutoMatchDialog: React.FC<AutoMatchDialogProps> = ({
     }));
 
     try {
-      await api.estimates.bulkUpdateEstimateItems(updates);
+      await estimateApi.bulkUpdateEstimateItems(updates);
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
       toast.success(`Применено ${accepted.length} совпадений`);
       onOpenChange(false);
@@ -145,9 +149,19 @@ export const AutoMatchDialog: React.FC<AutoMatchDialogProps> = ({
       size: 180,
       cell: ({ row }) => row.original.matched_product?.name || '—',
     },
+    ...(matchMode === 'all' ? [{
+      id: 'current_price',
+      header: 'Тек. цена',
+      size: 90,
+      cell: ({ row }: { row: { original: MatchRow } }) => {
+        const cp = (row.original as any).current_price;
+        if (!cp) return <span className="text-muted-foreground">—</span>;
+        return <span className="text-muted-foreground">{Number(cp).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} {'\u20BD'}</span>;
+      },
+    } as ColumnDef<MatchRow, any>] : []),
     {
       id: 'product_price',
-      header: 'Цена',
+      header: 'Новая цена',
       size: 100,
       cell: ({ row }) => {
         const offer = row.original.selectedOffer;
@@ -265,17 +279,32 @@ export const AutoMatchDialog: React.FC<AutoMatchDialogProps> = ({
               </div>
             )}
 
-            <div>
-              <Label className="mb-2 block">Стратегия подбора цены</Label>
-              <Select value={priceStrategy} onValueChange={setPriceStrategy}>
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cheapest">Самая дешёвая цена</SelectItem>
-                  <SelectItem value="latest">Последняя из счетов</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex gap-6">
+              <div>
+                <Label className="mb-2 block">Стратегия подбора цены</Label>
+                <Select value={priceStrategy} onValueChange={setPriceStrategy}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cheapest">Самая дешёвая цена</SelectItem>
+                    <SelectItem value="latest">Последняя из счетов</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Режим подбора</Label>
+                <Select value={matchMode} onValueChange={setMatchMode}>
+                  <SelectTrigger className="w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gaps_only">Только незаполненные</SelectItem>
+                    <SelectItem value="all">Переподобрать все</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         )}

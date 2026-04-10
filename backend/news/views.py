@@ -7,14 +7,19 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
 from django.conf import settings
-from django.db.models import Sum, Avg, Count
+from django.db.models import Sum, Count
 from decimal import Decimal
-from .models import NewsPost, Comment, MediaUpload, SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall
+from .models import (
+    NewsPost, Comment, MediaUpload, SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall,
+    RatingCriterion, RatingConfiguration, RatingRun,
+)
 from .serializers import (
     NewsPostSerializer, NewsPostWriteSerializer, CommentSerializer, MediaUploadSerializer,
     SearchConfigurationSerializer, SearchConfigurationListSerializer,
     NewsDiscoveryRunSerializer, NewsDiscoveryRunListSerializer,
-    DiscoveryAPICallSerializer, DiscoveryStatsSerializer
+    DiscoveryAPICallSerializer, DiscoveryStatsSerializer,
+    RatingCriterionSerializer, RatingConfigurationSerializer, RatingConfigurationListSerializer,
+    RatingRunSerializer, RatingRunListSerializer,
 )
 from .translation_service import TranslationService
 
@@ -32,23 +37,23 @@ def get_default_prompts() -> dict:
         },
         'search_prompts': {
             'ru': {
-                'main': 'Найди все свежие новости на сайте {url} ({name}) за последние 2 недели.\n\nИспользуй веб-поиск. Ищи все статьи, публикации, пресс-релизы, новости на сайте. Для каждой найденной новости верни заголовок, текст новости (1 абзац) и ссылку на источник.',
-                'json_format': 'Верни ответ СТРОГО в JSON формате:\n\n{{\n  "news": [\n    {{\n      "title": "Заголовок новости",\n      "summary": "Текст новости (1 абзац). Пиши напрямую, как журналист, от третьего лица.",\n      "source_url": "https://example.com/news/article"\n    }}\n  ]\n}}\n\nЕсли новостей не найдено: {{"news": []}}\n\nВерни ТОЛЬКО JSON, без комментариев.'
+                'main': 'Найди все свежие новости на сайте {url} ({name}) за последние 2 недели.\n\nИспользуй веб-поиск. Ищи все статьи, публикации, пресс-релизы, новости на сайте. Для каждой найденной новости верни заголовок, текст новости (3 абзаца) и ссылку на источник.',
+                'json_format': 'Верни ответ СТРОГО в JSON формате:\n\n{{\n  "news": [\n    {{\n      "title": "Заголовок новости",\n      "summary": "Текст новости (3 абзаца). Пиши напрямую, как журналист, от третьего лица.",\n      "source_url": "https://example.com/news/article"\n    }}\n  ]\n}}\n\nЕсли новостей не найдено: {{"news": []}}\n\nВерни ТОЛЬКО JSON, без комментариев.'
             },
             'en': {
-                'main': 'Find all recent news on website {url} ({name}) from the last 2 weeks.\n\nUse web search. Look for all articles, publications, press releases, news on the website. For each news item, provide title, summary (1 paragraph) and source link.\n\n**IMPORTANT: Translate all news to Russian. Return only Russian text.**',
-                'json_format': 'Return STRICTLY in JSON format:\n\n{{\n  "news": [\n    {{\n      "title": "Заголовок новости на русском",\n      "summary": "Текст новости на русском (1 абзац). Пиши напрямую, как журналист, от третьего лица.",\n      "source_url": "https://example.com/news/article"\n    }}\n  ]\n}}\n\nIf no news found: {{"news": []}}\n\nReturn ONLY JSON in Russian, no comments.'
+                'main': 'Find all recent news on website {url} ({name}) from the last 2 weeks.\n\nUse web search. Look for all articles, publications, press releases, news on the website. For each news item, provide title, summary (3 paragraphs) and source link.\n\n**IMPORTANT: Translate all news to Russian. Return only Russian text.**',
+                'json_format': 'Return STRICTLY in JSON format:\n\n{{\n  "news": [\n    {{\n      "title": "Заголовок новости на русском",\n      "summary": "Текст новости на русском (3 абзаца). Пиши напрямую, как журналист, от третьего лица.",\n      "source_url": "https://example.com/news/article"\n    }}\n  ]\n}}\n\nIf no news found: {{"news": []}}\n\nReturn ONLY JSON in Russian, no comments.'
             },
             'es': {
-                'main': 'Encuentra noticias en {url} ({name}), {start_date} a {end_date}.\n\nUsa búsqueda web. Para cada: título, resumen (1 párrafo). **Traduce al ruso solamente.**',
+                'main': 'Encuentra noticias en {url} ({name}), {start_date} a {end_date}.\n\nUsa búsqueda web. Para cada: título, resumen (3 párrafos). **Traduce al ruso solamente.**',
                 'json_format': 'JSON:\n{{"news": [{{"title": "русский", "summary": "русский текст"}}]}}\n\nVacío: {{"news": []}}'
             },
             'de': {
-                'main': 'Finde Nachrichten auf {url} ({name}), {start_date} bis {end_date}.\n\nVerwende Websuche. Für jede: Titel, Zusammenfassung (1 Absatz). **Übersetze nur auf Russisch.**',
+                'main': 'Finde Nachrichten auf {url} ({name}), {start_date} bis {end_date}.\n\nVerwende Websuche. Für jede: Titel, Zusammenfassung (3 Absätze). **Übersetze nur auf Russisch.**',
                 'json_format': 'JSON:\n{{"news": [{{"title": "русский", "summary": "русский текст"}}]}}\n\nLeer: {{"news": []}}'
             },
             'pt': {
-                'main': 'Encontre notícias em {url} ({name}), {start_date} a {end_date}.\n\nUse pesquisa web. Para cada: título, resumo (1 parágrafo). **Traduza apenas para russo.**',
+                'main': 'Encontre notícias em {url} ({name}), {start_date} a {end_date}.\n\nUse pesquisa web. Para cada: título, resumo (3 parágrafos). **Traduza apenas para russo.**',
                 'json_format': 'JSON:\n{{"news": [{{"title": "русский", "summary": "русский текст"}}]}}\n\nVazio: {{"news": []}}'
             }
         },
@@ -72,7 +77,7 @@ class NewsPostViewSet(viewsets.ModelViewSet):
     - Создание/Редактирование/Удаление: только администраторы
     """
     permission_classes = [permissions.AllowAny]
-    pagination_class = NewsPagination
+    pagination_class = None
     
     def get_serializer_class(self):
         """Используем разные сериализаторы для чтения и записи"""
@@ -89,18 +94,48 @@ class NewsPostViewSet(viewsets.ModelViewSet):
         """
         queryset = NewsPost.objects.select_related('author').prefetch_related('media').filter(is_deleted=False)
 
-        # Если пользователь не админ, показываем только опубликованные новости
+        # Если пользователь не админ, показываем только опубликованные новости с рейтингом 5
         if not self.request.user.is_staff:
             queryset = queryset.filter(
                 status='published',
                 pub_date__lte=timezone.now()
             )
+            # По умолчанию показываем только 5★, если star_rating не указан явно
+            star_rating_param = self.request.query_params.get('star_rating', None)
+            if star_rating_param is None:
+                queryset = queryset.filter(star_rating=5)
 
         # Фильтрация по is_no_news_found (для массового удаления на фронтенде)
         is_no_news_found = self.request.query_params.get('is_no_news_found', None)
         if is_no_news_found is not None:
             is_no_news_found_bool = is_no_news_found.lower() in ('true', '1', 'yes')
             queryset = queryset.filter(is_no_news_found=is_no_news_found_bool)
+
+        # Фильтрация по star_rating (через запятую: ?star_rating=5,4)
+        star_rating = self.request.query_params.get('star_rating', None)
+        if star_rating is not None:
+            try:
+                ratings = [int(r.strip()) for r in star_rating.split(',') if r.strip()]
+                queryset = queryset.filter(star_rating__in=ratings)
+            except (ValueError, TypeError):
+                pass
+
+        # Фильтрация по региону производителя (?region=Russia)
+        region = self.request.query_params.get('region', None)
+        if region:
+            queryset = queryset.filter(manufacturer__region__icontains=region)
+
+        # Фильтрация по месяцу (?month=2026-03)
+        month = self.request.query_params.get('month', None)
+        if month:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(month, '%Y-%m')
+                queryset = queryset.filter(
+                    pub_date__year=dt.year, pub_date__month=dt.month
+                )
+            except (ValueError, TypeError):
+                pass
 
         return queryset
 
@@ -113,7 +148,9 @@ class NewsPostViewSet(viewsets.ModelViewSet):
         """
         Переопределяем права доступа для разных действий.
         """
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'drafts', 'scheduled', 'publish']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'drafts',
+                           'scheduled', 'publish', 'rate_all_unrated', 'rate_batch', 'set_rating',
+                           'analyze_published', 'rating_progress']:
             return [permissions.IsAdminUser()]
         return [permissions.AllowAny()]
     
@@ -220,6 +257,78 @@ class NewsPostViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(news_post)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['post'], url_path='rate-all-unrated')
+    def rate_all_unrated(self, request):
+        """Запустить AI-рейтинг для всех неоценённых новостей"""
+        from .tasks import rate_news_task
+        config_id = request.data.get('config_id', None)
+        rate_news_task.delay(config_id=config_id)
+        return Response({'status': 'running', 'message': 'AI-рейтинг запущен'})
+
+    @action(detail=False, methods=['get'], url_path='rating-progress')
+    def rating_progress(self, request):
+        """Получить прогресс текущего/последнего рейтинга"""
+        from .models import RatingRun
+        run = RatingRun.objects.first()
+        if not run:
+            return Response({'status': 'idle', 'message': 'Нет запусков рейтинга'})
+        return Response({
+            'id': run.id,
+            'status': run.status,
+            'current_phase': run.current_phase,
+            'processed_count': run.processed_count,
+            'total_to_rate': run.total_to_rate,
+            'total_news_rated': run.total_news_rated,
+            'estimated_cost_usd': float(run.estimated_cost_usd),
+            'started_at': run.started_at.isoformat() if run.started_at else None,
+            'finished_at': run.finished_at.isoformat() if run.finished_at else None,
+            'rating_distribution': run.rating_distribution,
+            'error_message': run.error_message,
+        })
+
+    @action(detail=False, methods=['post'], url_path='analyze-published')
+    def analyze_published(self, request):
+        """Запустить анализ опубликованных новостей для выявления паттернов"""
+        from .tasks import analyze_published_news_task
+        config_id = request.data.get('config_id', None)
+        analyze_published_news_task.delay(config_id=config_id)
+        return Response({'status': 'running', 'message': 'Анализ опубликованных запущен. Результаты в логах Celery.'})
+
+    @action(detail=False, methods=['post'], url_path='rate-batch')
+    def rate_batch(self, request):
+        """Запустить AI-рейтинг для выбранных новостей"""
+        news_ids = request.data.get('news_ids', [])
+        if not news_ids:
+            return Response({'error': 'news_ids обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .tasks import rate_news_task
+        config_id = request.data.get('config_id', None)
+        rate_news_task.delay(config_id=config_id)
+        return Response({'status': 'running', 'message': f'AI-рейтинг запущен для {len(news_ids)} новостей'})
+
+    @action(detail=True, methods=['post'], url_path='set-rating')
+    def set_rating(self, request, pk=None):
+        """Ручная установка рейтинга для одной новости"""
+        news_post = self.get_object()
+        star_rating = request.data.get('star_rating')
+
+        if star_rating is None:
+            return Response({'error': 'star_rating обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            star_rating = int(star_rating)
+            if star_rating < 0 or star_rating > 5:
+                raise ValueError()
+        except (TypeError, ValueError):
+            return Response({'error': 'star_rating должен быть от 0 до 5'}, status=status.HTTP_400_BAD_REQUEST)
+
+        news_post.star_rating = star_rating
+        news_post.rating_explanation = f'Установлено вручную: {request.user.email}'
+        news_post.save(update_fields=['star_rating', 'rating_explanation'])
+
+        serializer = self.get_serializer(news_post)
+        return Response(serializer.data)
+
 
 class CommentViewSet(viewsets.ModelViewSet):
     """
@@ -317,6 +426,7 @@ class SearchConfigurationViewSet(viewsets.ModelViewSet):
     Только администраторы могут просматривать и редактировать конфигурации.
     """
     permission_classes = [permissions.IsAdminUser]
+    pagination_class = None
     
     def get_queryset(self):
         return SearchConfiguration.objects.all()
@@ -612,5 +722,183 @@ class DiscoveryAPICallViewSet(viewsets.ReadOnlyModelViewSet):
         run_id = self.request.query_params.get('run_id', None)
         if run_id:
             queryset = queryset.filter(discovery_run_id=run_id)
-        
+
         return queryset
+
+
+# ============================================================================
+# AI-рейтинг ViewSet-ы
+# ============================================================================
+
+class RatingCriterionViewSet(viewsets.ModelViewSet):
+    """
+    CRUD для критериев оценки новостей.
+    Только администраторы.
+    """
+    serializer_class = RatingCriterionSerializer
+    pagination_class = None
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        queryset = RatingCriterion.objects.prefetch_related('children').all()
+        # Фильтр по уровню звёзд
+        star_rating = self.request.query_params.get('star_rating', None)
+        if star_rating is not None:
+            try:
+                queryset = queryset.filter(star_rating=int(star_rating))
+            except (ValueError, TypeError):
+                pass
+        # Только корневые критерии
+        root_only = self.request.query_params.get('root_only', None)
+        if root_only and root_only.lower() in ('true', '1', 'yes'):
+            queryset = queryset.filter(parent__isnull=True)
+        return queryset
+
+    @action(detail=True, methods=['post'])
+    def move(self, request, pk=None):
+        """Переместить критерий в другой уровень звёзд"""
+        criterion = self.get_object()
+        new_star_rating = request.data.get('star_rating')
+        if new_star_rating is None:
+            return Response({'error': 'star_rating обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            criterion.star_rating = int(new_star_rating)
+            criterion.save(update_fields=['star_rating'])
+        except (ValueError, TypeError):
+            return Response({'error': 'Некорректный star_rating'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(criterion)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        """Массовое переупорядочивание критериев"""
+        items = request.data.get('items', [])
+        for item in items:
+            try:
+                RatingCriterion.objects.filter(id=item['id']).update(order=item['order'])
+            except (KeyError, TypeError):
+                continue
+        return Response({'status': 'ok'})
+
+
+class RatingConfigurationViewSet(viewsets.ModelViewSet):
+    """
+    Управление конфигурациями рейтинга.
+    Аналогично SearchConfigurationViewSet.
+    """
+    permission_classes = [permissions.IsAdminUser]
+    pagination_class = None
+
+    def get_queryset(self):
+        return RatingConfiguration.objects.all()
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return RatingConfigurationListSerializer
+        return RatingConfigurationSerializer
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """Получить активную конфигурацию"""
+        config = RatingConfiguration.get_active()
+        serializer = RatingConfigurationSerializer(config)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """Активировать конфигурацию"""
+        config = self.get_object()
+        config.is_active = True
+        config.save()
+        return Response({'status': 'activated', 'id': config.id, 'name': config.name})
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        """Дублировать конфигурацию"""
+        original = self.get_object()
+        original.pk = None
+        original.id = None
+        original.name = f"{original.name} (copy)"
+        original.is_active = False
+        original.save()
+        serializer = RatingConfigurationSerializer(original)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='default-prompts')
+    def default_prompts(self, request):
+        """Возвращает дефолтные промпты для рейтинга"""
+        return Response({
+            'system_prompt': (
+                "Ты — эксперт по HVAC-индустрии (вентиляция, кондиционирование, холодоснабжение, "
+                "тепловые насосы). Твоя задача — оценить новости по шкале 0-5 звёзд."
+            ),
+            'rating_prompt': (
+                "Оцени каждую новость по следующим критериям.\n\n"
+                "КРИТЕРИИ ОЦЕНКИ:\n{criteria}\n\n"
+                "ВАЖНЫЕ ПРАВИЛА:\n"
+                "- Если новость не подходит ни под один критерий → 0 звёзд\n"
+                "- Если подходит под несколько критериев разных уровней, "
+                "используй НАИВЫСШИЙ рейтинг\n"
+                "- Если есть дочерний критерий с override — используй его рейтинг\n\n"
+                "НОВОСТИ ДЛЯ ОЦЕНКИ:\n[{news_items}]\n\n"
+                "Верни СТРОГО JSON: {{\"ratings\": [{{\"news_id\": <id>, \"star_rating\": <0-5>, "
+                "\"explanation\": \"<почему>\", \"matched_criteria\": [<ids>]}}]}}"
+            ),
+        })
+
+    @action(detail=False, methods=['post'], url_path='check-providers')
+    def check_providers(self, request):
+        """Проверяет доступность провайдеров (переиспользуем логику)"""
+        scv = SearchConfigurationViewSet()
+        scv.request = request
+        return scv.check_providers(request)
+
+
+class RatingRunViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Просмотр истории запусков рейтинга.
+    """
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_queryset(self):
+        return RatingRun.objects.all()
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return RatingRunListSerializer
+        return RatingRunSerializer
+
+    @action(detail=False, methods=['get'])
+    def latest(self, request):
+        """Получить последний запуск"""
+        run = RatingRun.objects.first()
+        if run:
+            serializer = RatingRunSerializer(run)
+            return Response(serializer.data)
+        return Response({'detail': 'No rating runs found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Агрегированная статистика по запускам рейтинга"""
+        runs = RatingRun.objects.all()
+        days = request.query_params.get('days', None)
+        if days:
+            try:
+                from_date = timezone.now() - timezone.timedelta(days=int(days))
+                runs = runs.filter(created_at__gte=from_date)
+            except ValueError:
+                pass
+
+        aggregates = runs.aggregate(
+            total_runs=Count('id'),
+            total_news_rated=Sum('total_news_rated'),
+            total_cost_usd=Sum('estimated_cost_usd'),
+            total_requests=Sum('total_requests'),
+        )
+
+        return Response({
+            'total_runs': aggregates['total_runs'] or 0,
+            'total_news_rated': aggregates['total_news_rated'] or 0,
+            'total_cost_usd': aggregates['total_cost_usd'] or Decimal('0'),
+            'total_requests': aggregates['total_requests'] or 0,
+        })

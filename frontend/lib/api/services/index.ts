@@ -12,4 +12,5 @@ export { createBankingService } from './banking';
 export { createSupplyService } from './supply';
 export { createKanbanService } from './kanban';
 export { createSectionFeedbackService } from './section-feedback';
+export { createMarketingService } from './marketing';
 export type { RequestFn } from './types';

@@ -7,7 +7,8 @@ from datetime import date
 import uuid
 
 from estimates.models import (
-    Project, ProjectNote, Estimate, EstimateSection,
+    Project, ProjectNote, ProjectFileType, ProjectFile,
+    Estimate, EstimateSection,
     EstimateSubsection, EstimateCharacteristic, MountingEstimate,
     EstimateItem,
 )
@@ -245,9 +246,115 @@ class ProjectNoteTests(TestCase):
         self.assertEqual(notes[1], note1)
 
 
+class ProjectFileTypeTests(TestCase):
+    """Тесты для модели ProjectFileType"""
+
+    def test_create_file_type(self):
+        """Тест создания типа файла"""
+        ft = ProjectFileType.objects.create(
+            name='Спецификация', code='spec', sort_order=1
+        )
+        self.assertEqual(ft.name, 'Спецификация')
+        self.assertEqual(ft.code, 'spec')
+        self.assertTrue(ft.is_active)
+
+    def test_unique_code(self):
+        """Тест уникальности кода"""
+        ProjectFileType.objects.create(name='Тип 1', code='unique_code')
+        with self.assertRaises(Exception):
+            ProjectFileType.objects.create(name='Тип 2', code='unique_code')
+
+    def test_str(self):
+        ft = ProjectFileType.objects.create(name='Полный проект', code='full')
+        self.assertEqual(str(ft), 'Полный проект')
+
+    def test_ordering(self):
+        """Тест сортировки по sort_order"""
+        ft2 = ProjectFileType.objects.create(name='Б', code='test_b', sort_order=200)
+        ft1 = ProjectFileType.objects.create(name='А', code='test_a', sort_order=100)
+        types = list(ProjectFileType.objects.filter(code__startswith='test_'))
+        self.assertEqual(types[0].code, 'test_a')
+        self.assertEqual(types[1].code, 'test_b')
+
+    def test_seed_data_exists(self):
+        """Тест что seed-данные из миграции существуют"""
+        codes = ['full_project', 'graphics', 'specification', 'technique']
+        for code in codes:
+            self.assertTrue(
+                ProjectFileType.objects.filter(code=code).exists(),
+                f'Seed тип {code} не найден'
+            )
+
+
+class ProjectFileTests(TestCase):
+    """Тесты для модели ProjectFile"""
+
+    def setUp(self):
+        unique_id = str(uuid.uuid4())[:8]
+        self.object = Object.objects.create(
+            name=f'Тестовый объект {unique_id}', address='Тестовый адрес'
+        )
+        self.user = User.objects.create_user(username='testuser', password='testpass123')
+        self.test_file = SimpleUploadedFile('project.zip', b'fake zip content')
+        self.project = Project.objects.create(
+            cipher='ПР-2025-001', name='Тестовый проект',
+            date=date.today(), stage=Project.Stage.P,
+            object=self.object, file=self.test_file,
+        )
+        self.file_type = ProjectFileType.objects.get(code='full_project')
+
+    def test_create_project_file(self):
+        """Тест создания файла проекта"""
+        pf = ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('spec.pdf', b'pdf content'),
+            file_type=self.file_type,
+            original_filename='spec.pdf',
+            uploaded_by=self.user,
+        )
+        self.assertEqual(pf.project, self.project)
+        self.assertEqual(pf.file_type, self.file_type)
+        self.assertEqual(pf.original_filename, 'spec.pdf')
+
+    def test_cascade_delete(self):
+        """Тест каскадного удаления файлов при удалении проекта"""
+        ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('doc.pdf', b'content'),
+            file_type=self.file_type,
+            original_filename='doc.pdf',
+        )
+        self.assertEqual(ProjectFile.objects.filter(project=self.project).count(), 1)
+        self.project.delete()
+        self.assertEqual(ProjectFile.objects.filter(project=self.project).count(), 0)
+
+    def test_protect_file_type_delete(self):
+        """Тест что нельзя удалить тип файла, если есть привязанные файлы"""
+        ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('doc.pdf', b'content'),
+            file_type=self.file_type,
+            original_filename='doc.pdf',
+        )
+        from django.db.models import ProtectedError
+        with self.assertRaises(ProtectedError):
+            self.file_type.delete()
+
+    def test_str(self):
+        pf = ProjectFile.objects.create(
+            project=self.project,
+            file=SimpleUploadedFile('doc.pdf', b'content'),
+            file_type=self.file_type,
+            original_filename='doc.pdf',
+            title='Основной документ',
+        )
+        self.assertIn('Основной документ', str(pf))
+        self.assertIn(self.project.cipher, str(pf))
+
+
 class EstimateTests(TestCase):
     """Тесты для модели Estimate"""
-    
+
     def setUp(self):
         # Используем уникальное имя для избежания конфликтов при параллельном запуске
         unique_id = str(uuid.uuid4())[:8]
@@ -1094,3 +1201,155 @@ class EstimateItemPromotionServiceTests(TestCase):
         # sort_order строго возрастающий
         for i in range(len(sections) - 1):
             self.assertLess(sections[i].sort_order, sections[i + 1].sort_order)
+
+
+class EstimateItemMoveServiceTests(TestCase):
+    """Unit-тесты для move_item_up / move_item_down (оптимизированный swap)"""
+
+    def setUp(self):
+        unique_id = str(uuid.uuid4())[:8]
+        self.object = Object.objects.create(
+            name=f'Тестовый объект {unique_id}',
+            address='Тестовый адрес'
+        )
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+        self.tax_system, _ = TaxSystem.objects.get_or_create(
+            code='osn_vat_20',
+            defaults={
+                'name': 'ОСН с НДС 20%',
+                'vat_rate': Decimal('20.00'),
+                'has_vat': True
+            }
+        )
+        self.legal_entity, _ = LegalEntity.objects.get_or_create(
+            inn='1234567890',
+            defaults={
+                'name': 'ООО Тест',
+                'short_name': 'Тест',
+                'tax_system': self.tax_system
+            }
+        )
+        self.estimate = Estimate.objects.create(
+            name='Тестовая смета',
+            object=self.object,
+            legal_entity=self.legal_entity,
+            created_by=self.user,
+        )
+        self.section1 = EstimateSection.objects.create(
+            estimate=self.estimate, name='Раздел 1', sort_order=0,
+        )
+        self.section2 = EstimateSection.objects.create(
+            estimate=self.estimate, name='Раздел 2', sort_order=1,
+        )
+        self.items = [
+            EstimateItem.objects.create(
+                estimate=self.estimate, section=self.section1,
+                name=f'Позиция {i}', sort_order=i, item_number=i,
+                quantity=1, material_unit_price=100, work_unit_price=50,
+            ) for i in range(1, 4)
+        ]
+
+    def _get_service(self):
+        from estimates.services.estimate_import_service import EstimateImportService
+        return EstimateImportService()
+
+    def test_move_up_swaps_sort_order_and_item_number(self):
+        """move_up корректно свопает sort_order и item_number"""
+        service = self._get_service()
+        item2 = self.items[1]  # sort_order=2, item_number=2
+        item1 = self.items[0]  # sort_order=1, item_number=1
+
+        result = service.move_item_up(item2.id)
+        self.assertTrue(result['moved'])
+
+        item2.refresh_from_db()
+        item1.refresh_from_db()
+        self.assertEqual(item2.sort_order, 1)
+        self.assertEqual(item2.item_number, 1)
+        self.assertEqual(item1.sort_order, 2)
+        self.assertEqual(item1.item_number, 2)
+
+    def test_move_down_swaps_sort_order_and_item_number(self):
+        """move_down корректно свопает sort_order и item_number"""
+        service = self._get_service()
+        item1 = self.items[0]  # sort_order=1, item_number=1
+        item2 = self.items[1]  # sort_order=2, item_number=2
+
+        result = service.move_item_down(item1.id)
+        self.assertTrue(result['moved'])
+
+        item1.refresh_from_db()
+        item2.refresh_from_db()
+        self.assertEqual(item1.sort_order, 2)
+        self.assertEqual(item1.item_number, 2)
+        self.assertEqual(item2.sort_order, 1)
+        self.assertEqual(item2.item_number, 1)
+
+    def test_move_up_first_item_noop(self):
+        """Первая строка в секции не перемещается вверх"""
+        service = self._get_service()
+        item1 = self.items[0]
+        orig_sort = item1.sort_order
+        orig_num = item1.item_number
+
+        result = service.move_item_up(item1.id)
+        self.assertFalse(result['moved'])
+
+        item1.refresh_from_db()
+        self.assertEqual(item1.sort_order, orig_sort)
+        self.assertEqual(item1.item_number, orig_num)
+
+    def test_move_down_last_item_noop(self):
+        """Последняя строка в секции не перемещается вниз"""
+        service = self._get_service()
+        item3 = self.items[2]
+        orig_sort = item3.sort_order
+        orig_num = item3.item_number
+
+        result = service.move_item_down(item3.id)
+        self.assertFalse(result['moved'])
+
+        item3.refresh_from_db()
+        self.assertEqual(item3.sort_order, orig_sort)
+        self.assertEqual(item3.item_number, orig_num)
+
+    def test_move_preserves_item_number_sequence(self):
+        """После нескольких move подряд item_number остаётся последовательным"""
+        service = self._get_service()
+        # Двигаем item3 вверх дважды: 1,2,3 → 1,3,2 → 3,1,2
+        service.move_item_up(self.items[2].id)
+        service.move_item_up(self.items[2].id)
+
+        items = list(
+            EstimateItem.objects.filter(section=self.section1)
+            .order_by('sort_order')
+            .values_list('item_number', flat=True)
+        )
+        # item_number должен быть последовательным в порядке sort_order
+        self.assertEqual(sorted(items), list(range(1, 4)))
+        # И при этом порядок по sort_order: Позиция3, Позиция1, Позиция2
+        names = list(
+            EstimateItem.objects.filter(section=self.section1)
+            .order_by('sort_order')
+            .values_list('name', flat=True)
+        )
+        self.assertEqual(names, ['Позиция 3', 'Позиция 1', 'Позиция 2'])
+
+    def test_move_does_not_cross_sections(self):
+        """move_up первой строки в секции не перемещает в предыдущую секцию"""
+        service = self._get_service()
+        # Добавляем строку в section2
+        item_s2 = EstimateItem.objects.create(
+            estimate=self.estimate, section=self.section2,
+            name='Позиция S2', sort_order=1, item_number=4,
+            quantity=1, material_unit_price=100, work_unit_price=50,
+        )
+
+        result = service.move_item_up(item_s2.id)
+        self.assertFalse(result['moved'])
+
+        item_s2.refresh_from_db()
+        self.assertEqual(item_s2.section_id, self.section2.id)

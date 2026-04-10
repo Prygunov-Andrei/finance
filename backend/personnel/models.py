@@ -87,6 +87,8 @@ ERP_PERMISSION_TREE = OrderedDict([
             ('kanban', 'Канбан поиска объектов'),
             ('potential_customers', 'Потенциальные заказчики'),
             ('executors', 'Поиск исполнителей'),
+            ('campaigns', 'Рассылки'),
+            ('avito', 'Интеграция Avito'),
         ]),
     }),
     ('communications', {

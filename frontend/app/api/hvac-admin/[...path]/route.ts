@@ -40,14 +40,14 @@ const buildUpstreamUrl = (request: NextRequest, path: string[]): string => {
 
   if (prefix === 'api' && rest[0] === 'hvac') {
     const publicPath = rest.slice(1).join('/');
-    return `${ERP_API_URL}/api/v1/hvac/public/${publicPath}${search}`;
+    return `${ERP_API_URL}/api/v1/hvac/public/${publicPath}/${search}`;
   }
 
   if (prefix === 'hvac-admin') {
-    return `${ERP_API_URL}/api/v1/hvac/admin/${normalizedPath}${search}`;
+    return `${ERP_API_URL}/api/v1/hvac/admin/${normalizedPath}/${search}`;
   }
 
-  return `${ERP_API_URL}/api/v1/hvac/public/${normalizedPath}${search}`;
+  return `${ERP_API_URL}/api/v1/hvac/public/${normalizedPath}/${search}`;
 };
 
 const proxyRequest = async (

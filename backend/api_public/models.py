@@ -24,6 +24,53 @@ def portal_version_path(instance, filename):
     return f'results/{instance.request.access_token[:12]}/v{instance.version_number}/{filename}'
 
 
+class ExternalUser(TimestampedModel):
+    """Внешний пользователь публичного портала.
+
+    Аутентификация через OTP (email). Без пароля.
+    """
+
+    email = models.EmailField(unique=True, verbose_name='Email')
+    phone = models.CharField(max_length=20, blank=True, verbose_name='Телефон')
+    company_name = models.CharField(max_length=255, blank=True, verbose_name='Компания')
+    contact_name = models.CharField(max_length=255, blank=True, verbose_name='Контактное лицо')
+    is_verified = models.BooleanField(default=False, verbose_name='Email подтверждён')
+    session_token = models.CharField(
+        max_length=128, blank=True, db_index=True,
+        verbose_name='Токен сессии',
+    )
+    session_expires_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='Токен истекает',
+    )
+    last_login_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='Последний вход',
+    )
+
+    class Meta:
+        verbose_name = 'Внешний пользователь'
+        verbose_name_plural = 'Внешние пользователи'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.contact_name or self.email} ({self.company_name or "—"})'
+
+    def generate_session_token(self) -> str:
+        """Создать новый session token (7 дней)."""
+        self.session_token = secrets.token_urlsafe(48)
+        self.session_expires_at = timezone.now() + timedelta(days=7)
+        self.last_login_at = timezone.now()
+        self.save(update_fields=['session_token', 'session_expires_at', 'last_login_at'])
+        return self.session_token
+
+    @property
+    def is_session_valid(self) -> bool:
+        return (
+            bool(self.session_token)
+            and self.session_expires_at is not None
+            and self.session_expires_at > timezone.now()
+        )
+
+
 class EstimateRequest(TimestampedModel):
     """Публичный запрос на расчёт сметы. Создаётся при загрузке файлов на портале."""
 

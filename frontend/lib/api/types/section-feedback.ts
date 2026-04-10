@@ -1,7 +1,7 @@
 export type FeedbackSection =
   | 'dashboard' | 'commercial' | 'objects' | 'finance' | 'contracts'
   | 'supply' | 'goods' | 'pto' | 'marketing' | 'communications'
-  | 'settings' | 'help';
+  | 'settings' | 'hvac' | 'help';
 
 export type FeedbackStatus = 'new' | 'in_progress' | 'resolved';
 
@@ -70,5 +70,6 @@ export const SECTION_LABELS: Record<FeedbackSection, string> = {
   marketing: 'Маркетинг',
   communications: 'Переписка',
   settings: 'Справочники и Настройки',
+  hvac: 'HVAC-новости',
   help: 'Справка',
 };

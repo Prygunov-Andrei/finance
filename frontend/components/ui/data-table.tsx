@@ -48,6 +48,8 @@ export type DataTableProps<TData> = {
   enableGrouping?: boolean;
   enableVirtualization?: boolean;
   enableColumnResizing?: boolean;
+  initialColumnSizing?: ColumnSizingState;
+  onColumnSizingChanged?: (sizing: ColumnSizingState) => void;
   grouping?: string[];
   globalFilter?: string;
   onGlobalFilterChange?: (value: string) => void;
@@ -192,6 +194,8 @@ export function DataTable<TData>({
   enableGrouping = false,
   enableVirtualization = false,
   enableColumnResizing = false,
+  initialColumnSizing,
+  onColumnSizingChanged,
   grouping: initialGrouping = [],
   globalFilter: externalGlobalFilter,
   onGlobalFilterChange,
@@ -211,7 +215,7 @@ export function DataTable<TData>({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(initialColumnSizing ?? {});
   const [internalGlobalFilter, setInternalGlobalFilter] = useState('');
   const [groupingState, setGroupingState] = useState<GroupingState>(initialGrouping);
   const [expanded, setExpanded] = useState<ExpandedState>(true);
@@ -219,13 +223,32 @@ export function DataTable<TData>({
   const globalFilterValue = externalGlobalFilter ?? internalGlobalFilter;
   const handleGlobalFilterChange = onGlobalFilterChange ?? setInternalGlobalFilter;
 
+  const onColumnSizingChangedRef = useRef(onColumnSizingChanged);
+  onColumnSizingChangedRef.current = onColumnSizingChanged;
+
+  const handleColumnSizingChange = useCallback(
+    (updater: ColumnSizingState | ((old: ColumnSizingState) => ColumnSizingState)) => {
+      setColumnSizing((prev) => {
+        const newSizing = typeof updater === 'function' ? updater(prev) : updater;
+        onColumnSizingChangedRef.current?.(newSizing);
+        return newSizing;
+      });
+    },
+    [],
+  );
+
+  const onRowSelectionChangeRef = useRef(onRowSelectionChange);
+  onRowSelectionChangeRef.current = onRowSelectionChange;
+
   const handleRowSelectionChange = useCallback(
     (updater: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)) => {
-      const newSelection = typeof updater === 'function' ? updater(rowSelection) : updater;
-      setRowSelection(newSelection);
-      onRowSelectionChange?.(newSelection);
+      setRowSelection((prev) => {
+        const newSelection = typeof updater === 'function' ? updater(prev) : updater;
+        onRowSelectionChangeRef.current?.(newSelection);
+        return newSelection;
+      });
     },
-    [rowSelection, onRowSelectionChange],
+    [],
   );
 
   const table = useReactTable({
@@ -247,7 +270,7 @@ export function DataTable<TData>({
     onGroupingChange: setGroupingState,
     onExpandedChange: setExpanded,
     ...(enableColumnResizing ? {
-      onColumnSizingChange: setColumnSizing,
+      onColumnSizingChange: handleColumnSizingChange,
       columnResizeMode: 'onChange' as const,
       enableColumnResizing: true,
     } : {}),
@@ -274,18 +297,20 @@ export function DataTable<TData>({
     estimateSize: () => estimatedRowHeight,
     overscan,
     enabled: enableVirtualization,
+    measureElement: enableVirtualization
+      ? (el) => {
+          if (!el) return undefined as unknown as number;
+          return el.getBoundingClientRect().height;
+        }
+      : undefined,
+    scrollMargin: enableVirtualization ? estimatedRowHeight : undefined,
   });
 
-  const virtualRows = enableVirtualization ? virtualizer.getVirtualItems() : null;
+  const virtualItems = enableVirtualization ? virtualizer.getVirtualItems() : null;
   const totalSize = enableVirtualization ? virtualizer.getTotalSize() : 0;
 
   const headerGroups = table.getHeaderGroups();
   const hasFooter = columns.some((col) => 'footer' in col && col.footer);
-
-  const displayRows = useMemo(() => {
-    if (!enableVirtualization) return rows;
-    return virtualRows?.map((vr) => rows[vr.index]) ?? [];
-  }, [enableVirtualization, rows, virtualRows]);
 
   // Compute scroll container styles
   const scrollContainerStyle: React.CSSProperties | undefined = maxHeight
@@ -395,13 +420,86 @@ export function DataTable<TData>({
           </TableHeader>
 
           <TableBody>
-            {enableVirtualization && virtualRows && (
-              <tr style={{ height: `${virtualRows[0]?.start ?? 0}px` }}>
-                <td />
-              </tr>
-            )}
-
-            {displayRows.length === 0 ? (
+            {enableVirtualization && virtualItems ? (
+              virtualItems.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <>
+                  {virtualItems[0].start > 0 && (
+                    <tr style={{ height: `${virtualItems[0].start}px` }}>
+                      <td />
+                    </tr>
+                  )}
+                  {virtualItems.map((virtualItem) => {
+                    const row = rows[virtualItem.index];
+                    if (!row) return null;
+                    const extraClassName = rowClassName?.(row);
+                    return (
+                      <tr
+                        key={row.id}
+                        ref={virtualizer.measureElement}
+                        data-index={virtualItem.index}
+                        data-slot="table-row"
+                        data-state={row.getIsSelected() ? 'selected' : undefined}
+                        className={cn(
+                          'hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors',
+                          extraClassName,
+                        )}
+                        onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, row) : undefined}
+                      >
+                        {row.getVisibleCells().map((cell) => {
+                          const meta = cell.column.columnDef.meta as EditableCellMeta | undefined;
+                          return (
+                            <TableCell
+                              key={cell.id}
+                              style={{ width: cell.column.getSize() }}
+                              className={enableColumnResizing ? 'whitespace-normal break-words' : undefined}
+                            >
+                              {meta?.editable ? (
+                                <EditableCell cellContext={cell.getContext()} onEdit={onCellEdit} />
+                              ) : cell.getIsGrouped() ? (
+                                <button
+                                  onClick={row.getToggleExpandedHandler()}
+                                  className="flex items-center gap-1 font-medium"
+                                  aria-label={row.getIsExpanded() ? 'Свернуть группу' : 'Развернуть группу'}
+                                >
+                                  {row.getIsExpanded() ? '▼' : '▶'}{' '}
+                                  {flexRender(cell.column.columnDef.cell, cell.getContext())} (
+                                  {row.subRows.length})
+                                </button>
+                              ) : cell.getIsAggregated() ? (
+                                flexRender(
+                                  cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
+                                  cell.getContext(),
+                                )
+                              ) : cell.getIsPlaceholder() ? null : (
+                                flexRender(cell.column.columnDef.cell, cell.getContext())
+                              )}
+                            </TableCell>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                  {virtualItems[virtualItems.length - 1].end < totalSize && (
+                    <tr
+                      style={{
+                        height: `${totalSize - virtualItems[virtualItems.length - 1].end}px`,
+                      }}
+                    >
+                      <td />
+                    </tr>
+                  )}
+                </>
+              )
+            ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
@@ -411,59 +509,46 @@ export function DataTable<TData>({
                 </TableCell>
               </TableRow>
             ) : (
-              displayRows.map((row) => {
-                if (!row) return null;
-                return (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() ? 'selected' : undefined}
-                    className={rowClassName?.(row)}
-                    onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, row) : undefined}
-                  >
-                    {row.getVisibleCells().map((cell) => {
-                      const meta = cell.column.columnDef.meta as EditableCellMeta | undefined;
-                      return (
-                        <TableCell
-                          key={cell.id}
-                          style={{ width: cell.column.getSize() }}
-                          className={enableColumnResizing ? 'whitespace-normal break-words' : undefined}
-                        >
-                          {meta?.editable ? (
-                            <EditableCell cellContext={cell.getContext()} onEdit={onCellEdit} />
-                          ) : cell.getIsGrouped() ? (
-                            <button
-                              onClick={row.getToggleExpandedHandler()}
-                              className="flex items-center gap-1 font-medium"
-                              aria-label={row.getIsExpanded() ? 'Свернуть группу' : 'Развернуть группу'}
-                            >
-                              {row.getIsExpanded() ? '▼' : '▶'}{' '}
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())} (
-                              {row.subRows.length})
-                            </button>
-                          ) : cell.getIsAggregated() ? (
-                            flexRender(
-                              cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
-                              cell.getContext(),
-                            )
-                          ) : cell.getIsPlaceholder() ? null : (
-                            flexRender(cell.column.columnDef.cell, cell.getContext())
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                );
-              })
-            )}
-
-            {enableVirtualization && virtualRows && (
-              <tr
-                style={{
-                  height: `${totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0)}px`,
-                }}
-              >
-                <td />
-              </tr>
+              rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() ? 'selected' : undefined}
+                  className={rowClassName?.(row)}
+                  onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, row) : undefined}
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    const meta = cell.column.columnDef.meta as EditableCellMeta | undefined;
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        style={{ width: cell.column.getSize() }}
+                        className={enableColumnResizing ? 'whitespace-normal break-words' : undefined}
+                      >
+                        {meta?.editable ? (
+                          <EditableCell cellContext={cell.getContext()} onEdit={onCellEdit} />
+                        ) : cell.getIsGrouped() ? (
+                          <button
+                            onClick={row.getToggleExpandedHandler()}
+                            className="flex items-center gap-1 font-medium"
+                            aria-label={row.getIsExpanded() ? 'Свернуть группу' : 'Развернуть группу'}
+                          >
+                            {row.getIsExpanded() ? '▼' : '▶'}{' '}
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())} (
+                            {row.subRows.length})
+                          </button>
+                        ) : cell.getIsAggregated() ? (
+                          flexRender(
+                            cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )
+                        ) : cell.getIsPlaceholder() ? null : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))
             )}
           </TableBody>
 

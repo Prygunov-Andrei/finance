@@ -39,7 +39,7 @@ describe('AuthService', () => {
 
       const result = await service.login('admin', 'password');
 
-      expect(fetch).toHaveBeenCalledWith('/api/v1/auth/login/', {
+      expect(fetch).toHaveBeenCalledWith('/api/erp/auth/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: 'admin', password: 'password' }),
@@ -86,7 +86,7 @@ describe('AuthService', () => {
       const result = await service.refreshToken();
 
       expect(result).toBe(true);
-      expect(fetch).toHaveBeenCalledWith('/api/v1/auth/refresh/', {
+      expect(fetch).toHaveBeenCalledWith('/api/erp/auth/refresh/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh: 'old-refresh' }),

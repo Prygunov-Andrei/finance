@@ -138,6 +138,8 @@ INSTALLED_APPS = [
     'kanban_object_tasks',
     'kanban_rules',
     'kanban_files',
+    # Маркетинг (поиск исполнителей, Avito-интеграция)
+    'marketing',
 ]
 
 MIDDLEWARE = [
@@ -428,19 +430,7 @@ ESTIMATE_SESSION_TTL = int(os.environ.get('ESTIMATE_SESSION_TTL', '3600'))
 ESTIMATE_IMPORT_PAGE_DPI = int(os.environ.get('ESTIMATE_IMPORT_PAGE_DPI', '100'))
 ESTIMATE_IMPORT_MAX_FILE_SIZE = int(os.environ.get('ESTIMATE_IMPORT_MAX_FILE_SIZE', str(50 * 1024 * 1024)))
 
-# Celery Beat — расписание периодических задач
-from celery.schedules import crontab  # noqa: E402
-
-CELERY_BEAT_SCHEDULE = {
-    'generate-recurring-invoices': {
-        'task': 'supply.tasks.generate_recurring_invoices',
-        'schedule': crontab(hour=6, minute=0),  # Каждый день в 06:00
-    },
-    'scan-overdue-object-tasks': {
-        'task': 'kanban_object_tasks.tasks.scan_overdue_tasks',
-        'schedule': crontab(hour=7, minute=0),
-    },
-}
+# Celery Beat — расписание задач определено в finans_assistant/celery.py (единый источник)
 
 # Bitrix24 Integration
 BITRIX_WEBHOOK_TIMEOUT = int(os.environ.get('BITRIX_WEBHOOK_TIMEOUT', '30'))

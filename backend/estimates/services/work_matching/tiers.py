@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Dict, List, Optional
 
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 
 from catalog.models import Product, ProductKnowledge, ProductWorkMapping
 from llm_services.models import LLMTaskConfig
@@ -89,17 +89,21 @@ class Tier1History:
         if not product:
             return None
 
-        # Ручные привязки (MANUAL) — достаточно 1 использования
-        # Автоматические — нужно минимум 2
-        mapping = (
-            ProductWorkMapping.objects.filter(product=product)
-            .select_related('work_item', 'work_item__section')
-            .order_by('-usage_count', '-confidence')
-            .first()
-        )
+        # Prefetched cache (O(1)) или fallback на DB query
+        if ctx.history_cache:
+            mapping = ctx.history_cache.get(product.id)
+        else:
+            mapping = (
+                ProductWorkMapping.objects.filter(product=product)
+                .select_related('work_item', 'work_item__section')
+                .order_by('-usage_count', '-confidence')
+                .first()
+            )
         if not mapping:
             return None
 
+        # Ручные привязки (MANUAL) — достаточно 1 использования
+        # Автоматические — нужно минимум 2
         if mapping.source == ProductWorkMapping.Source.MANUAL and mapping.usage_count >= 1:
             pass  # OK
         elif mapping.usage_count >= 2:
@@ -149,6 +153,11 @@ class Tier2PriceList:
             score = fuzz.token_set_ratio(item_normalized, wi_normalized) / 100.0
             entry = {
                 'id': wi_id, 'name': wi_name, 'article': wi_obj.article,
+                'hours': str(wi_obj.hours or 0),
+                'unit': wi_obj.unit,
+                'section_name': wi_obj.section.name if wi_obj.section else '',
+                'required_grade': _wi_grade_str(wi_obj),
+                'calculated_cost': cost,
                 'confidence': round(score * 0.9, 3),
             }
             if score > best_score:
@@ -190,16 +199,20 @@ class Tier3Knowledge:
     def match(self, item, ctx) -> Optional[MatchResult]:
         item_normalized = Product.normalize_name(item.name)
 
-        knowledge = (
-            ProductKnowledge.objects.filter(
-                item_name_pattern=item_normalized,
-                status__in=[ProductKnowledge.Status.VERIFIED, ProductKnowledge.Status.PENDING],
-                confidence__gte=0.5,
+        # Prefetched cache (O(1)) или fallback на DB query
+        if ctx.knowledge_cache:
+            knowledge = ctx.knowledge_cache.get(item_normalized)
+        else:
+            knowledge = (
+                ProductKnowledge.objects.filter(
+                    item_name_pattern=item_normalized,
+                    status__in=[ProductKnowledge.Status.VERIFIED, ProductKnowledge.Status.PENDING],
+                    confidence__gte=0.5,
+                )
+                .select_related('work_item', 'work_item__section')
+                .order_by('-confidence', '-usage_count')
+                .first()
             )
-            .select_related('work_item', 'work_item__section')
-            .order_by('-confidence', '-usage_count')
-            .first()
-        )
         if not knowledge:
             return None
 
@@ -209,10 +222,8 @@ class Tier3Knowledge:
             return None
 
         wi = knowledge.work_item
-        # Обновляем usage
-        ProductKnowledge.objects.filter(pk=knowledge.pk).update(
-            usage_count=knowledge.usage_count + 1,
-        )
+        # Откладываем обновление usage (batch в конце)
+        ctx.knowledge_usage_updates.append(knowledge.pk)
 
         return MatchResult(
             work_item_id=wi.id,
@@ -306,6 +317,11 @@ class Tier5Fuzzy:
         conf = best_score * 0.7
         alternatives = [
             {'id': wi.id, 'name': wi.name, 'article': wi.article,
+             'hours': str(wi.hours or 0),
+             'unit': wi.unit,
+             'section_name': wi.section.name if wi.section else '',
+             'required_grade': _wi_grade_str(wi),
+             'calculated_cost': ctx.get_cost_for_work_item(wi),
              'confidence': round(s * 0.7, 3)}
             for s, wi in scored[1:4]
         ]
@@ -542,3 +558,13 @@ ALL_TIERS = [
 ]
 
 TIER_NAMES = ['default', 'history', 'pricelist', 'knowledge', 'category', 'fuzzy', 'llm', 'web']
+
+# Быстрые тиры (0-5): CPU/memory only, без LLM API calls
+FAST_TIERS = [
+    Tier0Default(),
+    Tier1History(),
+    Tier2PriceList(),
+    Tier3Knowledge(),
+    Tier4Category(),
+    Tier5Fuzzy(),
+]

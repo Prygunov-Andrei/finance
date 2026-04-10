@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { api } from '@/lib/api';
+import { useEstimateApi } from '@/lib/api/estimate-api-context';
 import type {
   WorkMatchingProgress,
   WorkMatchingApplyItem,
@@ -41,12 +41,14 @@ function playNotificationBeep() {
 }
 
 export function WorkMatchingDialog({ open, onOpenChange, estimateId }: Props) {
+  const estimateApi = useEstimateApi();
   const [step, setStep] = useState<Step>('start');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [progress, setProgress] = useState<WorkMatchingProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -70,9 +72,10 @@ export function WorkMatchingDialog({ open, onOpenChange, estimateId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.estimates.startWorkMatching(estimateId);
+      const result = await estimateApi.startWorkMatching(estimateId);
       setSessionId(result.session_id);
       setStep('progress');
+      setStartedAt(Date.now());
       startPolling(result.session_id);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -86,15 +89,24 @@ export function WorkMatchingDialog({ open, onOpenChange, estimateId }: Props) {
     }
   };
 
+  const failCountRef = useRef(0);
+
   const startPolling = (sid: string) => {
     const poll = async () => {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        const data = await api.estimates.getWorkMatchingProgress(sid, controller.signal);
+        const data = await estimateApi.getWorkMatchingProgress(sid, controller.signal);
+        failCountRef.current = 0;
+        if (error && !error.includes('Подбор уже')) setError(null);
         setProgress(data);
         if (data.status === 'completed' || data.status === 'error') {
           stopPolling();
+          // Запрашиваем полные результаты отдельным вызовом
+          try {
+            const fullData = await estimateApi.getWorkMatchingProgress(sid, undefined, true);
+            setProgress(fullData);
+          } catch { /* используем данные без results */ }
           setStep('results');
           setIsMinimized((was) => { if (was) playNotificationBeep(); return false; });
           if (!isMinimized) playNotificationBeep();
@@ -104,24 +116,32 @@ export function WorkMatchingDialog({ open, onOpenChange, estimateId }: Props) {
           setIsMinimized(false);
           onOpenChange(false);
         }
-      } catch { /* polling error — ignore single failure */ }
+      } catch {
+        failCountRef.current++;
+        if (failCountRef.current >= 10) {
+          stopPolling();
+          setError('Потеряно соединение с сервером. Подбор может продолжаться в фоне.');
+        } else if (failCountRef.current >= 5) {
+          setError('Проблемы с подключением, повторяю...');
+        }
+      }
     };
     poll();
     pollRef.current = setInterval(poll, POLL_INTERVAL);
   };
 
   const cancelMatching = async () => {
-    if (sessionId) await api.estimates.cancelWorkMatching(sessionId);
+    if (sessionId) await estimateApi.cancelWorkMatching(sessionId);
     stopPolling();
     setIsMinimized(false);
     onOpenChange(false);
   };
 
-  const applyResults = async (items: WorkMatchingApplyItem[]) => {
+  const applyResults = async (items: WorkMatchingApplyItem[], rejected?: Array<{ item_id: number; work_item_id: number }>) => {
     if (!sessionId) return;
     setLoading(true);
     try {
-      await api.estimates.applyWorkMatching(sessionId, items);
+      await estimateApi.applyWorkMatching(sessionId, items, rejected);
       onOpenChange(false);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -142,6 +162,7 @@ export function WorkMatchingDialog({ open, onOpenChange, estimateId }: Props) {
     setProgress(null);
     setError(null);
     setIsMinimized(false);
+    setStartedAt(null);
     onOpenChange(false);
   }, [step, sessionId, stopPolling, onOpenChange]);
 
@@ -221,7 +242,7 @@ export function WorkMatchingDialog({ open, onOpenChange, estimateId }: Props) {
 
           {step === 'progress' && progress && (
             <div className="space-y-4">
-              <WorkMatchingProgressView data={progress} />
+              <WorkMatchingProgressView data={progress} startedAt={startedAt ?? undefined} />
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setIsMinimized(true)}>
                   <Minimize2 className="h-4 w-4 mr-1" />

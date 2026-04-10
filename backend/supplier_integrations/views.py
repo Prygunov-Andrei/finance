@@ -12,6 +12,10 @@ from .models import (
     SupplierBrand,
     SupplierProduct,
     SupplierSyncLog,
+    SupplierRFQ,
+    SupplierRFQItem,
+    SupplierRFQResponse,
+    SupplierRFQResponseItem,
 )
 from .serializers import (
     SupplierIntegrationSerializer,
@@ -196,3 +200,176 @@ class SupplierSyncLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return SupplierSyncLog.objects.select_related('integration')
+
+
+class SupplierRFQViewSet(viewsets.ModelViewSet):
+    """CRUD для запросов поставщикам (RFQ)."""
+
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['estimate', 'status']
+    search_fields = ['number', 'name']
+
+    def get_queryset(self):
+        return SupplierRFQ.objects.select_related(
+            'estimate', 'created_by',
+        ).prefetch_related(
+            'counterparties', 'items', 'responses',
+        ).order_by('-created_at')
+
+    def get_serializer_class(self):
+        from rest_framework import serializers
+
+        class RFQItemSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = SupplierRFQItem
+                fields = '__all__'
+
+        class RFQResponseItemSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = SupplierRFQResponseItem
+                fields = '__all__'
+
+        class RFQResponseSerializer(serializers.ModelSerializer):
+            items = RFQResponseItemSerializer(many=True, read_only=True)
+            counterparty_name = serializers.CharField(source='counterparty.name', read_only=True)
+
+            class Meta:
+                model = SupplierRFQResponse
+                fields = '__all__'
+
+        class RFQSerializer(serializers.ModelSerializer):
+            items = RFQItemSerializer(many=True, read_only=True)
+            responses = RFQResponseSerializer(many=True, read_only=True)
+            created_by_name = serializers.CharField(
+                source='created_by.get_full_name', read_only=True,
+            )
+
+            class Meta:
+                model = SupplierRFQ
+                fields = '__all__'
+                read_only_fields = ['number', 'created_by']
+
+        return RFQSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='add-items')
+    def add_items(self, request, pk=None):
+        """Добавить позиции из сметы в запрос."""
+        rfq = self.get_object()
+        estimate_item_ids = request.data.get('estimate_item_ids', [])
+        if not estimate_item_ids:
+            return Response({'error': 'estimate_item_ids обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from estimates.models import EstimateItem
+        items = EstimateItem.objects.filter(pk__in=estimate_item_ids)
+        created = []
+        for item in items:
+            rfq_item, was_created = SupplierRFQItem.objects.get_or_create(
+                rfq=rfq, estimate_item=item,
+                defaults={
+                    'name': item.name,
+                    'model_name': item.model_name or '',
+                    'unit': item.unit or 'шт',
+                    'quantity': item.quantity or 1,
+                    'sort_order': item.sort_order,
+                },
+            )
+            if was_created:
+                created.append(rfq_item.id)
+
+        return Response({'added': len(created)})
+
+    @action(detail=True, methods=['post'], url_path='send')
+    def send_rfq(self, request, pk=None):
+        """Отправить запрос поставщикам по email."""
+        rfq = self.get_object()
+        if rfq.status != SupplierRFQ.Status.DRAFT:
+            return Response({'error': 'Можно отправить только черновик'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.core.mail import send_mail
+        from django.conf import settings as django_settings
+
+        sent_count = 0
+        for cp in rfq.counterparties.all():
+            if not cp.email:
+                continue
+            try:
+                items_text = '\n'.join(
+                    f'{i+1}. {item.name} ({item.model_name}) — {item.quantity} {item.unit}'
+                    for i, item in enumerate(rfq.items.all())
+                )
+                send_mail(
+                    subject=f'Запрос цен #{rfq.number} — {rfq.name}',
+                    message=f'Просим предоставить коммерческое предложение:\n\n{items_text}\n\nСрок: {rfq.due_date or "по возможности"}\n\n{rfq.message}',
+                    from_email=django_settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[cp.email],
+                    fail_silently=True,
+                )
+                sent_count += 1
+            except Exception:
+                pass
+
+        rfq.status = SupplierRFQ.Status.SENT
+        rfq.save(update_fields=['status'])
+        return Response({'sent': sent_count})
+
+    @action(detail=True, methods=['get'], url_path='compare')
+    def compare(self, request, pk=None):
+        """Сравнение цен от разных поставщиков."""
+        rfq = self.get_object()
+        rfq_items = rfq.items.all()
+        responses = rfq.responses.prefetch_related('items__rfq_item', 'counterparty').all()
+
+        comparison = []
+        for rfq_item in rfq_items:
+            row = {
+                'rfq_item_id': rfq_item.id,
+                'name': rfq_item.name,
+                'quantity': str(rfq_item.quantity),
+                'unit': rfq_item.unit,
+                'offers': [],
+            }
+            for resp in responses:
+                resp_item = resp.items.filter(rfq_item=rfq_item).first()
+                if resp_item:
+                    row['offers'].append({
+                        'counterparty_id': resp.counterparty_id,
+                        'counterparty_name': resp.counterparty.name,
+                        'price': str(resp_item.price),
+                        'available': resp_item.available,
+                        'total': str(resp_item.price * rfq_item.quantity),
+                    })
+            comparison.append(row)
+
+        return Response(comparison)
+
+    @action(detail=True, methods=['post'], url_path='apply')
+    def apply_prices(self, request, pk=None):
+        """Применить выбранные цены к смете."""
+        rfq = self.get_object()
+        selections = request.data.get('selections', [])
+        # selections: [{rfq_item_id: 1, response_item_id: 5}, ...]
+
+        from estimates.models import EstimateItem
+        applied = 0
+        for sel in selections:
+            try:
+                resp_item = SupplierRFQResponseItem.objects.select_related(
+                    'rfq_item__estimate_item',
+                ).get(pk=sel['response_item_id'])
+            except SupplierRFQResponseItem.DoesNotExist:
+                continue
+
+            est_item = resp_item.rfq_item.estimate_item
+            if est_item:
+                est_item.material_unit_price = resp_item.price
+                est_item.save(update_fields=['material_unit_price'])
+                applied += 1
+
+        rfq.status = SupplierRFQ.Status.APPLIED
+        rfq.save(update_fields=['status'])
+
+        return Response({'applied': applied})

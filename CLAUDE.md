@@ -48,7 +48,7 @@ cd bot && pytest
 
 ### Backend
 - Services pattern: бизнес-логика в `app/services/`, views только для HTTP orchestration
-- Apps с services/: accounting, banking, catalog, contracts, estimates, llm_services, objects, payments, personnel, pricelists, proposals, supplier_integrations, supply
+- Apps с services/: accounting, banking, catalog, contracts, estimates, llm_services, marketing, objects, payments, personnel, pricelists, proposals, supplier_integrations, supply
 - Status transitions: через `core/state_machine.py` (декларативный валидатор)
 - Text normalization: через `core/text_utils.py` (единственная копия)
 - Kanban permissions: через `core/kanban_permissions.py` (KanbanRolePermissionMixin)
@@ -57,6 +57,7 @@ cd bot && pytest
 - Markup system: трёхуровневые наценки (смета → раздел → строка), сервис пересчёта в `estimates/services/markup_service.py`, три режима (percent/fixed_price/fixed_amount). Документация: `docs/estimates/markup-architecture.md`
 - Work matching: async 8-уровневый pipeline подбора расценок работ (default → history → pricelist → knowledge → category → fuzzy → LLM → web), сервис в `estimates/services/work_matching/`, Celery + Redis сессии, самообучение через ProductKnowledge + .md файлы. Документация: `docs/estimates/work-matching-dev.md`
 - LLM task config: настройка провайдера для каждой задачи через `LLMTaskConfig`, поддержка локальных LLM. Никакие провайдеры не хардкодятся
+- Marketing: поиск исполнителей + Avito-интеграция в `marketing/`. ExecutorProfile — 1:1 расширение Counterparty (НЕ отдельная сущность). Avito API клиент: `marketing/clients/avito.py` (OAuth2, rate limiting). Unisender: `marketing/clients/unisender.py` (email + SMS). Singleton-модели используют `get_or_create(pk=1) + select_for_update`. Документация: `docs/marketing/`
 
 ### Frontend
 - UI primitives: `@/components/ui/` (shadcn/ui) — единственная копия

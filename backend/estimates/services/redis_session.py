@@ -7,7 +7,7 @@ import json
 import logging
 import uuid
 
-from typing import Optional
+from typing import List, Optional
 
 import redis
 from django.conf import settings
@@ -96,6 +96,24 @@ class RedisSessionManager:
         """Прочитать значение lock."""
         r = get_redis()
         return r.get(lock_key)
+
+    def append_result(self, session_id: str, result: dict):
+        """Добавить один результат в Redis LIST (O(1) per item)."""
+        r = get_redis()
+        key = f'{self._key(session_id)}:results'
+        r.rpush(key, json.dumps(result, ensure_ascii=False))
+        r.expire(key, self.ttl)
+
+    def get_all_results(self, session_id: str) -> List[dict]:
+        """Прочитать все результаты из Redis LIST."""
+        r = get_redis()
+        raw = r.lrange(f'{self._key(session_id)}:results', 0, -1)
+        return [json.loads(item) for item in raw]
+
+    def get_results_count(self, session_id: str) -> int:
+        """Количество результатов в LIST."""
+        r = get_redis()
+        return r.llen(f'{self._key(session_id)}:results')
 
     def scan_sessions(self) -> list:
         """Найти все сессии по prefix (для crash recovery)."""

@@ -401,6 +401,11 @@ export interface WorkMatchingAlternative {
   id: number;
   name: string;
   article: string;
+  hours?: string;
+  unit?: string;
+  section_name?: string;
+  required_grade?: string;
+  calculated_cost?: string | null;
   confidence: number;
 }
 
@@ -420,6 +425,7 @@ export interface WorkMatchingProgress {
   total_items: number;
   current_item: number;
   current_tier: string;
+  current_item_name: string;
   results: WorkMatchingResult[];
   stats: Record<string, number>;
   errors: Array<{ error: string }>;

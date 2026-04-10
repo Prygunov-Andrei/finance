@@ -9,6 +9,12 @@ class Manufacturer(models.Model):
     website_3 = models.URLField(_("Website 3"), blank=True, null=True)
     description = models.TextField(_("Description"), blank=True)
     region = models.CharField(_("Region"), max_length=100, blank=True) # Можно сделать Choices или отдельной моделью, пока строка
+    is_kmp = models.BooleanField(
+        _("KMP (Key Market Producer)"),
+        default=False,
+        help_text=_("Крупный мировой производитель (LG, DAIKIN, Mitsubishi и т.д.). "
+                   "Любые новости от КМП автоматически получают рейтинг не ниже 4 звёзд.")
+    )
 
     class Meta:
         verbose_name = _("Manufacturer")

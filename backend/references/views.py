@@ -16,9 +16,11 @@ class ManufacturerViewSet(viewsets.ModelViewSet):
     """
     ViewSet для производителей с поддержкой CRUD операций.
     Чтение доступно всем, создание/редактирование/удаление - только аутентифицированным пользователям.
+    Пагинация отключена — производителей немного, фронтенд группирует по регионам.
     """
     queryset = Manufacturer.objects.select_related('statistics').prefetch_related('brands').all()
     serializer_class = ManufacturerSerializer
+    pagination_class = None
     
     def get_permissions(self):
         """
@@ -97,6 +99,7 @@ class BrandViewSet(viewsets.ModelViewSet):
     Чтение доступно всем, создание/редактирование/удаление - только аутентифицированным пользователям.
     """
     queryset = Brand.objects.select_related('manufacturer').all()
+    pagination_class = None
     serializer_class = BrandSerializer
     
     def get_permissions(self):
@@ -149,6 +152,7 @@ class NewsResourceViewSet(viewsets.ModelViewSet):
     Чтение доступно всем, создание/редактирование/удаление - только аутентифицированным пользователям.
     """
     queryset = NewsResource.objects.select_related('statistics').all()
+    pagination_class = None
     serializer_class = NewsResourceSerializer
     
     def get_permissions(self):
@@ -279,38 +283,13 @@ class NewsResourceViewSet(viewsets.ModelViewSet):
         if provider not in ['auto', 'grok', 'anthropic', 'openai']:
             provider = 'auto'
         
-        # Запускаем поиск в фоне
-        import threading
-        import time as _time
-
-        # Максимальное время выполнения фонового поиска (секунды)
-        DISCOVERY_WALL_CLOCK_LIMIT = 300  # 5 минут
-
-        def run_discovery():
-            start_time = _time.monotonic()
-            logger.info(
-                "Discovery thread started for resource %s (%s), provider=%s",
-                resource.id, resource.name, provider,
-            )
-            try:
-                service = NewsDiscoveryService(user=request.user)
-                created, errors, error_msg = service.discover_news_for_resource(resource, provider=provider)
-                duration = _time.monotonic() - start_time
-                logger.info(
-                    "Discovery thread finished for resource %s: created=%s, errors=%s, "
-                    "provider=%s, duration=%.1fs",
-                    resource.id, created, errors, provider, duration,
-                )
-            except Exception as e:
-                duration = _time.monotonic() - start_time
-                logger.error(
-                    "Discovery thread failed for resource %s after %.1fs: %s",
-                    resource.id, duration, str(e),
-                )
-
-        thread = threading.Thread(target=run_discovery, name=f"discovery-resource-{resource.id}")
-        thread.daemon = True
-        thread.start()
+        # Запускаем поиск через Celery
+        from news.tasks import discover_news_for_resource_task
+        discover_news_for_resource_task.delay(
+            resource_id=resource.id,
+            provider=provider,
+            user_id=request.user.id if request.user.is_authenticated else None,
+        )
         
         return Response({
             'status': 'running',

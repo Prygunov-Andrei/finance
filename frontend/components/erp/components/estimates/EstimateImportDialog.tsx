@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { api, type EstimateImportPreview } from '@/lib/api';
+import { useEstimateApi } from '@/lib/api/estimate-api-context';
 import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -68,6 +69,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
   estimateId,
   projectFiles,
 }) => {
+  const estimateApi = useEstimateApi();
   const queryClient = useQueryClient();
   const excelInputRef = useRef<HTMLInputElement>(null); // F7: раздельные input
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -176,7 +178,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
   // ── Excel: синхронный preview ──
 
   const previewMutation = useMutation({
-    mutationFn: (file: File) => api.estimates.importEstimateFilePreview(estimateIdRef.current, file),
+    mutationFn: (file: File) => estimateApi.importEstimateFilePreview(estimateIdRef.current, file),
     onSuccess: (data) => {
       setPreviewData(data);
       setSectionFlags(new Set());
@@ -200,7 +202,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
 
   const projectFilePreviewMutation = useMutation({
     mutationFn: (projectFileIds: number[]) =>
-      api.estimates.importFromProjectFilePreview(estimateIdRef.current, projectFileIds),
+      estimateApi.importFromProjectFilePreview(estimateIdRef.current, projectFileIds),
     onSuccess: (data) => {
       setPreviewData(data);
       setSectionFlags(new Set());
@@ -216,7 +218,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
 
   const importMutation = useMutation({
     mutationFn: (rows: Array<{ name: string; model_name?: string; unit?: string; quantity?: string; material_unit_price?: string; work_unit_price?: string; is_section?: boolean }>) =>
-      api.estimates.importEstimateRows(estimateIdRef.current, rows),
+      estimateApi.importEstimateRows(estimateIdRef.current, rows),
     onSuccess: (data) => {
       const count = data?.created_count ?? (Array.isArray(data) ? data.length : 0);
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateIdRef.current] });
@@ -265,7 +267,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
       // Все PDF → async progressive flow
       setStep('progressive');
       setPdfProgress({ current: 0, total: 0 });
-      api.estimates.startProjectFilePdfImport(estimateIdRef.current, pdfIds)
+      estimateApi.startProjectFilePdfImport(estimateIdRef.current, pdfIds)
         .then(({ session_id, total_pages }) => {
           setPdfSessionId(session_id);
           setPdfProgress({ current: 0, total: total_pages });
@@ -298,7 +300,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
       abortRef.current = controller;
 
       try {
-        const data = await api.estimates.getEstimateImportProgress(pdfSessionId, controller.signal);
+        const data = await estimateApi.getEstimateImportProgress(pdfSessionId, controller.signal);
 
         // Проверяем, не был ли запрос отменён
         if (controller.signal.aborted) return;
@@ -394,7 +396,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
     if (ext === 'pdf') {
       setStep('progressive');
       setPdfProgress({ current: 0, total: 0 });
-      api.estimates.startEstimatePdfImport(estimateIdRef.current, file)
+      estimateApi.startEstimatePdfImport(estimateIdRef.current, file)
         .then(({ session_id, total_pages }) => {
           setPdfSessionId(session_id);
           setPdfProgress({ current: 0, total: total_pages });
@@ -438,7 +440,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
   const handleCancelPdf = useCallback(() => {
     if (pdfSessionId) {
       // F5: логируем ошибку cancel (best-effort)
-      api.estimates.cancelEstimateImport(pdfSessionId).catch((e) => {
+      estimateApi.cancelEstimateImport(pdfSessionId).catch((e) => {
         console.warn('Cancel import failed:', e);
       });
     }
@@ -451,7 +453,7 @@ export const EstimateImportDialog: React.FC<EstimateImportDialogProps> = ({
   const handleReset = useCallback(() => {
     stopPolling();
     if (pdfSessionId && step === 'progressive') {
-      api.estimates.cancelEstimateImport(pdfSessionId).catch((e) => {
+      estimateApi.cancelEstimateImport(pdfSessionId).catch((e) => {
         console.warn('Cancel import failed:', e);
       });
     }

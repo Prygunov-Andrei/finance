@@ -319,6 +319,10 @@ class ProductWorkMapping(TimestampedModel):
         default=1,
         verbose_name='Количество использований'
     )
+    public_source = models.BooleanField(
+        default=False,
+        verbose_name='Из публичного портала',
+    )
 
     class Meta:
         verbose_name = 'Сопоставление товар → работа'
@@ -425,6 +429,10 @@ class ProductKnowledge(TimestampedModel):
         null=True,
         blank=True,
         verbose_name='Подтвердил'
+    )
+    public_source = models.BooleanField(
+        default=False,
+        verbose_name='Из публичного портала',
     )
 
     class Meta:

@@ -23,7 +23,9 @@ const nextConfig = {
       // Django admin
       { source: '/admin/:path*', destination: `${backendUrl}/admin/:path*` },
       { source: '/hvac-admin/:path*', destination: `${backendUrl}/api/v1/hvac/admin/:path*` },
-      // Static/media — news media с прод-сервера (файлы не существуют локально)
+      // Загруженные через редактор медиа — всегда локальный backend
+      { source: '/media/news/uploads/:path*', destination: `${backendUrl}/media/news/uploads/:path*` },
+      // Discovery media — с прод-сервера (файлы не существуют локально)
       { source: '/media/news/:path*', destination: `${prodMediaUrl}/media/news/:path*` },
       { source: '/hvac-media/:path*', destination: `${prodMediaUrl}/hvac-media/:path*` },
       { source: '/hvac-static/:path*', destination: `${prodMediaUrl}/hvac-static/:path*` },

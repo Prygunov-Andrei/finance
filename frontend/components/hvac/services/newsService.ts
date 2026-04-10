@@ -42,12 +42,14 @@ export interface MediaUpload {
 
 const newsService = {
   // Получить список новостей
-  getNews: async (language?: string, page?: number): Promise<PaginatedResponse<News>> => {
+  getNews: async (language?: string, page?: number, starRating?: number[]): Promise<PaginatedResponse<News>> => {
     try {
       const config = language ? {
         headers: { 'Accept-Language': language }
       } : {};
-      const params = page ? { page } : {};
+      const params: Record<string, string | number> = {};
+      if (page) params.page = page;
+      if (starRating && starRating.length > 0) params.star_rating = starRating.join(',');
       const response = await apiClient.get('/news/', { ...config, params });
       return response.data;
     } catch (error: unknown) {
@@ -112,24 +114,6 @@ const newsService = {
   // Массовое удаление новостей (только для админов)
   bulkDeleteNews: async (ids: number[]): Promise<void> => {
     await Promise.all(ids.map(id => apiClient.delete(`/news/${id}/`)));
-  },
-
-  // Получить черновики (только для админов)
-  getDrafts: async (): Promise<News[]> => {
-    const response = await apiClient.get('/news/drafts/');
-    return response.data;
-  },
-
-  // Получить черновики с фильтрами (только для админов)
-  getDraftsFiltered: async (params?: {
-    created_at__gte?: string;
-    created_at__lte?: string;
-    ordering?: string;
-    status?: string;
-    is_no_news_found?: boolean;
-  }): Promise<News[]> => {
-    const response = await apiClient.get('/news/drafts/', { params });
-    return response.data;
   },
 
   // Получить запланированные новости (только для админов)

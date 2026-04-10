@@ -259,6 +259,39 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
             ),
         )
 
+    def perform_update(self, serializer):
+        """При изменении work_item — записать в ProductWorkMapping для обучения."""
+        old_work_item_id = serializer.instance.work_item_id
+        instance = serializer.save()
+
+        # Если work_item изменился и есть product — создать mapping для обучения
+        if (instance.work_item_id
+                and instance.work_item_id != old_work_item_id
+                and instance.product_id):
+            from catalog.models import Product, ProductWorkMapping
+
+            ProductWorkMapping.objects.update_or_create(
+                product_id=instance.product_id,
+                work_item_id=instance.work_item_id,
+                defaults={
+                    'confidence': 1.0,
+                    'source': ProductWorkMapping.Source.MANUAL,
+                },
+            )
+            ProductWorkMapping.objects.filter(
+                product_id=instance.product_id,
+                work_item_id=instance.work_item_id,
+            ).update(usage_count=F('usage_count') + 1)
+
+            # Name-based learning
+            from estimates.services.work_matching.knowledge import save_knowledge
+            item_normalized = Product.normalize_name(instance.name)
+            save_knowledge(item_normalized, instance.work_item_id, source='manual')
+
+            # Пересчёт наценок
+            from estimates.services.markup_service import recalculate_subsections_for_items
+            recalculate_subsections_for_items([instance.id])
+
     @action(detail=True, methods=['post'], url_path='promote-to-section')
     def promote_to_section(self, request, pk=None):
         """Превратить строку сметы в раздел (секцию)."""
@@ -439,6 +472,39 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
             EstimateItemSerializer(updated, many=True).data,
         )
 
+    @action(detail=False, methods=['post'], url_path='bulk-delete')
+    def bulk_delete(self, request):
+        """Массовое удаление строк сметы."""
+        item_ids = request.data.get('item_ids', [])
+        if not item_ids:
+            return Response(
+                {'error': 'Необходим item_ids'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from estimates.models import suppress_item_signals
+        with suppress_item_signals():
+            qs = EstimateItem.objects.filter(pk__in=item_ids)
+            # Запомнить subsections для пересчёта
+            subsection_ids = set(qs.values_list('subsection_id', flat=True))
+            deleted_count = qs.count()
+            qs.delete()
+
+        # Пересчёт подсекций после удаления
+        if subsection_ids:
+            from estimates.services.markup_service import recalculate_estimate_subsections
+            for sub_id in subsection_ids:
+                if sub_id:
+                    try:
+                        from estimates.models import EstimateSubsection
+                        sub = EstimateSubsection.objects.get(pk=sub_id)
+                        recalculate_estimate_subsections(sub.section.estimate_id)
+                        break  # Один пересчёт на всю смету достаточно
+                    except Exception:
+                        pass
+
+        return Response({'deleted': deleted_count})
+
     @action(detail=False, methods=['post'], url_path='auto-match')
     def auto_match(self, request):
         """Автоматический подбор цен и работ для строк сметы"""
@@ -461,6 +527,7 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
 
         supplier_ids = request.data.get('supplier_ids', [])
         price_strategy = request.data.get('price_strategy', 'cheapest')
+        mode = request.data.get('mode', 'gaps_only')
 
         from estimates.services.estimate_auto_matcher import EstimateAutoMatcher
         matcher = EstimateAutoMatcher()
@@ -468,6 +535,7 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
             estimate,
             supplier_ids=supplier_ids or None,
             price_strategy=price_strategy,
+            mode=mode,
         )
         return Response(results)
 
@@ -491,6 +559,11 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
                 estimate_id=int(estimate_id),
                 user_id=request.user.id,
             )
+        except Estimate.DoesNotExist:
+            return Response(
+                {'error': 'Смета не найдена'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except ValueError as e:
             msg = str(e)
             if msg.startswith('ALREADY_RUNNING:'):
@@ -506,10 +579,15 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'],
             url_path='work-matching-progress/(?P<session_id>[a-f0-9]+)')
     def work_matching_progress(self, request, session_id=None):
-        """Получить прогресс подбора работ."""
+        """Получить прогресс подбора работ.
+
+        Query params:
+            include_results: true — включить полный массив результатов (для финального запроса)
+        """
+        include_results = request.query_params.get('include_results', '').lower() in ('true', '1')
         from estimates.services.work_matching import WorkMatchingService
         svc = WorkMatchingService()
-        progress = svc.get_progress(session_id)
+        progress = svc.get_progress(session_id, include_results=include_results)
         if not progress:
             return Response(
                 {'error': 'Сессия не найдена или истекла'},
@@ -536,6 +614,7 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
         """Применить результаты подбора работ."""
         session_id = request.data.get('session_id')
         items_data = request.data.get('items', [])
+        rejected_items = request.data.get('rejected_items', [])
         if not session_id or not items_data:
             return Response(
                 {'error': 'Необходимы session_id и items'},
@@ -547,6 +626,7 @@ class EstimateItemViewSet(viewsets.ModelViewSet):
         result = svc.apply_results(
             session_id=session_id,
             items=items_data,
+            rejected_items=rejected_items,
             user=request.user,
         )
 

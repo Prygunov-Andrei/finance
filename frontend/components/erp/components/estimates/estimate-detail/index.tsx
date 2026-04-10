@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from '@/hooks/erp-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, EstimateSection, EstimateSubsection, EstimateCharacteristic, EstimateCreateRequest} from '@/lib/api';
@@ -102,6 +102,34 @@ export function EstimateDetail() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['estimate', id] }); toast.success('Сохранено'); },
     onError: (error) => { toast.error(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`); },
   });
+
+  // Тихое сохранение ширин столбцов (без toast)
+  const silentUpdateMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => api.estimates.updateEstimate(Number(id), data as Partial<EstimateCreateRequest>),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['estimate', id] }); },
+  });
+
+  const columnResizeTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleColumnResize = useCallback((sizing: Record<string, number>) => {
+    if (columnResizeTimerRef.current) clearTimeout(columnResizeTimerRef.current);
+    columnResizeTimerRef.current = setTimeout(() => {
+      if (!estimate?.column_config) return;
+      const updated = estimate.column_config.map((col: ColumnDefAPI) => {
+        const newWidth = sizing[col.key];
+        return newWidth != null ? { ...col, width: Math.round(newWidth) } : col;
+      });
+      silentUpdateMutation.mutate({ column_config: updated });
+    }, 1000);
+  }, [estimate?.column_config, silentUpdateMutation]);
+
+  const initialColumnSizing = useMemo(() => {
+    if (!estimate?.column_config) return undefined;
+    const sizing: Record<string, number> = {};
+    for (const col of estimate.column_config) {
+      if (col.width) sizing[col.key] = col.width;
+    }
+    return sizing;
+  }, [estimate?.column_config]);
 
   const deleteEstimateMutation = useMutation({
     mutationFn: () => api.estimates.deleteEstimate(Number(id)),
@@ -317,7 +345,7 @@ export function EstimateDetail() {
 
         <TabsContent value="items" className="space-y-6">
           <div className="bg-card rounded-xl shadow-sm border border-border p-6">
-            <EstimateItemsEditor estimateId={Number(id)} readOnly={estimate?.status === 'approved' || estimate?.status === 'agreed'} columnConfig={estimate?.column_config} onOpenColumnConfig={() => setColumnConfigOpen(true)} projectFiles={allProjectFiles} />
+            <EstimateItemsEditor estimateId={Number(id)} readOnly={estimate?.status === 'approved' || estimate?.status === 'agreed'} columnConfig={estimate?.column_config} onOpenColumnConfig={() => setColumnConfigOpen(true)} projectFiles={allProjectFiles} onColumnResize={handleColumnResize} initialColumnSizing={initialColumnSizing} />
           </div>
         </TabsContent>
 

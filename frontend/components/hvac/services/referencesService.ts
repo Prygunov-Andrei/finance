@@ -261,7 +261,10 @@ const referencesService = {
       headers: { 'Accept-Language': language }
     } : {};
     const response = await apiClient.get('/references/manufacturers/', config);
-    return response.data;
+    const data = response.data;
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.results)) return data.results;
+    return [];
   },
 
   // Получить список брендов
@@ -270,7 +273,10 @@ const referencesService = {
       headers: { 'Accept-Language': language }
     } : {};
     const response = await apiClient.get('/references/brands/', config);
-    return response.data;
+    const data = response.data;
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.results)) return data.results;
+    return [];
   },
 
   // Получить список ресурсов
@@ -293,7 +299,10 @@ const referencesService = {
     
     const url = params.toString() ? `/references/resources/?${params.toString()}` : '/references/resources/';
     const response = await apiClient.get(url, config);
-    return response.data;
+    const data = response.data;
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.results)) return data.results;
+    return [];
   },
 
   // Получить информацию о последнем поиске новостей

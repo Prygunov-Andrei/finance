@@ -56,6 +56,45 @@ class NewsPost(models.Model):
         default=False,
         help_text=_("Soft-delete: новость скрыта и не будет пересоздана discovery")
     )
+
+    # AI-рейтинг (звёзды 0-5)
+    STAR_RATING_CHOICES = [
+        (0, _('0 — Не классифицировано')),
+        (1, _('1 — Новостей не найдено')),
+        (2, _('2 — Не по теме')),
+        (3, _('3 — Не интересно')),
+        (4, _('4 — Ограниченно интересно')),
+        (5, _('5 — Интересно')),
+    ]
+    star_rating = models.IntegerField(
+        _("Star Rating"),
+        choices=STAR_RATING_CHOICES,
+        null=True,
+        blank=True,
+        help_text=_("AI-рейтинг (0-5 звёзд). NULL = ещё не оценена.")
+    )
+    rating_explanation = models.TextField(
+        _("Rating Explanation"),
+        blank=True,
+        default='',
+        help_text=_("Объяснение LLM, почему присвоен такой рейтинг")
+    )
+    matched_criteria = models.JSONField(
+        _("Matched Criteria"),
+        default=list,
+        blank=True,
+        help_text=_("Список ID критериев, которые сработали для этой новости")
+    )
+    duplicate_group = models.ForeignKey(
+        'NewsDuplicateGroup',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='news_posts',
+        verbose_name=_("Duplicate Group"),
+        help_text=_("Группа дубликатов, к которой относится эта новость")
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -76,6 +115,7 @@ class NewsPost(models.Model):
         ordering = ['-pub_date']
         indexes = [
             models.Index(fields=['status', '-pub_date']),
+            models.Index(fields=['star_rating', 'status', '-pub_date']),
         ]
 
     def __str__(self):
@@ -779,3 +819,414 @@ class NewsDiscoveryStatus(models.Model):
             processed_count=0,
             status='running'
         )
+
+
+# ============================================================================
+# AI-рейтинг новостей
+# ============================================================================
+
+class NewsDuplicateGroup(models.Model):
+    """
+    Группа дубликатов новостей.
+    Когда одна и та же новость найдена в нескольких источниках,
+    они объединяются в группу с общим текстом.
+    """
+    merged_title = models.CharField(
+        _("Merged Title"),
+        max_length=500,
+        blank=True,
+        help_text=_("Объединённый заголовок из всех дубликатов")
+    )
+    merged_body = models.TextField(
+        _("Merged Body"),
+        blank=True,
+        help_text=_("Объединённый текст из всех дубликатов (сформирован LLM)")
+    )
+    source_count = models.IntegerField(
+        _("Source Count"),
+        default=0,
+        help_text=_("Количество источников, в которых найдена новость")
+    )
+    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("News Duplicate Group")
+        verbose_name_plural = _("News Duplicate Groups")
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Duplicate Group: {self.merged_title[:80]} ({self.source_count} sources)"
+
+
+class RatingCriterion(models.Model):
+    """
+    Настраиваемый критерий оценки новостей.
+    Критерии организованы по уровням звёзд и могут быть двухуровневыми:
+    - Уровень 1: если критерий сработал → базовый star_rating
+    - Уровень 2 (дочерний): если сработал И родитель И ребёнок → override_star_rating
+    """
+    STAR_RATING_CHOICES = [
+        (0, _('0 — Не классифицировано')),
+        (2, _('2 — Не по теме')),
+        (3, _('3 — Не интересно')),
+        (4, _('4 — Ограниченно интересно')),
+        (5, _('5 — Интересно')),
+    ]
+
+    star_rating = models.IntegerField(
+        _("Star Rating"),
+        choices=STAR_RATING_CHOICES,
+        help_text=_("Уровень звёзд, к которому относится критерий")
+    )
+    name = models.CharField(
+        _("Name"),
+        max_length=255,
+        help_text=_("Короткое имя критерия для отображения в списке")
+    )
+    description = models.TextField(
+        _("Description"),
+        help_text=_("Полное описание критерия для промпта LLM. "
+                   "Чем подробнее, тем точнее будет оценка.")
+    )
+    keywords = models.JSONField(
+        _("Keywords"),
+        default=list,
+        blank=True,
+        help_text=_("Подсказки по ключевым словам: ['назначение', 'увольнение', 'CEO']")
+    )
+    is_active = models.BooleanField(
+        _("Is Active"),
+        default=True,
+        help_text=_("Неактивные критерии не участвуют в оценке")
+    )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name=_("Parent Criterion"),
+        help_text=_("Родительский критерий для двухуровневой оценки")
+    )
+    override_star_rating = models.IntegerField(
+        _("Override Star Rating"),
+        null=True,
+        blank=True,
+        help_text=_("Если сработал И родитель И этот критерий, "
+                   "используем этот рейтинг вместо родительского")
+    )
+    order = models.IntegerField(
+        _("Order"),
+        default=0,
+        help_text=_("Порядок отображения в списке")
+    )
+    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Updated At"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("Rating Criterion")
+        verbose_name_plural = _("Rating Criteria")
+        ordering = ['star_rating', 'order', 'name']
+        indexes = [
+            models.Index(fields=['star_rating', 'is_active']),
+        ]
+
+    def __str__(self):
+        stars = '★' * self.star_rating
+        parent_info = f" → {self.override_star_rating}★" if self.parent and self.override_star_rating else ""
+        return f"{stars} {self.name}{parent_info}"
+
+
+class RatingConfiguration(models.Model):
+    """
+    Конфигурация AI-рейтинга новостей.
+    Аналогична SearchConfiguration, но для процесса оценки.
+    """
+    PROVIDER_CHOICES = [
+        ('grok', 'Grok (xAI)'),
+        ('anthropic', 'Anthropic Claude'),
+        ('gemini', 'Google Gemini'),
+        ('openai', 'OpenAI GPT'),
+    ]
+
+    name = models.CharField(
+        _("Configuration Name"),
+        max_length=100,
+        default="default",
+        help_text=_("Название конфигурации для идентификации")
+    )
+    is_active = models.BooleanField(
+        _("Is Active"),
+        default=False,
+        help_text=_("Только одна конфигурация может быть активной")
+    )
+
+    # Основной провайдер и цепочка fallback
+    primary_provider = models.CharField(
+        _("Primary Provider"),
+        max_length=20,
+        choices=PROVIDER_CHOICES,
+        default='grok',
+        help_text=_("Основной провайдер для оценки")
+    )
+    fallback_chain = models.JSONField(
+        _("Fallback Chain"),
+        default=list,
+        blank=True,
+        help_text=_("Цепочка резервных провайдеров: ['anthropic', 'gemini', 'openai']")
+    )
+
+    # LLM параметры
+    temperature = models.FloatField(
+        _("Temperature"),
+        default=0.2,
+        help_text=_("Температура LLM (0.0-1.0). Для рейтинга рекомендуется низкая (0.1-0.3)")
+    )
+    timeout = models.IntegerField(
+        _("Timeout (seconds)"),
+        default=120,
+        help_text=_("Таймаут запроса к LLM в секундах")
+    )
+
+    # Модели LLM
+    grok_model = models.CharField(_("Grok Model"), max_length=50, default='grok-4-1-fast')
+    anthropic_model = models.CharField(_("Anthropic Model"), max_length=50, default='claude-haiku-4-5')
+    gemini_model = models.CharField(_("Gemini Model"), max_length=50, default='gemini-2.5-flash')
+    openai_model = models.CharField(_("OpenAI Model"), max_length=50, default='gpt-4.1-mini')
+
+    # Настройки рейтинга
+    batch_size = models.IntegerField(
+        _("Batch Size"),
+        default=10,
+        help_text=_("Количество новостей в одном батче для LLM (10-20)")
+    )
+    duplicate_similarity_threshold = models.FloatField(
+        _("Duplicate Similarity Threshold"),
+        default=0.75,
+        help_text=_("Порог схожести заголовков для определения дубликатов (0.0-1.0)")
+    )
+
+    # Тарифы для расчёта стоимости (цена за 1М токенов в USD)
+    grok_input_price = models.DecimalField(_("Grok Input Price"), max_digits=10, decimal_places=4, default=0.20)
+    grok_output_price = models.DecimalField(_("Grok Output Price"), max_digits=10, decimal_places=4, default=0.50)
+    anthropic_input_price = models.DecimalField(_("Anthropic Input Price"), max_digits=10, decimal_places=4, default=1.00)
+    anthropic_output_price = models.DecimalField(_("Anthropic Output Price"), max_digits=10, decimal_places=4, default=5.00)
+    gemini_input_price = models.DecimalField(_("Gemini Input Price"), max_digits=10, decimal_places=4, default=0.30)
+    gemini_output_price = models.DecimalField(_("Gemini Output Price"), max_digits=10, decimal_places=4, default=2.50)
+    openai_input_price = models.DecimalField(_("OpenAI Input Price"), max_digits=10, decimal_places=4, default=0.40)
+    openai_output_price = models.DecimalField(_("OpenAI Output Price"), max_digits=10, decimal_places=4, default=1.60)
+
+    # Промпты (JSON)
+    prompts = models.JSONField(
+        _("Prompts"),
+        default=dict,
+        blank=True,
+        help_text=_("Промпты для рейтинга: {system_prompt, rating_prompt, duplicate_prompt, merge_prompt}. "
+                   "Пустой {} = дефолтные промпты.")
+    )
+
+    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Updated At"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("Rating Configuration")
+        verbose_name_plural = _("Rating Configurations")
+        ordering = ['-is_active', '-updated_at']
+
+    def __str__(self):
+        active = " ✓" if self.is_active else ""
+        return f"{self.name}{active}"
+
+    def save(self, *args, **kwargs):
+        """При активации конфигурации деактивируем остальные"""
+        if self.is_active:
+            RatingConfiguration.objects.exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_active(cls):
+        """Возвращает активную конфигурацию или создаёт дефолтную"""
+        config = cls.objects.filter(is_active=True).first()
+        if not config:
+            config = cls.objects.first()
+            if config:
+                config.is_active = True
+                config.save()
+            else:
+                config = cls.objects.create(name="default", is_active=True)
+        return config
+
+    def get_price(self, provider: str, token_type: str) -> float:
+        """Возвращает цену за 1М токенов для провайдера"""
+        field_name = f"{provider}_{token_type}_price"
+        return float(getattr(self, field_name, 0))
+
+    def to_dict(self) -> dict:
+        """Возвращает снимок конфигурации как словарь"""
+        return {
+            'name': self.name,
+            'primary_provider': self.primary_provider,
+            'fallback_chain': self.fallback_chain,
+            'temperature': self.temperature,
+            'timeout': self.timeout,
+            'grok_model': self.grok_model,
+            'anthropic_model': self.anthropic_model,
+            'gemini_model': self.gemini_model,
+            'openai_model': self.openai_model,
+            'batch_size': self.batch_size,
+            'duplicate_similarity_threshold': self.duplicate_similarity_threshold,
+            'prompts': self.prompts or {},
+            'prices': {
+                'grok': {'input': float(self.grok_input_price), 'output': float(self.grok_output_price)},
+                'anthropic': {'input': float(self.anthropic_input_price), 'output': float(self.anthropic_output_price)},
+                'gemini': {'input': float(self.gemini_input_price), 'output': float(self.gemini_output_price)},
+                'openai': {'input': float(self.openai_input_price), 'output': float(self.openai_output_price)},
+            }
+        }
+
+
+class RatingRun(models.Model):
+    """
+    Запуск AI-рейтинга новостей.
+    Аналогичен NewsDiscoveryRun, но для процесса оценки.
+    """
+    discovery_run = models.ForeignKey(
+        NewsDiscoveryRun,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rating_runs',
+        verbose_name=_("Discovery Run"),
+        help_text=_("Discovery-запуск, после которого был запущен рейтинг")
+    )
+    config_snapshot = models.JSONField(
+        _("Config Snapshot"),
+        null=True,
+        blank=True,
+        help_text=_("Копия конфигурации рейтинга на момент запуска")
+    )
+
+    started_at = models.DateTimeField(_("Started At"), null=True, blank=True)
+    finished_at = models.DateTimeField(_("Finished At"), null=True, blank=True)
+
+    # Метрики
+    total_news_rated = models.IntegerField(_("Total News Rated"), default=0)
+    total_requests = models.IntegerField(_("Total Requests"), default=0)
+    total_input_tokens = models.IntegerField(_("Total Input Tokens"), default=0)
+    total_output_tokens = models.IntegerField(_("Total Output Tokens"), default=0)
+    estimated_cost_usd = models.DecimalField(
+        _("Estimated Cost (USD)"),
+        max_digits=10,
+        decimal_places=4,
+        default=0
+    )
+    provider_stats = models.JSONField(
+        _("Provider Stats"),
+        default=dict,
+        blank=True
+    )
+    rating_distribution = models.JSONField(
+        _("Rating Distribution"),
+        default=dict,
+        blank=True,
+        help_text=_('Распределение по звёздам: {"0": 5, "1": 20, "2": 50, "3": 200, "4": 30, "5": 10}')
+    )
+    duplicates_found = models.IntegerField(_("Duplicates Found"), default=0)
+
+    # Статус
+    STATUS_CHOICES = [
+        ('running', _('Running')),
+        ('completed', _('Completed')),
+        ('error', _('Error')),
+    ]
+    status = models.CharField(
+        _("Status"),
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='running'
+    )
+    error_message = models.TextField(_("Error Message"), blank=True, default='')
+
+    # Прогресс
+    total_to_rate = models.IntegerField(_("Total To Rate"), default=0,
+        help_text=_("Общее количество новостей для оценки"))
+    processed_count = models.IntegerField(_("Processed Count"), default=0,
+        help_text=_("Количество уже обработанных новостей"))
+    current_phase = models.CharField(_("Current Phase"), max_length=100, blank=True, default='',
+        help_text=_("Текущий этап: quick_rules / llm_rating / duplicates / completed"))
+
+    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Updated At"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("Rating Run")
+        verbose_name_plural = _("Rating Runs")
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+        ]
+
+    def __str__(self):
+        cost = f"${self.estimated_cost_usd:.2f}" if self.estimated_cost_usd else "$0"
+        return f"Rating Run {self.created_at.strftime('%Y-%m-%d %H:%M')} - {self.total_news_rated} rated, {cost}"
+
+    def get_duration_seconds(self) -> int:
+        if self.started_at and self.finished_at:
+            return int((self.finished_at - self.started_at).total_seconds())
+        return 0
+
+    def get_duration_display(self) -> str:
+        seconds = self.get_duration_seconds()
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        secs = seconds % 60
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+    @classmethod
+    def start_new_run(cls, config: 'RatingConfiguration' = None, discovery_run=None):
+        """Создаёт новый запуск рейтинга"""
+        if config is None:
+            config = RatingConfiguration.get_active()
+        return cls.objects.create(
+            discovery_run=discovery_run,
+            config_snapshot=config.to_dict() if config else None,
+            started_at=timezone.now(),
+            provider_stats={}
+        )
+
+    def finish(self, error_message=''):
+        """Завершает запуск рейтинга"""
+        self.finished_at = timezone.now()
+        self.status = 'error' if error_message else 'completed'
+        self.error_message = error_message
+        self.current_phase = 'completed'
+        self.save()
+
+    def update_progress(self, processed: int, total: int, phase: str):
+        """Обновляет прогресс выполнения"""
+        self.processed_count = processed
+        self.total_to_rate = total
+        self.current_phase = phase
+        self.save(update_fields=['processed_count', 'total_to_rate', 'current_phase', 'updated_at'])
+
+    def add_api_call(self, provider: str, input_tokens: int, output_tokens: int,
+                     cost: float, success: bool = True):
+        """Добавляет статистику вызова API"""
+        if provider not in self.provider_stats:
+            self.provider_stats[provider] = {
+                'requests': 0, 'input_tokens': 0, 'output_tokens': 0,
+                'cost': 0, 'errors': 0
+            }
+        stats = self.provider_stats[provider]
+        stats['requests'] += 1
+        stats['input_tokens'] += input_tokens
+        stats['output_tokens'] += output_tokens
+        stats['cost'] += cost
+        if not success:
+            stats['errors'] += 1
+
+        self.total_requests += 1
+        self.total_input_tokens += input_tokens
+        self.total_output_tokens += output_tokens
+        self.estimated_cost_usd = float(self.estimated_cost_usd) + cost
+        self.save()

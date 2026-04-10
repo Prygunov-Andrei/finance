@@ -11,6 +11,7 @@ class SectionFeedback(TimestampedModel):
     class Section(models.TextChoices):
         DASHBOARD = 'dashboard', 'Пункт управления'
         COMMERCIAL = 'commercial', 'Коммерческие предложения'
+        ESTIMATES = 'estimates', 'Сметы'
         OBJECTS = 'objects', 'Объекты'
         FINANCE = 'finance', 'Финансы'
         CONTRACTS = 'contracts', 'Договоры'
@@ -20,6 +21,7 @@ class SectionFeedback(TimestampedModel):
         MARKETING = 'marketing', 'Маркетинг'
         COMMUNICATIONS = 'communications', 'Переписка'
         SETTINGS = 'settings', 'Справочники и Настройки'
+        HVAC = 'hvac', 'HVAC-новости'
         HELP = 'help', 'Справка'
 
     class Status(models.TextChoices):

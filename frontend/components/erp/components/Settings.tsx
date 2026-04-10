@@ -1,6 +1,6 @@
 import { useSearchParams } from '@/hooks/erp-router';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, CreditCard, FolderTree, ScrollText, ShieldCheck, Sparkles, Landmark } from 'lucide-react';
+import { Building2, CreditCard, FolderTree, ScrollText, ShieldCheck, Sparkles, Landmark, FileStack } from 'lucide-react';
 import { TaxSystemsTab } from './TaxSystemsTab';
 import { LLMSettings } from './LLMSettings';
 import { BankConnectionsTab } from './BankConnectionsTab';
@@ -8,8 +8,9 @@ import { LegalEntitiesTab } from './settings/LegalEntitiesTab';
 import { AccountsTab } from './settings/AccountsTab';
 import { ExpenseCategoriesTab } from './settings/ExpenseCategoriesTab';
 import { FNSIntegrationTab } from './settings/FNSIntegrationTab';
+import { ProjectFileTypesTab } from './settings/ProjectFileTypesTab';
 
-const SETTINGS_TABS = ['tax-systems', 'entities', 'accounts', 'categories', 'fns', 'llm', 'banking'] as const;
+const SETTINGS_TABS = ['tax-systems', 'entities', 'accounts', 'categories', 'file-types', 'fns', 'llm', 'banking'] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 const DEFAULT_SETTINGS_TAB: SettingsTab = 'entities';
 
@@ -55,6 +56,10 @@ export function Settings() {
               <FolderTree className="w-4 h-4" />
               Категории расходов
             </TabsTrigger>
+            <TabsTrigger value="file-types" className="flex shrink-0 items-center gap-2">
+              <FileStack className="w-4 h-4" />
+              Типы файлов проектов
+            </TabsTrigger>
             <TabsTrigger value="fns" className="flex shrink-0 items-center gap-2">
               <ShieldCheck className="w-4 h-4" />
               Интеграция ФНС
@@ -84,6 +89,10 @@ export function Settings() {
 
           <TabsContent value="categories">
             <ExpenseCategoriesTab />
+          </TabsContent>
+
+          <TabsContent value="file-types">
+            <ProjectFileTypesTab />
           </TabsContent>
 
           <TabsContent value="fns">

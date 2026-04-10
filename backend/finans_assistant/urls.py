@@ -137,6 +137,7 @@ urlpatterns = [
     path('api/v1/', include('supply.urls')),
     path('api/v1/', include('supplier_integrations.urls')),
     path('api/v1/', include('section_feedback.urls')),
+    path('api/v1/', include('marketing.urls')),
     path('api/v1/hvac/', include('hvac_bridge.urls')),
     path('api/hvac/', include('hvac_bridge.public_urls')),
     # Kanban (объединён с основным бэкендом)

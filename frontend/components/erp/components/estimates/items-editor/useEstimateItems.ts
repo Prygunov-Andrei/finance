@@ -8,6 +8,7 @@ import {
   type ColumnDef as ColumnDefAPI,
   DEFAULT_COLUMN_CONFIG,
 } from '@/lib/api';
+import { useEstimateApi } from '@/lib/api/estimate-api-context';
 import { CONSTANTS } from '@/constants';
 import { toast } from 'sonner';
 import { type TableRow, makeSectionRow } from './types';
@@ -15,6 +16,7 @@ import { type TableRow, makeSectionRow } from './types';
 const DEBOUNCE_MS = 600;
 
 export function useEstimateItems(estimateId: number, readOnly: boolean, columnConfig?: ColumnDefAPI[]) {
+  const estimateApi = useEstimateApi();
   const queryClient = useQueryClient();
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [globalFilter, setGlobalFilter] = useState('');
@@ -38,7 +40,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['estimate-items', estimateId],
-    queryFn: () => api.estimates.getEstimateItems(estimateId),
+    queryFn: () => estimateApi.getEstimateItems(estimateId),
     staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
     refetchOnWindowFocus: false,
     placeholderData: (prev) => prev,
@@ -46,7 +48,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
 
   const { data: sections = [] } = useQuery({
     queryKey: ['estimate-sections', estimateId],
-    queryFn: () => api.estimates.getEstimateSections(estimateId),
+    queryFn: () => estimateApi.getEstimateSections(estimateId),
     staleTime: CONSTANTS.QUERY_STALE_TIME_MS,
     refetchOnWindowFocus: false,
     placeholderData: (prev) => prev,
@@ -114,7 +116,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
   // Mutations
   const updateItemMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<CreateEstimateItemData> & { custom_data?: Record<string, string> } }) =>
-      api.estimates.updateEstimateItem(id, data as Partial<CreateEstimateItemData>),
+      estimateApi.updateEstimateItem(id, data as Partial<CreateEstimateItemData>),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
     },
@@ -124,7 +126,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
   });
 
   const createItemMutation = useMutation({
-    mutationFn: (data: CreateEstimateItemData) => api.estimates.createEstimateItem(data),
+    mutationFn: (data: CreateEstimateItemData) => estimateApi.createEstimateItem(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
       setAddDialogOpen(false);
@@ -145,7 +147,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
   });
 
   const deleteItemMutation = useMutation({
-    mutationFn: (id: number) => api.estimates.deleteEstimateItem(id),
+    mutationFn: (id: number) => estimateApi.deleteEstimateItem(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
       toast.success('Строка удалена');
@@ -156,7 +158,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
   });
 
   const bulkCreateMutation = useMutation({
-    mutationFn: (newItems: CreateEstimateItemData[]) => api.estimates.bulkCreateEstimateItems(newItems),
+    mutationFn: (newItems: CreateEstimateItemData[]) => estimateApi.bulkCreateEstimateItems(newItems),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
       setPasteDialogOpen(false);
@@ -170,7 +172,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
 
   const bulkMoveMutation = useMutation({
     mutationFn: ({ itemIds, targetPosition }: { itemIds: number[]; targetPosition: number }) =>
-      api.estimates.bulkMoveEstimateItems(itemIds, targetPosition),
+      estimateApi.bulkMoveEstimateItems(itemIds, targetPosition),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
       setMoveTargetPosition('');
@@ -183,7 +185,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
   });
 
   const mergeItemsMutation = useMutation({
-    mutationFn: (itemIds: number[]) => api.estimates.mergeEstimateItems(itemIds),
+    mutationFn: (itemIds: number[]) => estimateApi.mergeEstimateItems(itemIds),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
       setRowSelection({});
@@ -201,20 +203,20 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
   }, [queryClient, estimateId]);
 
   const promoteMutation = useMutation({
-    mutationFn: (itemId: number) => api.estimates.promoteItemToSection(itemId),
+    mutationFn: (itemId: number) => estimateApi.promoteItemToSection(itemId),
     onSuccess: () => { invalidateAll(); toast.success('Строка назначена разделом'); },
     onError: () => { toast.error('Ошибка назначения раздела'); },
   });
 
   const demoteMutation = useMutation({
-    mutationFn: (sectionId: number) => api.estimates.demoteSectionToItem(sectionId),
+    mutationFn: (sectionId: number) => estimateApi.demoteSectionToItem(sectionId),
     onSuccess: () => { invalidateAll(); toast.success('Раздел снят'); },
     onError: () => { toast.error('Ошибка снятия раздела'); },
   });
 
   const moveMutation = useMutation({
     mutationFn: ({ itemId, direction }: { itemId: number; direction: 'up' | 'down' }) =>
-      api.estimates.moveEstimateItem(itemId, { direction }),
+      estimateApi.moveEstimateItem(itemId, { direction }),
     onMutate: async ({ itemId, direction }) => {
       await queryClient.cancelQueries({ queryKey: ['estimate-items', estimateId] });
       const previousItems = queryClient.getQueryData<EstimateItem[]>(['estimate-items', estimateId]);
@@ -254,7 +256,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
 
   const moveToSectionMutation = useMutation({
     mutationFn: ({ itemId, targetSectionId }: { itemId: number; targetSectionId: number }) =>
-      api.estimates.moveEstimateItem(itemId, { target_section_id: targetSectionId }),
+      estimateApi.moveEstimateItem(itemId, { target_section_id: targetSectionId }),
     onSuccess: () => { invalidateAll(); toast.success('Строка перемещена в другой раздел'); },
     onError: () => { toast.error('Ошибка перемещения'); },
   });
@@ -314,10 +316,13 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
 
     if (selectedIds.length === 0) return;
 
-    Promise.all(selectedIds.map((id) => api.estimates.deleteEstimateItem(id))).then(() => {
+    estimateApi.bulkDeleteEstimateItems(selectedIds).then((result) => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
+      queryClient.invalidateQueries({ queryKey: ['estimate', String(estimateId)] });
       setRowSelection({});
-      toast.success(`Удалено ${selectedIds.length} строк`);
+      toast.success(`Удалено ${result.deleted} строк`);
+    }).catch((err) => {
+      toast.error(`Ошибка удаления: ${err instanceof Error ? err.message : 'Неизвестная ошибка'}`);
     });
   }, [rowSelection, queryClient, estimateId]);
 
@@ -401,7 +406,7 @@ export function useEstimateItems(estimateId: number, readOnly: boolean, columnCo
     // Если разделов нет — автоматически создаём «Основной раздел»
     if (!sectionId) {
       try {
-        const newSection = await api.estimates.createEstimateSection({
+        const newSection = await estimateApi.createEstimateSection({
           estimate: estimateId,
           name: 'Основной раздел',
           sort_order: 0,

@@ -13,6 +13,7 @@ import {
   createSupplyService,
   createKanbanService,
   createSectionFeedbackService,
+  createMarketingService,
 } from './services';
 
 const API_BASE_URL = '/api/erp';
@@ -37,6 +38,7 @@ export class ApiClient {
   readonly supply: ReturnType<typeof createSupplyService>;
   readonly kanban: ReturnType<typeof createKanbanService>;
   readonly sectionFeedback: ReturnType<typeof createSectionFeedbackService>;
+  readonly marketing: ReturnType<typeof createMarketingService>;
 
   constructor() {
     const boundRequest = this.request.bind(this);
@@ -54,6 +56,7 @@ export class ApiClient {
     this.supply = createSupplyService(boundRequest);
     this.kanban = createKanbanService(boundRequest);
     this.sectionFeedback = createSectionFeedbackService(boundRequest);
+    this.marketing = createMarketingService(boundRequest);
   }
 
   // ── Auth & Transport ─────────────────────────────────────────────

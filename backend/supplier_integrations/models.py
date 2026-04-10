@@ -299,3 +299,154 @@ class SupplierSyncLog(TimestampedModel):
 
     def __str__(self):
         return f'{self.integration.name} — {self.get_sync_type_display()} — {self.get_status_display()}'
+
+
+# ====================== Supplier RFQ (запросы поставщикам) ======================
+
+class SupplierRFQ(TimestampedModel):
+    """Запрос коммерческого предложения поставщику."""
+
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Черновик'
+        SENT = 'sent', 'Отправлен'
+        PARTIAL = 'partial', 'Частичный ответ'
+        RESPONDED = 'responded', 'Получены ответы'
+        APPLIED = 'applied', 'Применён'
+        CLOSED = 'closed', 'Закрыт'
+
+    estimate = models.ForeignKey(
+        'estimates.Estimate',
+        on_delete=models.CASCADE,
+        related_name='rfqs',
+        verbose_name='Смета',
+    )
+    number = models.CharField(max_length=50, blank=True, verbose_name='Номер запроса')
+    name = models.CharField(max_length=255, verbose_name='Название')
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT,
+        verbose_name='Статус',
+    )
+    due_date = models.DateField(null=True, blank=True, verbose_name='Срок ответа')
+    message = models.TextField(blank=True, verbose_name='Сопроводительное письмо')
+    counterparties = models.ManyToManyField(
+        'accounting.Counterparty',
+        blank=True,
+        related_name='rfqs',
+        verbose_name='Поставщики',
+    )
+    created_by = models.ForeignKey(
+        'auth.User', on_delete=models.PROTECT,
+        related_name='created_rfqs', verbose_name='Создал',
+    )
+
+    class Meta:
+        verbose_name = 'Запрос поставщику'
+        verbose_name_plural = 'Запросы поставщикам'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'RFQ {self.number} — {self.name}'
+
+    def save(self, *args, **kwargs):
+        if not self.number:
+            from core.number_generator import generate_sequential_number
+            self.number = generate_sequential_number('RFQ', SupplierRFQ)
+        super().save(*args, **kwargs)
+
+
+class SupplierRFQItem(TimestampedModel):
+    """Позиция запроса — что именно запрашиваем."""
+
+    rfq = models.ForeignKey(
+        SupplierRFQ, on_delete=models.CASCADE,
+        related_name='items', verbose_name='Запрос',
+    )
+    estimate_item = models.ForeignKey(
+        'estimates.EstimateItem', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='rfq_items',
+        verbose_name='Строка сметы',
+    )
+    name = models.CharField(max_length=500, verbose_name='Наименование')
+    model_name = models.CharField(max_length=255, blank=True, verbose_name='Модель')
+    unit = models.CharField(max_length=30, default='шт', verbose_name='Ед. изм.')
+    quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, default=1,
+        verbose_name='Количество',
+    )
+    sort_order = models.PositiveIntegerField(default=0, verbose_name='Порядок')
+
+    class Meta:
+        verbose_name = 'Позиция запроса'
+        verbose_name_plural = 'Позиции запроса'
+        ordering = ['sort_order']
+
+    def __str__(self):
+        return self.name
+
+
+class SupplierRFQResponse(TimestampedModel):
+    """Ответ поставщика на запрос (загруженный КП или счёт)."""
+
+    class Status(models.TextChoices):
+        UPLOADED = 'uploaded', 'Загружен'
+        RECOGNIZED = 'recognized', 'Распознан'
+        REVIEWED = 'reviewed', 'Проверен'
+
+    rfq = models.ForeignKey(
+        SupplierRFQ, on_delete=models.CASCADE,
+        related_name='responses', verbose_name='Запрос',
+    )
+    counterparty = models.ForeignKey(
+        'accounting.Counterparty', on_delete=models.PROTECT,
+        related_name='rfq_responses', verbose_name='Поставщик',
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.UPLOADED,
+        verbose_name='Статус',
+    )
+    file = models.FileField(
+        upload_to='rfq_responses/%Y/%m/',
+        null=True, blank=True,
+        verbose_name='Файл КП/счёта',
+    )
+    delivery_days = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Срок поставки (дней)',
+    )
+    validity_days = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Срок действия (дней)',
+    )
+    notes = models.TextField(blank=True, verbose_name='Примечания')
+
+    class Meta:
+        verbose_name = 'Ответ поставщика'
+        verbose_name_plural = 'Ответы поставщиков'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.counterparty} → RFQ {self.rfq.number}'
+
+
+class SupplierRFQResponseItem(TimestampedModel):
+    """Цена на конкретную позицию от поставщика."""
+
+    response = models.ForeignKey(
+        SupplierRFQResponse, on_delete=models.CASCADE,
+        related_name='items', verbose_name='Ответ',
+    )
+    rfq_item = models.ForeignKey(
+        SupplierRFQItem, on_delete=models.CASCADE,
+        related_name='response_items', verbose_name='Позиция запроса',
+    )
+    price = models.DecimalField(
+        max_digits=15, decimal_places=2, verbose_name='Цена за ед.',
+    )
+    available = models.BooleanField(default=True, verbose_name='В наличии')
+    notes = models.CharField(max_length=500, blank=True, verbose_name='Примечание')
+
+    class Meta:
+        verbose_name = 'Цена от поставщика'
+        verbose_name_plural = 'Цены от поставщиков'
+        unique_together = ('response', 'rfq_item')
+
+    def __str__(self):
+        return f'{self.rfq_item.name}: {self.price}'

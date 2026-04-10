@@ -352,7 +352,7 @@ class EstimateExcelExporter:
 
         items = list(EstimateItem.objects.filter(
             estimate=estimate,
-        ).select_related('section', 'estimate').order_by(
+        ).select_related('section', 'estimate', 'work_item').order_by(
             'section__sort_order', 'sort_order', 'item_number',
         ))
 
@@ -399,14 +399,20 @@ class EstimateExcelExporter:
         row_num = 4
         agg_sums = {c['key']: Decimal('0') for c in visible_cols if c.get('aggregatable')}
 
+        section_fill = PatternFill(start_color='D6E4F0', end_color='D6E4F0', fill_type='solid')
+        subtotal_font = Font(bold=True, size=10, color='333333')
+
         for section in sections:
             # Section header
             ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=num_cols)
             cell = ws.cell(row=row_num, column=1, value=section.name)
             cell.font = section_font
+            cell.fill = section_fill
             row_num += 1
 
             section_items = [i for i in items if i.section_id == section.id]
+            section_sums = {c['key']: Decimal('0') for c in visible_cols if c.get('aggregatable')}
+
             for item in section_items:
                 builtin_values = {
                     'item_number': Decimal(str(item.item_number or 0)),
@@ -436,8 +442,9 @@ class EstimateExcelExporter:
 
                     if col_type == 'builtin':
                         field = col_def.get('builtin_field', key)
-                        # Сначала проверяем builtin_values (включает новые поля)
-                        if key in builtin_values:
+                        if field == 'work_item_name':
+                            value = item.work_item.name if item.work_item else ''
+                        elif key in builtin_values:
                             value = builtin_values[key]
                         else:
                             value = getattr(item, field, None)
@@ -462,12 +469,30 @@ class EstimateExcelExporter:
                         cell.value = ''
 
                     # Accumulate aggregatables
-                    if key in agg_sums and value is not None:
+                    if value is not None:
                         try:
-                            agg_sums[key] += Decimal(str(value))
+                            dec_val = Decimal(str(value))
+                            if key in agg_sums:
+                                agg_sums[key] += dec_val
+                            if key in section_sums:
+                                section_sums[key] += dec_val
                         except Exception:
                             pass
 
+                row_num += 1
+
+            # Section subtotals
+            if section_items and any(v > 0 for v in section_sums.values()):
+                for col_idx, col_def in enumerate(visible_cols, 1):
+                    key = col_def['key']
+                    cell = ws.cell(row=row_num, column=col_idx)
+                    cell.font = subtotal_font
+                    cell.border = thin_border
+                    if key in section_sums and section_sums[key] > 0:
+                        cell.value = float(section_sums[key])
+                        cell.number_format = num_fmt
+                    elif col_idx == 1:
+                        cell.value = f'Итого: {section.name}'
                 row_num += 1
 
         # Footer totals

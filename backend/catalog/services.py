@@ -4,7 +4,7 @@ from typing import List, Dict, Optional
 from functools import lru_cache
 from django.db.models import Q
 from django.core.cache import cache
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from .models import Product, ProductAlias
 
 logger = logging.getLogger(__name__)

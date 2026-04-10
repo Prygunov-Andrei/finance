@@ -256,6 +256,14 @@ def _process_pdf_pages(r, key, session_id, file_path, total_pages):
     finally:
         doc.close()
 
+    # Разрешить "то же" / "так же" строки
+    from estimates.services.ditto_resolver import resolve_dittos_in_rows
+    resolved_count = resolve_dittos_in_rows(all_rows, name_key='name')
+    if resolved_count:
+        logger.info('Session %s: resolved %d "то же" rows', session_id, resolved_count)
+        # Обновить rows в Redis с разрешёнными именами
+        r.hset(key, 'rows', json.dumps(all_rows, ensure_ascii=False, default=_json_default))
+
     # Завершение
     r.hset(key, 'status', 'completed')
     r.expire(key, SESSION_TTL)

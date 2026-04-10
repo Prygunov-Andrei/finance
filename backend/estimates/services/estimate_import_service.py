@@ -178,6 +178,12 @@ class EstimateImportService:
 
         wb.close()
 
+        # Разрешить "то же" / "так же" строки
+        from estimates.services.ditto_resolver import resolve_dittos_in_rows
+        resolved = resolve_dittos_in_rows(parsed_rows, name_key='name')
+        if resolved:
+            logger.info('Excel import: resolved %d "то же" rows', resolved)
+
         confidence = 0.9 if len(col_mapping) >= 4 else 0.7 if len(col_mapping) >= 2 else 0.4
 
         return ParsedEstimate(
@@ -278,6 +284,13 @@ class EstimateImportService:
                 parsed_rows.append(EstimateImportRow(**r))
             except Exception:
                 continue
+
+        # Разрешить "то же" / "так же" строки
+        from estimates.services.ditto_resolver import resolve_dittos_in_rows
+        resolved = resolve_dittos_in_rows(parsed_rows, name_key='name')
+        if resolved:
+            logger.info('PDF import: resolved %d "то же" rows', resolved)
+
         return ParsedEstimate(
             rows=parsed_rows,
             sections=response.get('sections', []),
@@ -718,16 +731,30 @@ class EstimateImportService:
         # Вставляем перемещаемые строки на нужную позицию
         new_order = remaining[:insert_idx] + moving + remaining[insert_idx:]
 
+        # Определяем целевой раздел для перемещённых строк
+        if insert_idx < len(remaining):
+            target_section = remaining[insert_idx].section
+        elif remaining:
+            target_section = remaining[-1].section
+        else:
+            target_section = moving[0].section
+
+        # Обновляем section FK для перемещённых строк
+        for item in moving:
+            if item.section_id != target_section.id:
+                item.section = target_section
+
         # Переназначаем sort_order
         to_update = []
         for i, item in enumerate(new_order):
             new_sort = i + 1
-            if item.sort_order != new_sort:
+            if item.sort_order != new_sort or item in moving:
                 item.sort_order = new_sort
-                to_update.append(item)
+                if item not in to_update:
+                    to_update.append(item)
 
         if to_update:
-            EstimateItem.objects.bulk_update(to_update, ['sort_order'])
+            EstimateItem.objects.bulk_update(to_update, ['sort_order', 'section'])
 
         self._renumber_items(estimate)
         return {'moved': len(moving)}

@@ -136,7 +136,7 @@ class EstimateComplianceChecker:
         self, name: str, contract_estimate,
     ) -> Optional[ContractEstimateItem]:
         """Ищет похожую позицию в смете через fuzzy matching."""
-        from fuzzywuzzy import fuzz
+        from rapidfuzz import fuzz
         from catalog.models import Product
 
         normalized = Product.normalize_name(name)

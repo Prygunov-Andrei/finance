@@ -71,7 +71,7 @@ class TestEstimateExport(TestCase):
         # Row 3 = headers, should have 10 columns for default config
         headers = [ws.cell(row=3, column=i).value for i in range(1, 11)]
         self.assertIn('Наименование', headers)
-        self.assertIn('Итого', headers)
+        self.assertIn('Итого закупка', headers)
 
     def test_export_content_disposition(self):
         estimate, _ = _make_estimate_with_items(self.user)

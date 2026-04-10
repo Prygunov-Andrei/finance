@@ -78,6 +78,15 @@ export const useTaxSystems = () => {
 /**
  * Хук для загрузки категорий расходов
  */
+export const useProjectFileTypes = (onlyActive = true) => {
+  return useQuery({
+    queryKey: ['project-file-types', onlyActive],
+    queryFn: () => api.estimates.getProjectFileTypes(onlyActive ? { is_active: true } : undefined),
+    staleTime: REFERENCE_STALE_TIME,
+    gcTime: GC_TIME,
+  });
+};
+
 export const useExpenseCategories = () => {
   return useQuery({
     queryKey: ['expense-categories'],

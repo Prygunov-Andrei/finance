@@ -198,43 +198,15 @@ class ManufacturerAdmin(TranslationAdmin):
             manufacturer_count = Manufacturer.objects.count()
             status_obj = NewsDiscoveryStatus.create_new_status(manufacturer_count, search_type='manufacturers', provider=provider)
             
-            # Если это AJAX запрос - запускаем поиск в фоне
+            # Если это AJAX запрос - запускаем поиск через Celery
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                import threading
-                import time as _time
+                from news.tasks import discover_all_manufacturers_task
+                discover_all_manufacturers_task.delay(
+                    user_id=request.user.id if request.user.is_authenticated else None,
+                    provider=provider,
+                    last_search_date_override=last_search_date_override.isoformat() if last_search_date_override else None,
+                )
 
-                DISCOVERY_WALL_CLOCK_LIMIT = 1800  # 30 минут для полного прогона по производителям
-
-                def run_discovery():
-                    start_time = _time.monotonic()
-                    logger.info(
-                        "Manufacturers discovery thread started: %d manufacturers, provider=%s",
-                        manufacturer_count, provider,
-                    )
-                    try:
-                        service = NewsDiscoveryService(user=request.user)
-                        service.discover_all_manufacturers_news(
-                            status_obj=status_obj,
-                            last_search_date_override=last_search_date_override,
-                        )
-                        duration = _time.monotonic() - start_time
-                        logger.info(
-                            "Manufacturers discovery thread finished: duration=%.1fs",
-                            duration,
-                        )
-                    except Exception as e:
-                        duration = _time.monotonic() - start_time
-                        logger.error(
-                            "Manufacturers discovery thread failed after %.1fs: %s",
-                            duration, str(e),
-                        )
-                        status_obj.status = 'error'
-                        status_obj.save()
-
-                thread = threading.Thread(target=run_discovery, name="discovery-manufacturers")
-                thread.daemon = True
-                thread.start()
-                
                 return JsonResponse({
                     'status': 'running',
                     'processed': 0,
@@ -470,52 +442,14 @@ class NewsResourceAdmin(TranslationAdmin):
             provider=provider
         )
         
-        # Запускаем поиск в фоне
-        import threading
-        import time as _time
-
-        def run_discovery():
-            start_time = _time.monotonic()
-            logger.info(
-                "Selected resources discovery thread started: %d resources, provider=%s",
-                len(resource_ids), provider,
+        # Запускаем поиск через Celery (каждый ресурс отдельной задачей)
+        from news.tasks import discover_news_for_resource_task
+        for resource_id in resource_ids:
+            discover_news_for_resource_task.delay(
+                resource_id=resource_id,
+                provider=provider,
+                user_id=request.user.id if request.user.is_authenticated else None,
             )
-            try:
-                service = NewsDiscoveryService(user=request.user)
-                # Обрабатываем только выбранные источники
-                for resource_id in resource_ids:
-                    try:
-                        resource = NewsResource.objects.get(id=resource_id)
-                        service.discover_news_for_resource(resource, provider=provider)
-                        # Обновляем прогресс
-                        status_obj.processed_count += 1
-                        status_obj.save()
-                    except NewsResource.DoesNotExist:
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error processing resource {resource_id}: {str(e)}")
-                        status_obj.processed_count += 1
-                        status_obj.save()
-
-                duration = _time.monotonic() - start_time
-                status_obj.status = 'completed'
-                status_obj.save()
-                logger.info(
-                    "Selected resources discovery thread finished: %d resources, duration=%.1fs",
-                    len(resource_ids), duration,
-                )
-            except Exception as e:
-                duration = _time.monotonic() - start_time
-                logger.error(
-                    "Selected resources discovery thread failed after %.1fs: %s",
-                    duration, str(e),
-                )
-                status_obj.status = 'error'
-                status_obj.save()
-
-        thread = threading.Thread(target=run_discovery, name="discovery-selected-resources")
-        thread.daemon = True
-        thread.start()
         
         provider_display = dict(NewsDiscoveryStatus._meta.get_field('provider').choices).get(provider, provider)
         self.message_user(
@@ -640,46 +574,16 @@ class NewsResourceAdmin(TranslationAdmin):
                 provider=status_provider,
             )
             
-            # Если это AJAX запрос - запускаем поиск в фоне и возвращаем статус
+            # Если это AJAX запрос - запускаем поиск через Celery и возвращаем статус
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                import threading
-                import time as _time
-                resources_list = list(resources_qs.order_by('id'))
+                from news.tasks import discover_all_resources_task
+                discover_all_resources_task.delay(
+                    user_id=request.user.id if request.user.is_authenticated else None,
+                    config_id=selected_config.id if selected_config else None,
+                    provider=status_provider,
+                    last_search_date_override=last_search_date_override.isoformat() if last_search_date_override else None,
+                )
 
-                def run_discovery():
-                    start_time = _time.monotonic()
-                    logger.info(
-                        "All-resources discovery thread started: %d resources, provider=%s, config=%s",
-                        resource_count, status_provider,
-                        selected_config.name if selected_config else 'default',
-                    )
-                    try:
-                        service = NewsDiscoveryService(user=request.user, config=selected_config)
-                        service.discover_all_news(
-                            status_obj=status_obj,
-                            resources=resources_list,
-                            last_search_date_override=last_search_date_override,
-                        )
-                        duration = _time.monotonic() - start_time
-                        logger.info(
-                            "All-resources discovery thread finished: %d resources, duration=%.1fs",
-                            resource_count, duration,
-                        )
-                    except Exception as e:
-                        duration = _time.monotonic() - start_time
-                        logger.error(
-                            "All-resources discovery thread failed after %.1fs: %s",
-                            duration, str(e),
-                        )
-                        status_obj.status = 'error'
-                        status_obj.save()
-
-                # Запускаем поиск в отдельном потоке
-                thread = threading.Thread(target=run_discovery, name="discovery-all-resources")
-                thread.daemon = True
-                thread.start()
-                
-                # Возвращаем начальный статус
                 return JsonResponse({
                     'status': 'running',
                     'processed': 0,
@@ -779,22 +683,15 @@ class NewsResourceAdmin(TranslationAdmin):
             if provider not in ['auto', 'grok', 'anthropic', 'openai']:
                 provider = 'auto'
             
-            # Если это AJAX запрос - запускаем поиск в фоне
+            # Если это AJAX запрос - запускаем поиск через Celery
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                import threading
-                
-                def run_discovery():
-                    try:
-                        service = NewsDiscoveryService(user=request.user)
-                        created, errors, error_msg = service.discover_news_for_resource(resource, provider=provider)
-                        logger.info(f"Discovery completed for resource {resource_id}: created={created}, errors={errors}")
-                    except Exception as e:
-                        logger.error(f"Error during single resource discovery: {str(e)}")
-                
-                thread = threading.Thread(target=run_discovery)
-                thread.daemon = True
-                thread.start()
-                
+                from news.tasks import discover_news_for_resource_task
+                discover_news_for_resource_task.delay(
+                    resource_id=resource.id,
+                    provider=provider,
+                    user_id=request.user.id if request.user.is_authenticated else None,
+                )
+
                 return JsonResponse({
                     'status': 'running',
                     'resource_id': resource_id,

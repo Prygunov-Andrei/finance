@@ -1,5 +1,9 @@
 """Celery tasks для фонового подбора работ.
 
+Двухпроходная архитектура:
+  Pass 1: быстрые тиры 0-5 (CPU/memory) — все строки
+  Pass 2: LLM-батчинг (тир 6) + Web Search (тир 7) — только unmatched
+
 Использует общий RedisSessionManager из redis_session.py.
 """
 import json
@@ -11,7 +15,9 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from estimates.services.redis_session import RedisSessionManager
 from estimates.services.work_matching.knowledge import save_knowledge
-from estimates.services.work_matching.pipeline import MatchingContext, match_single_item
+from estimates.services.work_matching.pipeline import (
+    MatchingContext, match_single_item, match_single_item_fast,
+)
 from estimates.services.work_matching.service import LOCK_PREFIX, REDIS_PREFIX
 
 logger = logging.getLogger(__name__)
@@ -46,7 +52,11 @@ def process_work_matching(self, session_id: str):
 
 
 def _run_matching(session_id: str, estimate_id: int):
-    """Основной цикл подбора."""
+    """Двухпроходный подбор работ.
+
+    Pass 1: быстрые тиры 0-5 (CPU/memory, ~0.01 сек/строка)
+    Pass 2: LLM batch (тир 6, по 5 штук) + Web Search (тир 7, по 1)
+    """
     from estimates.models import Estimate, EstimateItem
 
     estimate = Estimate.objects.select_related('price_list').get(pk=estimate_id)
@@ -66,67 +76,200 @@ def _run_matching(session_id: str, estimate_id: int):
         session_mgr.update(session_id, {'status': 'completed'})
         return
 
-    ctx = MatchingContext(estimate)
+    ctx = MatchingContext(estimate, items=items)
+
+    # Fallback: resolve "то же" для старых смет (импортированных до фикса)
+    from estimates.services.ditto_resolver import is_ditto, resolve_ditto
+    last_real_name = None
+    ditto_map = {}
+    for item in items:
+        if is_ditto(item.name):
+            if last_real_name:
+                ditto_map[item.id] = resolve_ditto(item.name, last_real_name)
+        else:
+            if item.name.strip():
+                last_real_name = item.name
+    if ditto_map:
+        logger.info('Resolved %d "то же" items for matching', len(ditto_map))
 
     raw = session_mgr.get(session_id)
-    results = json.loads(raw.get('results', '[]')) if raw else []
-    processed_ids = {r_['item_id'] for r_ in results}
     stats = json.loads(raw.get('stats', '{}')) if raw else {}
+
+    # Восстановление после рестарта
+    existing_results = session_mgr.get_all_results(session_id)
+    processed_ids = {r_['item_id'] for r_ in existing_results}
+
+    # ======== Pass 1: быстрые тиры 0-5 ========
+    unmatched_items = []
 
     for i, item in enumerate(items):
         if session_mgr.is_cancelled(session_id):
-            logger.info('Session %s cancelled, stopping', session_id)
+            logger.info('Session %s cancelled, stopping at pass 1', session_id)
             break
 
         if item.id in processed_ids:
             continue
 
+        # Подменить "то же" на реальное имя (временно, без сохранения в БД)
+        original_name = item.name
+        if item.id in ditto_map:
+            item.name = ditto_map[item.id]
+
         session_mgr.update(session_id, {
             'current_item': str(i + 1),
-            'current_tier': 'matching',
+            'current_tier': 'pass1',
+            'current_item_name': item.name[:100],
         })
 
         try:
-            result = match_single_item(item, ctx)
+            result = match_single_item_fast(item, ctx)
         except Exception:
-            logger.exception('Failed to match item %d', item.id)
-            result = {
-                'item_id': item.id, 'item_name': item.name,
-                'matched_work': None, 'alternatives': [],
-                'confidence': 0.0, 'source': 'unmatched', 'llm_reasoning': '',
-            }
+            logger.exception('Fast match failed for item %d', item.id)
+            result = None
+        finally:
+            item.name = original_name
 
-        results.append(result)
+        if result:
+            source = result.get('source', 'unmatched')
+            stats[source] = stats.get(source, 0) + 1
+            session_mgr.append_result(session_id, result)
+            session_mgr.update(session_id, {
+                'stats': json.dumps(stats),
+                'current_tier': source,
+            })
+        else:
+            unmatched_items.append(item)
 
-        source = result.get('source', 'unmatched')
-        stats[source] = stats.get(source, 0) + 1
+    logger.info(
+        'Pass 1 done for %s: %d matched, %d unmatched',
+        session_id, len(items) - len(unmatched_items), len(unmatched_items),
+    )
 
-        # Сохранить знания для LLM и Web результатов
-        if source in ('llm', 'web') and result.get('matched_work'):
+    # ======== Pass 2: LLM batch (тир 6) + Web Search (тир 7) ========
+    # Подменить "то же" на реальное имя для LLM (временно)
+    originals_pass2 = {}
+    for item in unmatched_items:
+        if item.id in ditto_map:
+            originals_pass2[item.id] = item.name
+            item.name = ditto_map[item.id]
+
+    if unmatched_items and not session_mgr.is_cancelled(session_id):
+        from estimates.services.work_matching.tiers import Tier6LLM, Tier7WebSearch
+        from estimates.services.work_matching.pipeline import _result_to_dict, _get_alternatives
+
+        tier6 = Tier6LLM()
+        tier7 = Tier7WebSearch()
+        batch_size = tier6.BATCH_SIZE
+        total = len(items)
+
+        # Номер текущей строки в общем списке (для прогресс-бара)
+        base_item_num = total - len(unmatched_items)
+
+        # Батчинг LLM: по batch_size штук
+        for batch_start in range(0, len(unmatched_items), batch_size):
+            if session_mgr.is_cancelled(session_id):
+                break
+
+            batch = unmatched_items[batch_start:batch_start + batch_size]
+            item_num = base_item_num + batch_start + len(batch)
+
+            session_mgr.update(session_id, {
+                'current_item': str(item_num),
+                'current_tier': 'pass2_llm',
+                'current_item_name': batch[0].name[:100],
+            })
+
+            # LLM batch
+            items_with_candidates = [
+                (item, ctx.fuzzy_candidates.get(item.id, []))
+                for item in batch
+            ]
             try:
-                from pricelists.models import WorkItem
-                wi = WorkItem.objects.get(pk=result['matched_work']['id'])
-                save_knowledge(
-                    item_name=item.name, work_item=wi, source=source,
-                    confidence=result['confidence'],
-                    llm_reasoning=result.get('llm_reasoning', ''),
-                    web_query=result.get('web_search_query', ''),
-                    web_summary=result.get('web_search_result_summary', ''),
-                )
+                batch_results = tier6.match_batch(items_with_candidates, ctx)
             except Exception:
-                logger.exception('Failed to save knowledge for item %d', item.id)
+                logger.exception('LLM batch failed for %d items', len(batch))
+                batch_results = {}
 
-        session_mgr.update(session_id, {
-            'results': json.dumps(results),
-            'stats': json.dumps(stats),
-            'current_tier': source,
-        })
+            for item in batch:
+                if session_mgr.is_cancelled(session_id):
+                    break
+
+                llm_result = batch_results.get(item.id)
+
+                if llm_result and llm_result.confidence >= tier6.THRESHOLD:
+                    result = _result_to_dict(item, llm_result, ctx)
+                else:
+                    # Fallback: Tier 7 Web Search (per-item)
+                    session_mgr.update(session_id, {
+                        'current_tier': 'pass2_web',
+                        'current_item_name': item.name[:100],
+                    })
+                    try:
+                        web_match = tier7.match(item, ctx)
+                    except Exception:
+                        logger.exception('Web search failed for item %d', item.id)
+                        web_match = None
+
+                    if web_match and web_match.confidence >= tier7.THRESHOLD:
+                        result = _result_to_dict(item, web_match, ctx)
+                    else:
+                        result = {
+                            'item_id': item.id, 'item_name': item.name,
+                            'matched_work': None,
+                            'alternatives': _get_alternatives(item, ctx),
+                            'confidence': 0.0, 'source': 'unmatched',
+                            'llm_reasoning': '',
+                        }
+
+                source = result.get('source', 'unmatched')
+                stats[source] = stats.get(source, 0) + 1
+
+                # Сохранить знания для LLM и Web результатов
+                if source in ('llm', 'web') and result.get('matched_work'):
+                    _save_knowledge_safe(item, result, source)
+
+                session_mgr.append_result(session_id, result)
+                session_mgr.update(session_id, {
+                    'stats': json.dumps(stats),
+                    'current_tier': source,
+                })
+
+    # Восстановить оригинальные имена после Pass 2
+    for item_id, orig in originals_pass2.items():
+        for item in unmatched_items:
+            if item.id == item_id:
+                item.name = orig
+                break
+
+    # Batch-update knowledge usage counts
+    if ctx.knowledge_usage_updates:
+        from catalog.models import ProductKnowledge
+        from django.db.models import F
+        ProductKnowledge.objects.filter(pk__in=set(ctx.knowledge_usage_updates)).update(
+            usage_count=F('usage_count') + 1,
+        )
 
     # Завершение
     if not session_mgr.is_cancelled(session_id):
         session_mgr.update(session_id, {'status': 'completed'})
 
     logger.info('Work matching %s completed: %s', session_id, json.dumps(stats))
+
+
+def _save_knowledge_safe(item, result: dict, source: str):
+    """Сохранить знания для LLM/Web результатов. Не бросает исключений."""
+    try:
+        from pricelists.models import WorkItem
+        wi = WorkItem.objects.get(pk=result['matched_work']['id'])
+        save_knowledge(
+            item_name=item.name, work_item=wi, source=source,
+            confidence=result['confidence'],
+            llm_reasoning=result.get('llm_reasoning', ''),
+            web_query=result.get('web_search_query', ''),
+            web_summary=result.get('web_search_result_summary', ''),
+        )
+    except Exception:
+        logger.exception('Failed to save knowledge for item %d', item.id)
 
 
 @shared_task

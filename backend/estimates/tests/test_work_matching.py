@@ -842,3 +842,392 @@ class TestIntegrationWorkflow(WorkMatchingTestBase):
         self.estimate.refresh_from_db()
         self.assertEqual(self.estimate.man_hours, total)
         self.assertGreater(total, 0)
+
+
+# ====================== Celery Task Registration ======================
+
+class TestCeleryTaskRegistration(TestCase):
+    """Тесты регистрации Celery-задач (корневая причина бага #003)."""
+
+    def test_process_work_matching_registered(self):
+        """Задача process_work_matching зарегистрирована в Celery."""
+        from finans_assistant.celery import app
+        self.assertIn(
+            'estimates.tasks_work_matching.process_work_matching',
+            app.tasks,
+        )
+
+    def test_recover_stuck_registered(self):
+        """Задача recover_stuck_work_matching зарегистрирована."""
+        from finans_assistant.celery import app
+        self.assertIn(
+            'estimates.tasks_work_matching.recover_stuck_work_matching',
+            app.tasks,
+        )
+
+    def test_sync_knowledge_md_registered(self):
+        """Задача sync_knowledge_md_task зарегистрирована."""
+        from finans_assistant.celery import app
+        self.assertIn(
+            'estimates.tasks_work_matching.sync_knowledge_md_task',
+            app.tasks,
+        )
+
+
+# ====================== MatchingContext Prefetch ======================
+
+class TestMatchingContextPrefetch(WorkMatchingTestBase):
+    """Тесты prefetch-кэшей в MatchingContext."""
+
+    def test_history_cache_loaded(self):
+        """MatchingContext загружает ProductWorkMapping в history_cache."""
+        ProductWorkMapping.objects.create(
+            product=self.product_cond, work_item=self.wi_mount_cond,
+            confidence=1.0, source=ProductWorkMapping.Source.MANUAL, usage_count=3,
+        )
+        item = EstimateItem.objects.create(
+            estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+            name='Cache test', quantity=Decimal('1'),
+            product=self.product_cond, sort_order=1,
+        )
+        ctx = MatchingContext(self.estimate, items=[item])
+        self.assertIn(self.product_cond.id, ctx.history_cache)
+        mapping = ctx.history_cache[self.product_cond.id]
+        self.assertEqual(mapping.work_item_id, self.wi_mount_cond.id)
+
+    def test_knowledge_cache_loaded(self):
+        """MatchingContext загружает ProductKnowledge в knowledge_cache."""
+        ProductKnowledge.objects.create(
+            item_name_pattern='тестовый кондиционер',
+            work_item=self.wi_mount_cond,
+            confidence=0.8,
+            status=ProductKnowledge.Status.VERIFIED,
+        )
+        ctx = MatchingContext(self.estimate, items=[])
+        self.assertIn('тестовый кондиционер', ctx.knowledge_cache)
+
+    def test_history_cache_tier1_uses_cache(self):
+        """Tier1 использует cache вместо DB при наличии items."""
+        ProductWorkMapping.objects.create(
+            product=self.product_cond, work_item=self.wi_mount_cond,
+            confidence=1.0, source=ProductWorkMapping.Source.MANUAL, usage_count=1,
+        )
+        item = EstimateItem.objects.create(
+            estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+            name='Кондиционер', quantity=Decimal('1'),
+            product=self.product_cond, sort_order=1,
+        )
+        ctx = MatchingContext(self.estimate, items=[item])
+        tier = Tier1History()
+        result = tier.match(item, ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.source, 'history')
+
+
+# ====================== Fast Pipeline ======================
+
+class TestFastPipeline(WorkMatchingTestBase):
+    """Тесты match_single_item_fast (только тиры 0-5)."""
+
+    def test_fast_match_finds_default(self):
+        """match_single_item_fast находит default work item."""
+        from estimates.services.work_matching.pipeline import match_single_item_fast
+
+        self.product_cond.default_work_item = self.wi_mount_cond
+        self.product_cond.save()
+        item = EstimateItem.objects.create(
+            estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+            name='Кондиционер', quantity=Decimal('1'),
+            product=self.product_cond, sort_order=1,
+        )
+        ctx = MatchingContext(self.estimate)
+        result = match_single_item_fast(item, ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result['source'], 'default')
+
+    def test_fast_match_returns_none_for_unmatched(self):
+        """match_single_item_fast возвращает None если тиры 0-5 не нашли."""
+        from estimates.services.work_matching.pipeline import match_single_item_fast
+
+        item = EstimateItem.objects.create(
+            estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+            name='Абсолютно уникальный товар XYZ123', quantity=Decimal('1'),
+            sort_order=1,
+        )
+        ctx = MatchingContext(self.estimate)
+        result = match_single_item_fast(item, ctx)
+        self.assertIsNone(result)
+
+
+# ====================== WorkMatchingService Tests ======================
+
+class TestWorkMatchingService(WorkMatchingTestBase):
+    """Тесты сервиса WorkMatchingService (lock, session, progress)."""
+
+    def _cleanup_redis_keys(self, *keys):
+        """Удалить ключи Redis после теста."""
+        from estimates.services.redis_session import get_redis
+        r = get_redis()
+        for key in keys:
+            r.delete(key)
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+    def test_start_matching_creates_session(self):
+        """start_matching создаёт Redis-сессию и возвращает session_id."""
+        from estimates.services.work_matching import WorkMatchingService
+
+        # Создаём строку без работы
+        EstimateItem.objects.create(
+            estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+            name='Тест сервис', quantity=Decimal('1'),
+            product=self.product_cond, sort_order=1,
+        )
+        svc = WorkMatchingService()
+        result = svc.start_matching(estimate_id=self.estimate.id, user_id=self.user.id)
+
+        self.assertIn('session_id', result)
+        self.assertIn('total_items', result)
+        self.assertGreaterEqual(result['total_items'], 1)
+
+        # Cleanup
+        self._cleanup_redis_keys(
+            f'work_match:{result["session_id"]}',
+            f'work_match:{result["session_id"]}:results',
+            f'work_match_lock:{self.estimate.id}',
+        )
+
+    def test_start_matching_lock_prevents_double_run(self):
+        """Повторный запуск на той же смете возвращает ValueError ALREADY_RUNNING."""
+        from estimates.services.work_matching import WorkMatchingService
+        from estimates.services.work_matching.service import LOCK_PREFIX, session_mgr
+
+        lock_key = f'{LOCK_PREFIX}:{self.estimate.id}'
+        session_mgr.set_lock(lock_key, 'fake_session')
+
+        svc = WorkMatchingService()
+        with self.assertRaises(ValueError) as cm:
+            svc.start_matching(estimate_id=self.estimate.id, user_id=self.user.id)
+        self.assertIn('ALREADY_RUNNING', str(cm.exception))
+
+        # Cleanup
+        self._cleanup_redis_keys(lock_key)
+
+    def test_start_matching_lock_released_on_error(self):
+        """При ошибке создания сессии lock освобождается."""
+        from estimates.services.work_matching import WorkMatchingService
+        from estimates.services.work_matching.service import LOCK_PREFIX, session_mgr
+        from estimates.services.redis_session import get_redis
+
+        lock_key = f'{LOCK_PREFIX}:{self.estimate.id}'
+
+        svc = WorkMatchingService()
+        # Мокаем session_mgr.create чтобы вызвать ошибку после lock
+        with patch.object(session_mgr, 'create', side_effect=RuntimeError('Redis down')):
+            with self.assertRaises(RuntimeError):
+                svc.start_matching(estimate_id=self.estimate.id, user_id=self.user.id)
+
+        # Lock должен быть снят
+        r = get_redis()
+        self.assertIsNone(r.get(lock_key))
+
+    def test_get_progress_returns_none_for_unknown_session(self):
+        """get_progress возвращает None для несуществующей сессии."""
+        from estimates.services.work_matching import WorkMatchingService
+        svc = WorkMatchingService()
+        self.assertIsNone(svc.get_progress('nonexistent_session_id'))
+
+    def test_get_progress_without_results_is_lightweight(self):
+        """get_progress(include_results=False) возвращает пустой results."""
+        from estimates.services.work_matching import WorkMatchingService
+        from estimates.services.work_matching.service import session_mgr
+
+        sid = session_mgr.create({
+            'status': 'processing', 'estimate_id': str(self.estimate.id),
+            'total_items': '10', 'current_item': '3', 'current_tier': 'fuzzy',
+            'current_item_name': 'Тест', 'results': '[]',
+            'stats': '{}', 'errors': '[]', 'man_hours_total': '0',
+        })
+        # Добавим результат в LIST
+        session_mgr.append_result(sid, {'item_id': 1, 'source': 'default'})
+
+        svc = WorkMatchingService()
+        progress = svc.get_progress(sid, include_results=False)
+        self.assertEqual(progress['results'], [])
+        self.assertEqual(progress['current_item_name'], 'Тест')
+
+        # С include_results=True — результаты есть
+        progress_full = svc.get_progress(sid, include_results=True)
+        self.assertEqual(len(progress_full['results']), 1)
+
+        # Cleanup
+        self._cleanup_redis_keys(
+            f'work_match:{sid}', f'work_match:{sid}:results',
+        )
+
+
+# ====================== Redis Incremental Results Tests ======================
+
+class TestRedisIncrementalResults(TestCase):
+    """Тесты инкрементальных записей результатов в Redis LIST."""
+
+    def setUp(self):
+        from estimates.services.redis_session import RedisSessionManager
+        self.mgr = RedisSessionManager(prefix='test_wm')
+        self.session_id = self.mgr.create({
+            'status': 'processing', 'total_items': '5',
+        })
+
+    def tearDown(self):
+        from estimates.services.redis_session import get_redis
+        r = get_redis()
+        r.delete(f'test_wm:{self.session_id}')
+        r.delete(f'test_wm:{self.session_id}:results')
+
+    def test_append_result_and_get_all(self):
+        """append_result добавляет в LIST, get_all_results читает все."""
+        self.mgr.append_result(self.session_id, {'item_id': 1, 'source': 'default'})
+        self.mgr.append_result(self.session_id, {'item_id': 2, 'source': 'history'})
+        self.mgr.append_result(self.session_id, {'item_id': 3, 'source': 'fuzzy'})
+
+        results = self.mgr.get_all_results(self.session_id)
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0]['item_id'], 1)
+        self.assertEqual(results[1]['source'], 'history')
+        self.assertEqual(results[2]['item_id'], 3)
+
+    def test_get_results_count(self):
+        """get_results_count возвращает количество результатов."""
+        self.assertEqual(self.mgr.get_results_count(self.session_id), 0)
+        self.mgr.append_result(self.session_id, {'item_id': 1})
+        self.mgr.append_result(self.session_id, {'item_id': 2})
+        self.assertEqual(self.mgr.get_results_count(self.session_id), 2)
+
+    def test_empty_results_for_new_session(self):
+        """Новая сессия — пустой список результатов."""
+        results = self.mgr.get_all_results(self.session_id)
+        self.assertEqual(results, [])
+
+    def test_results_ttl_set(self):
+        """TTL устанавливается на ключ results."""
+        from estimates.services.redis_session import get_redis
+        self.mgr.append_result(self.session_id, {'item_id': 1})
+        r = get_redis()
+        ttl = r.ttl(f'test_wm:{self.session_id}:results')
+        self.assertGreater(ttl, 0)
+
+
+# ====================== Two-Pass Pipeline Tests ======================
+
+class TestTwoPassPipeline(WorkMatchingTestBase):
+    """Тесты двухпроходной архитектуры pipeline."""
+
+    def test_fast_tiers_match_before_llm(self):
+        """Pass 1: строки с default work item подбираются без LLM."""
+        from estimates.services.work_matching.pipeline import match_single_item_fast
+
+        self.product_cond.default_work_item = self.wi_mount_cond
+        self.product_cond.save()
+
+        item = EstimateItem.objects.create(
+            estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+            name='Кондиционер настенный', quantity=Decimal('1'),
+            product=self.product_cond, sort_order=1,
+        )
+        ctx = MatchingContext(self.estimate, items=[item])
+        result = match_single_item_fast(item, ctx)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result['source'], 'default')
+        self.assertEqual(result['matched_work']['id'], self.wi_mount_cond.id)
+
+    def test_unmatched_items_collected_for_pass2(self):
+        """Pass 1: строки без match собираются в unmatched для Pass 2."""
+        from estimates.services.work_matching.pipeline import match_single_item_fast
+
+        items = []
+        for i in range(3):
+            items.append(EstimateItem.objects.create(
+                estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+                name=f'Совершенно неизвестный товар QWERTY{i}', quantity=Decimal('1'),
+                sort_order=i + 1,
+            ))
+
+        ctx = MatchingContext(self.estimate, items=items)
+        unmatched = []
+        for item in items:
+            result = match_single_item_fast(item, ctx)
+            if result is None:
+                unmatched.append(item)
+
+        self.assertEqual(len(unmatched), 3)
+
+    @patch('estimates.services.work_matching.tiers.get_provider')
+    @patch('estimates.services.work_matching.tiers.LLMTaskConfig.get_provider_for_task')
+    def test_tier6_batch_called_in_pass2(self, mock_config, mock_get):
+        """Pass 2: Tier6LLM.match_batch вызывается с батчем unmatched items."""
+        from estimates.services.work_matching.tiers import Tier6LLM
+
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = {'matches': []}
+        mock_config.return_value = MagicMock(supports_web_search=False)
+        mock_get.return_value = mock_provider
+
+        items = []
+        for i in range(3):
+            items.append(EstimateItem.objects.create(
+                estimate=self.estimate, section=self.est_section, subsection=self.subsection,
+                name=f'Батч тест LLM {i}', quantity=Decimal('1'),
+                sort_order=100 + i,
+            ))
+
+        ctx = MatchingContext(self.estimate, items=items)
+        tier6 = Tier6LLM()
+        items_with_candidates = [(item, []) for item in items]
+        batch_results = tier6.match_batch(items_with_candidates, ctx)
+
+        # LLM был вызван
+        mock_provider.chat_completion.assert_called_once()
+        # Все items в результате (None если не подобрано)
+        for item in items:
+            self.assertIn(item.id, batch_results)
+
+
+# ====================== View Endpoint Tests ======================
+
+class TestWorkMatchingViews(WorkMatchingTestBase):
+    """Тесты view endpoints подбора работ."""
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_start_returns_404_for_invalid_estimate(self):
+        """POST start-work-matching с несуществующей сметой → 404."""
+        resp = self.client.post(
+            '/api/v1/estimate-items/start-work-matching/',
+            data=json.dumps({'estimate_id': 999999}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_start_returns_400_without_estimate_id(self):
+        """POST start-work-matching без estimate_id → 400."""
+        resp = self.client.post(
+            '/api/v1/estimate-items/start-work-matching/',
+            data=json.dumps({}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_progress_returns_404_for_unknown_session(self):
+        """GET progress для неизвестной сессии → 404."""
+        resp = self.client.get(
+            '/api/v1/estimate-items/work-matching-progress/deadbeef00000000/',
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_cancel_returns_404_for_unknown_session(self):
+        """POST cancel для неизвестной сессии → 404."""
+        resp = self.client.post(
+            '/api/v1/estimate-items/cancel-work-matching/deadbeef00000000/',
+        )
+        self.assertEqual(resp.status_code, 404)

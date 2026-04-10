@@ -18,7 +18,7 @@ def save_knowledge(item_name: str, work_item: WorkItem, source: str,
                    confidence: float, llm_reasoning: str = '',
                    web_query: str = '', web_summary: str = '') -> ProductKnowledge:
     """Сохранить знание в БД и обновить .md файл."""
-    normalized = Product.normalize_name(item_name)
+    normalized = Product.normalize_name(item_name)[:500]
 
     knowledge, created = ProductKnowledge.objects.update_or_create(
         item_name_pattern=normalized,
@@ -58,10 +58,10 @@ def verify_knowledge(item_name_pattern: str, work_item_id: int, user=None):
     )
 
 
-def reject_knowledge(item_name_pattern: str, work_item_id: int):
+def reject_knowledge(item_name_pattern: str, work_item_id: int, user=None):
     """Пометить знание как rejected (при отклонении пользователем)."""
     ProductKnowledge.objects.filter(
-        item_name_pattern=item_name_pattern,
+        item_name_pattern=item_name_pattern[:500],
         work_item_id=work_item_id,
     ).update(status=ProductKnowledge.Status.REJECTED)
 

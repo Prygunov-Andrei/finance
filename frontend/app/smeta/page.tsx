@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import { PublicLayout } from '@/components/public/PublicLayout';
 import { SmetaForm } from './SmetaForm';
+import { CabinetLoginForm } from './CabinetLoginForm';
 
 export const metadata: Metadata = {
-  title: 'Оценка сметы',
-  description: 'Загрузите смету для автоматической оценки стоимости работ и материалов',
+  title: 'Сметчик — Рассчитайте смету онлайн',
+  description: 'Загрузите смету для автоматической оценки стоимости работ и материалов или работайте в интерактивном редакторе',
 };
 
 export default function SmetaPage() {
@@ -16,8 +17,8 @@ export default function SmetaPage() {
           __html: JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'Service',
-            name: 'Оценка строительных смет',
-            description: 'Автоматическая оценка стоимости работ и материалов по загруженной смете',
+            name: 'Онлайн-сметчик для HVAC',
+            description: 'Интерактивный редактор смет с автоматическим подбором работ и материалов',
             provider: {
               '@type': 'Organization',
               name: 'HVAC Info',
@@ -27,16 +28,40 @@ export default function SmetaPage() {
         }}
       />
 
-      <section className="max-w-2xl mx-auto">
+      <section className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Оценка сметы
+          Сметчик
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mb-8">
-          Загрузите смету в формате Excel или PDF. Мы автоматически оценим стоимость работ
-          и материалов по актуальным рыночным ценам.
+          Рассчитайте стоимость работ и материалов. Зарегистрируйтесь для доступа к
+          интерактивному редактору или загрузите файл для быстрой оценки.
         </p>
 
-        <SmetaForm />
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Интерактивный кабинет */}
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              Интерактивный редактор
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Импортируйте спецификацию, редактируйте смету, подбирайте работы и материалы,
+              скачайте готовую смету в Excel.
+            </p>
+            <CabinetLoginForm />
+          </div>
+
+          {/* Быстрая оценка */}
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              Быстрая оценка
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Загрузите файл сметы — мы автоматически оценим стоимость и пришлём
+              результат на email.
+            </p>
+            <SmetaForm />
+          </div>
+        </div>
       </section>
     </PublicLayout>
   );

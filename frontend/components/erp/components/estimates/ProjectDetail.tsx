@@ -22,6 +22,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ArrowLeft, Loader2, FileText, Download, Plus, Edit2, Trash2, Check, Calendar, Users, Info, History, Upload, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { downloadNotesAsMarkdown } from './notes-export';
 
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -616,7 +619,15 @@ export function ProjectDetail() {
 
         {/* Notes Tab */}
         <TabsContent value="notes" className="space-y-6">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={project.project_notes.length === 0}
+              onClick={() => downloadNotesAsMarkdown(project.name, project.cipher || project.id, project.project_notes)}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Скачать .md
+            </Button>
             <Button onClick={() => {
               setEditingNote(null);
               setNoteText('');
@@ -639,7 +650,9 @@ export function ProjectDetail() {
                           {formatDate(note.created_at)}
                         </span>
                       </div>
-                      <p className="text-foreground whitespace-pre-wrap">{note.text}</p>
+                      <div className="prose prose-sm max-w-none dark:prose-invert text-foreground">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.text}</ReactMarkdown>
+                      </div>
                     </div>
                     {currentUser && typeof currentUser === 'object' && 'id' in (currentUser as Record<string, unknown>) && note.author.id === (currentUser as Record<string, unknown>).id ? (
                       <div className="flex items-center gap-2 ml-4">
@@ -726,19 +739,36 @@ export function ProjectDetail() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="note_text">Текст замечания *</Label>
+          <Tabs defaultValue="editor" className="w-full">
+            <TabsList className="mb-2">
+              <TabsTrigger value="editor">Редактор</TabsTrigger>
+              <TabsTrigger value="preview">Предпросмотр</TabsTrigger>
+            </TabsList>
+            <TabsContent value="editor" className="space-y-2">
               <textarea
                 id="note_text"
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value)}
-                rows={5}
-                placeholder="Введите текст замечания"
-                className="mt-1.5 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={10}
+                placeholder="Введите текст замечания (поддерживается Markdown)"
+                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
               />
-            </div>
-          </div>
+              <p className="text-xs text-muted-foreground">
+                Markdown: **жирный**, *курсив*, - списки, # заголовки, `код`
+              </p>
+            </TabsContent>
+            <TabsContent value="preview">
+              <div className="min-h-[240px] px-3 py-2 border border-border rounded-lg bg-muted/30">
+                {noteText.trim() ? (
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{noteText}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm italic">Начните вводить текст для предпросмотра</p>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => {

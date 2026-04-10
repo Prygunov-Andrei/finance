@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { ChevronDown, ChevronRight, Search, ArrowLeftRight, SearchCode } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,6 +19,7 @@ import type {
   WorkMatchingResult,
   WorkMatchingSource,
 } from '@/lib/api/types/estimates';
+import { WorkItemPicker } from './WorkItemPicker';
 
 const SOURCE_CONFIG: Record<WorkMatchingSource, { label: string; color: string }> = {
   default: { label: 'По умолч.', color: 'bg-emerald-600 text-white' },
@@ -42,19 +43,33 @@ interface Props {
   results: WorkMatchingResult[];
   stats: Record<string, number>;
   manHoursTotal: string;
-  onApply: (accepted: Array<{ item_id: number; work_item_id: number | null; work_price?: string }>) => void;
+  onApply: (accepted: Array<{ item_id: number; work_item_id: number | null; work_price?: string }>, rejected?: Array<{ item_id: number; work_item_id: number }>) => void;
 }
 
-export function WorkMatchingResults({ results, stats, manHoursTotal, onApply }: Props) {
+export function WorkMatchingResults({ results: initialResults, stats, manHoursTotal, onApply }: Props) {
+  // Mutable local state for results (to allow alternative selection)
+  const [results, setResults] = useState<WorkMatchingResult[]>(initialResults);
+
   const [accepted, setAccepted] = useState<Set<number>>(() => {
     const set = new Set<number>();
-    for (const r of results) {
+    for (const r of initialResults) {
       if (r.matched_work && r.confidence >= 0.7) set.add(r.item_id);
     }
     return set;
   });
+  // Track which items were initially auto-accepted (for rejection detection)
+  const [initiallyAccepted] = useState<Set<number>>(() => {
+    const set = new Set<number>();
+    for (const r of initialResults) {
+      if (r.matched_work && r.confidence >= 0.7) set.add(r.item_id);
+    }
+    return set;
+  });
+
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [searchFilter, setSearchFilter] = useState('');
+  const [pickerItemId, setPickerItemId] = useState<number | null>(null);
+  const [pickerItemName, setPickerItemName] = useState('');
 
   const toggle = (id: number) => {
     setAccepted((prev) => {
@@ -80,15 +95,90 @@ export function WorkMatchingResults({ results, stats, manHoursTotal, onApply }: 
     setAccepted(set);
   };
 
+  const selectAlternative = useCallback((itemId: number, alt: WorkMatchingAlternative) => {
+    setResults((prev) =>
+      prev.map((r) => {
+        if (r.item_id !== itemId) return r;
+
+        const oldMatch = r.matched_work;
+        const newMatch = {
+          id: alt.id,
+          name: alt.name,
+          article: alt.article,
+          section_name: alt.section_name || '',
+          hours: alt.hours || '0',
+          required_grade: alt.required_grade || '',
+          unit: alt.unit || '',
+          calculated_cost: alt.calculated_cost ?? null,
+        };
+
+        // Move old match to alternatives (if it existed), remove selected alt
+        const newAlternatives = r.alternatives.filter((a) => a.id !== alt.id);
+        if (oldMatch) {
+          newAlternatives.unshift({
+            id: oldMatch.id,
+            name: oldMatch.name,
+            article: oldMatch.article,
+            hours: oldMatch.hours,
+            unit: oldMatch.unit,
+            section_name: oldMatch.section_name,
+            required_grade: oldMatch.required_grade,
+            calculated_cost: oldMatch.calculated_cost,
+            confidence: r.confidence,
+          });
+        }
+
+        return {
+          ...r,
+          matched_work: newMatch,
+          alternatives: newAlternatives.slice(0, 5),
+          confidence: alt.confidence,
+          source: 'manual' as WorkMatchingSource,
+        };
+      }),
+    );
+    // Auto-accept the item
+    setAccepted((prev) => new Set(prev).add(itemId));
+  }, []);
+
+  const handlePickerSelect = useCallback((workItem: {
+    id: number; name: string; article: string; hours: string;
+    unit: string; section_name: string; required_grade: string;
+    calculated_cost: string | null;
+  }) => {
+    if (pickerItemId === null) return;
+    selectAlternative(pickerItemId, {
+      id: workItem.id,
+      name: workItem.name,
+      article: workItem.article,
+      hours: workItem.hours,
+      unit: workItem.unit,
+      section_name: workItem.section_name,
+      required_grade: workItem.required_grade,
+      calculated_cost: workItem.calculated_cost,
+      confidence: 1.0,
+    });
+    setPickerItemId(null);
+  }, [pickerItemId, selectAlternative]);
+
   const handleApply = () => {
-    const items = results
+    const acceptedItems = results
       .filter((r) => accepted.has(r.item_id) && r.matched_work)
       .map((r) => ({
         item_id: r.item_id,
         work_item_id: r.matched_work!.id,
         work_price: r.matched_work!.calculated_cost || undefined,
       }));
-    onApply(items);
+
+    // Collect rejected items: those that were initially auto-accepted but user unchecked
+    const rejectedItems = results
+      .filter((r) => initiallyAccepted.has(r.item_id) && !accepted.has(r.item_id) && r.matched_work)
+      .map((r) => ({
+        item_id: r.item_id,
+        work_item_id: r.matched_work!.id,
+      }));
+
+    onApply(acceptedItems, rejectedItems.length > 0 ? rejectedItems : undefined);
   };
 
   const matched = results.filter((r) => r.source !== 'unmatched').length;
@@ -149,17 +239,18 @@ export function WorkMatchingResults({ results, stats, manHoursTotal, onApply }: 
               <TableHead className="w-16">Часы</TableHead>
               <TableHead className="w-20">Источник</TableHead>
               <TableHead className="w-16">Увер.</TableHead>
+              <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((r) => {
-              const cfg = SOURCE_CONFIG[r.source];
+              const cfg = SOURCE_CONFIG[r.source] || SOURCE_CONFIG.unmatched;
               const hasAlternatives = r.alternatives && r.alternatives.length > 0;
               const isExpanded = expandedRows.has(r.item_id);
 
               return (
-                <>
-                  <TableRow key={r.item_id} className={r.source === 'unmatched' ? 'bg-red-50 dark:bg-red-950/20' : ''}>
+                <React.Fragment key={r.item_id}>
+                  <TableRow className={r.source === 'unmatched' ? 'bg-red-50 dark:bg-red-950/20' : ''}>
                     <TableCell>
                       {r.matched_work && (
                         <Checkbox checked={accepted.has(r.item_id)} onCheckedChange={() => toggle(r.item_id)} />
@@ -182,19 +273,27 @@ export function WorkMatchingResults({ results, stats, manHoursTotal, onApply }: 
                       <Badge className={`text-[10px] ${cfg.color}`}>{cfg.label}</Badge>
                     </TableCell>
                     <TableCell><ConfidenceBadge value={r.confidence} /></TableCell>
+                    <TableCell className="px-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        onClick={() => { setPickerItemId(r.item_id); setPickerItemName(r.item_name); }}
+                        title="Подобрать вручную"
+                      >
+                        <SearchCode className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                   {/* Expandable alternatives */}
                   {isExpanded && hasAlternatives && (
                     <AlternativesRows
                       alternatives={r.alternatives}
                       itemId={r.item_id}
-                      onSelect={(altId) => {
-                        // User picked an alternative — not yet implemented (would need WorkItem details fetch)
-                        // For now just show them
-                      }}
+                      onSelect={(alt) => selectAlternative(r.item_id, alt)}
                     />
                   )}
-                </>
+                </React.Fragment>
               );
             })}
           </TableBody>
@@ -207,9 +306,19 @@ export function WorkMatchingResults({ results, stats, manHoursTotal, onApply }: 
           Применить ({accepted.size})
         </Button>
       </div>
+
+      {/* Work item picker dialog */}
+      <WorkItemPicker
+        open={pickerItemId !== null}
+        onOpenChange={(open) => { if (!open) setPickerItemId(null); }}
+        onSelect={handlePickerSelect}
+        itemName={pickerItemName}
+      />
     </div>
   );
 }
+
+import React from 'react';
 
 function AlternativesRows({
   alternatives,
@@ -218,13 +327,23 @@ function AlternativesRows({
 }: {
   alternatives: WorkMatchingAlternative[];
   itemId: number;
-  onSelect: (altId: number) => void;
+  onSelect: (alt: WorkMatchingAlternative) => void;
 }) {
   return (
     <>
       {alternatives.map((alt) => (
         <TableRow key={`${itemId}-alt-${alt.id}`} className="bg-muted/30">
-          <TableCell />
+          <TableCell>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={() => onSelect(alt)}
+              title="Выбрать эту работу"
+            >
+              <ArrowLeftRight className="h-3 w-3" />
+            </Button>
+          </TableCell>
           <TableCell />
           <TableCell className="text-xs text-muted-foreground pl-6">
             Альтернатива
@@ -235,7 +354,9 @@ function AlternativesRows({
           <TableCell className="text-xs text-muted-foreground">
             {alt.article}
           </TableCell>
-          <TableCell />
+          <TableCell className="text-xs text-muted-foreground">
+            {alt.hours || ''}
+          </TableCell>
           <TableCell />
           <TableCell>
             <ConfidenceBadge value={alt.confidence} />

@@ -44,6 +44,11 @@ export interface HvacNews {
   media?: HvacNewsMedia[];
   manufacturer?: HvacManufacturerRef | null;
   is_no_news_found?: boolean;
+  // AI-рейтинг
+  star_rating?: number | null;
+  rating_explanation?: string;
+  matched_criteria?: number[];
+  duplicate_group?: number | null;
 }
 
 export interface HvacManufacturer {

@@ -3,8 +3,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.conf import settings
 from .models import (
-    NewsPost, NewsMedia, Comment, MediaUpload, 
-    SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall
+    NewsPost, NewsMedia, Comment, MediaUpload,
+    SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall,
+    RatingCriterion, RatingConfiguration, RatingRun, NewsDuplicateGroup,
 )
 import os
 
@@ -47,9 +48,16 @@ class NewsPostSerializer(serializers.ModelSerializer):
             'id', 'title', 'title_ru', 'title_en', 'title_de', 'title_pt',
             'body', 'body_ru', 'body_en', 'body_de', 'body_pt',
             'pub_date', 'status', 'source_language', 'source_url', 'created_at', 'updated_at', 'author', 'media',
-            'is_no_news_found', 'manufacturer'
+            'is_no_news_found', 'manufacturer',
+            'star_rating', 'rating_explanation', 'matched_criteria', 'duplicate_group',
         )
-        read_only_fields = ('id', 'created_at', 'updated_at', 'author', 'title_ru', 'title_en', 'title_de', 'title_pt', 'body_ru', 'body_en', 'body_de', 'body_pt', 'is_no_news_found', 'manufacturer')
+        read_only_fields = (
+            'id', 'created_at', 'updated_at', 'author',
+            'title_ru', 'title_en', 'title_de', 'title_pt',
+            'body_ru', 'body_en', 'body_de', 'body_pt',
+            'is_no_news_found', 'manufacturer',
+            'rating_explanation', 'matched_criteria', 'duplicate_group',
+        )
     
     def _get_translation_field(self, obj, field_name, lang_code):
         """Безопасно получает значение поля перевода или None"""
@@ -403,4 +411,104 @@ class DiscoveryStatsSerializer(serializers.Serializer):
     avg_efficiency = serializers.FloatField()
     avg_cost_per_run = serializers.DecimalField(max_digits=10, decimal_places=4)
     provider_breakdown = serializers.DictField()
+
+
+# ============================================================================
+# AI-рейтинг
+# ============================================================================
+
+class RatingCriterionChildSerializer(serializers.ModelSerializer):
+    """Сериализатор для дочерних критериев (вложенных)"""
+    class Meta:
+        model = RatingCriterion
+        fields = (
+            'id', 'star_rating', 'name', 'description', 'keywords',
+            'is_active', 'override_star_rating', 'order',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+
+class RatingCriterionSerializer(serializers.ModelSerializer):
+    """Сериализатор для критериев оценки с вложенными дочерними"""
+    children = RatingCriterionChildSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = RatingCriterion
+        fields = (
+            'id', 'star_rating', 'name', 'description', 'keywords',
+            'is_active', 'parent', 'override_star_rating', 'order',
+            'children', 'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+
+class RatingConfigurationSerializer(serializers.ModelSerializer):
+    """Сериализатор для конфигурации рейтинга"""
+    class Meta:
+        model = RatingConfiguration
+        fields = (
+            'id', 'name', 'is_active',
+            'primary_provider', 'fallback_chain',
+            'temperature', 'timeout',
+            'grok_model', 'anthropic_model', 'gemini_model', 'openai_model',
+            'batch_size', 'duplicate_similarity_threshold',
+            'grok_input_price', 'grok_output_price',
+            'anthropic_input_price', 'anthropic_output_price',
+            'gemini_input_price', 'gemini_output_price',
+            'openai_input_price', 'openai_output_price',
+            'prompts',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+
+class RatingConfigurationListSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор для списка конфигураций рейтинга"""
+    class Meta:
+        model = RatingConfiguration
+        fields = (
+            'id', 'name', 'is_active', 'primary_provider',
+            'batch_size', 'temperature', 'updated_at',
+        )
+        read_only_fields = fields
+
+
+class RatingRunSerializer(serializers.ModelSerializer):
+    """Сериализатор для запусков рейтинга"""
+    duration_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RatingRun
+        fields = (
+            'id', 'discovery_run', 'config_snapshot',
+            'started_at', 'finished_at', 'duration_display',
+            'total_news_rated', 'total_requests',
+            'total_input_tokens', 'total_output_tokens',
+            'estimated_cost_usd', 'provider_stats',
+            'rating_distribution', 'duplicates_found',
+            'status', 'error_message',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = fields
+
+    def get_duration_display(self, obj):
+        return obj.get_duration_display()
+
+
+class RatingRunListSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор для списка запусков рейтинга"""
+    duration_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RatingRun
+        fields = (
+            'id', 'started_at', 'finished_at', 'duration_display',
+            'total_news_rated', 'estimated_cost_usd',
+            'duplicates_found', 'status', 'created_at',
+        )
+        read_only_fields = fields
+
+    def get_duration_display(self, obj):
+        return obj.get_duration_display()
 

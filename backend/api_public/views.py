@@ -294,10 +294,11 @@ def public_start_work_matching(request, access_token):
 def public_work_matching_progress(request, access_token, session_id):
     """Прогресс подбора работ для публичного запроса."""
     get_object_or_404(EstimateRequest, access_token=access_token)
+    include_results = request.query_params.get('include_results', '').lower() in ('true', '1')
 
     from estimates.services.work_matching import WorkMatchingService
     svc = WorkMatchingService()
-    progress = svc.get_progress(session_id)
+    progress = svc.get_progress(session_id, include_results=include_results)
     if not progress:
         return Response({'error': 'Сессия не найдена'}, status=status.HTTP_404_NOT_FOUND)
     return Response(progress)
@@ -317,3 +318,120 @@ def public_apply_work_matching(request, access_token):
     svc = WorkMatchingService()
     result = svc.apply_results(session_id=session_id, items=items_data)
     return Response(result)
+
+
+# ====================== External User Registration/Login ======================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def external_user_register(request):
+    """Регистрация внешнего пользователя.
+
+    POST {email, phone?, company_name?, contact_name?}
+    → Отправляет OTP на email, создаёт/обновляет ExternalUser.
+    """
+    from .models import ExternalUser
+
+    email = request.data.get('email', '').strip().lower()
+    if not email:
+        return Response({'error': 'Email обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user, created = ExternalUser.objects.update_or_create(
+        email=email,
+        defaults={
+            'phone': request.data.get('phone', ''),
+            'company_name': request.data.get('company_name', ''),
+            'contact_name': request.data.get('contact_name', ''),
+        },
+    )
+
+    # Отправить OTP (переиспользуем существующую логику)
+    import random
+    otp_code = str(random.randint(100000, 999999))
+    cache_key = f'portal_otp:{email}'
+
+    from django.core.cache import cache
+    cache.set(cache_key, otp_code, timeout=600)  # 10 мин
+
+    from django.core.mail import send_mail
+    from django.conf import settings as django_settings
+    try:
+        send_mail(
+            subject='Код подтверждения',
+            message=f'Ваш код: {otp_code}',
+            from_email=django_settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+    except Exception:
+        return Response({'error': 'Ошибка отправки email'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({'message': 'Код отправлен на email', 'is_new': created})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def external_user_login(request):
+    """Вход по OTP коду.
+
+    POST {email, otp}
+    → Возвращает session_token.
+    """
+    from .models import ExternalUser
+    from django.core.cache import cache
+
+    email = request.data.get('email', '').strip().lower()
+    otp = request.data.get('otp', '').strip()
+
+    if not email or not otp:
+        return Response({'error': 'Email и код обязательны'}, status=status.HTTP_400_BAD_REQUEST)
+
+    cache_key = f'portal_otp:{email}'
+    stored_otp = cache.get(cache_key)
+
+    if not stored_otp or stored_otp != otp:
+        return Response({'error': 'Неверный или истёкший код'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    try:
+        user = ExternalUser.objects.get(email=email)
+    except ExternalUser.DoesNotExist:
+        return Response({'error': 'Пользователь не найден. Сначала зарегистрируйтесь.'}, status=status.HTTP_404_NOT_FOUND)
+
+    user.is_verified = True
+    user.save(update_fields=['is_verified'])
+    token = user.generate_session_token()
+    cache.delete(cache_key)
+
+    return Response({
+        'session_token': token,
+        'user': {
+            'id': user.id,
+            'email': user.email,
+            'contact_name': user.contact_name,
+            'company_name': user.company_name,
+        },
+    })
+
+
+@api_view(['GET'])
+def external_user_me(request):
+    """Получить данные текущего пользователя.
+
+    Требует: Authorization: Token <session_token>
+    """
+    from .authentication import ExternalUserTokenAuth
+
+    auth = ExternalUserTokenAuth()
+    result = auth.authenticate(request)
+    if not result:
+        return Response({'error': 'Не авторизован'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    user = result[0]
+    return Response({
+        'id': user.id,
+        'email': user.email,
+        'contact_name': user.contact_name,
+        'company_name': user.company_name,
+        'phone': user.phone,
+        'is_verified': user.is_verified,
+    })

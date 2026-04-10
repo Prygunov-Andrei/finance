@@ -88,7 +88,12 @@ export default function NewsEditor() {
     try {
       const media = await newsService.uploadMedia(file);
       toast.success('Изображение загружено');
-      return media.url;
+      // Сохраняем относительный путь, чтобы URL работал и локально, и на проде
+      try {
+        return new URL(media.url).pathname;
+      } catch {
+        return media.url;
+      }
     } catch (error: unknown) {
       console.error('Failed to upload image:', error);
 

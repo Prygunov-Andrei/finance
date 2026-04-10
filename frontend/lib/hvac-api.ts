@@ -51,8 +51,19 @@ function unwrapCollectionResponse<T>(response: CollectionResponse<T>): T[] {
 
 // --- Публичные методы ---
 
-export async function getNews(page = 1): Promise<PaginatedResponse<NewsItem>> {
-  return fetchApi(`/news/?page=${page}`, { revalidate: 300 });
+export async function getNews(
+  page = 1,
+  filters?: { starRating?: number[]; region?: string; month?: string }
+): Promise<PaginatedResponse<NewsItem>> {
+  const params = new URLSearchParams({ page: String(page) });
+  if (filters?.starRating?.length) params.set('star_rating', filters.starRating.join(','));
+  if (filters?.region) params.set('region', filters.region);
+  if (filters?.month) params.set('month', filters.month);
+  const data = await fetchApi<PaginatedResponse<NewsItem> | NewsItem[]>(`/news/?${params}`, { revalidate: 300 });
+  if (Array.isArray(data)) {
+    return { results: data, count: data.length, next: null, previous: null };
+  }
+  return data;
 }
 
 export async function getNewsById(id: number): Promise<NewsItem> {

@@ -105,11 +105,18 @@ class NewsDiscoveryService:
         return self.current_run
     
     def finish_discovery_run(self):
-        """Завершает текущий запуск поиска"""
+        """Завершает текущий запуск поиска и запускает AI-рейтинг"""
         if self.current_run:
             self.current_run.finish()
             logger.info(f"Finished discovery run #{self.current_run.id}: "
                        f"{self.current_run.news_found} news, ${self.current_run.estimated_cost_usd:.4f}")
+            # Автоматически запускаем AI-рейтинг после discovery
+            try:
+                from news.tasks import rate_news_task
+                rate_news_task.delay(discovery_run_id=self.current_run.id)
+                logger.info(f"Rating task queued for discovery run #{self.current_run.id}")
+            except Exception as e:
+                logger.warning(f"Could not queue rating task: {e}")
     
     def _track_api_call(self, provider: str, model: str, input_tokens: int, output_tokens: int,
                         duration_ms: int, success: bool, error_message: str = '', 
@@ -396,14 +403,14 @@ class NewsDiscoveryService:
         'ru': {
             'main': """Найди все свежие новости на сайте {url} ({name}) за последние 2 недели.
 
-Используй веб-поиск. Ищи все статьи, публикации, пресс-релизы, новости на сайте. Для каждой найденной новости верни заголовок, текст новости (1 абзац) и ссылку на источник.""",
+Используй веб-поиск. Ищи все статьи, публикации, пресс-релизы, новости на сайте. Для каждой найденной новости верни заголовок, текст новости (3 абзаца) и ссылку на источник.""",
             'json_format': """Верни ответ СТРОГО в JSON формате:
 
 {{
   "news": [
     {{
       "title": "Заголовок новости",
-      "summary": "Текст новости (1 абзац). Пиши напрямую, как журналист, от третьего лица.",
+      "summary": "Текст новости (3 абзаца). Пиши напрямую, как журналист, от третьего лица.",
       "source_url": "https://example.com/news/article"
     }}
   ]
@@ -416,7 +423,7 @@ class NewsDiscoveryService:
         'en': {
             'main': """Find all recent news on website {url} ({name}) from the last 2 weeks.
 
-Use web search. Look for all articles, publications, press releases, news on the website. For each news item, provide title, summary (1 paragraph) and source link.
+Use web search. Look for all articles, publications, press releases, news on the website. For each news item, provide title, summary (3 paragraphs) and source link.
 
 **IMPORTANT: Translate all news to Russian. Return only Russian text.**""",
             'json_format': """Return STRICTLY in JSON format:
@@ -425,7 +432,7 @@ Use web search. Look for all articles, publications, press releases, news on the
   "news": [
     {{
       "title": "Заголовок новости на русском",
-      "summary": "Текст новости на русском (1 абзац). Пиши напрямую, как журналист, от третьего лица.",
+      "summary": "Текст новости на русском (3 абзаца). Пиши напрямую, как журналист, от третьего лица.",
       "source_url": "https://example.com/news/article"
     }}
   ]
@@ -438,7 +445,7 @@ Return ONLY JSON in Russian, no comments."""
         'es': {
             'main': """Encuentra noticias en {url} ({name}), {start_date} a {end_date}.
 
-Usa búsqueda web. Para cada: título, resumen (1 párrafo). **Traduce al ruso solamente.**""",
+Usa búsqueda web. Para cada: título, resumen (3 párrafos). **Traduce al ruso solamente.**""",
             'json_format': """JSON:
 {{"news": [{{"title": "русский", "summary": "русский текст"}}]}}
 
@@ -447,7 +454,7 @@ Vacío: {{"news": []}}"""
         'de': {
             'main': """Finde Nachrichten auf {url} ({name}), {start_date} bis {end_date}.
 
-Verwende Websuche. Für jede: Titel, Zusammenfassung (1 Absatz). **Übersetze nur auf Russisch.**""",
+Verwende Websuche. Für jede: Titel, Zusammenfassung (3 Absätze). **Übersetze nur auf Russisch.**""",
             'json_format': """JSON:
 {{"news": [{{"title": "русский", "summary": "русский текст"}}]}}
 
@@ -456,7 +463,7 @@ Leer: {{"news": []}}"""
         'pt': {
             'main': """Encontre notícias em {url} ({name}), {start_date} a {end_date}.
 
-Use pesquisa web. Para cada: título, resumo (1 parágrafo). **Traduza apenas para russo.**""",
+Use pesquisa web. Para cada: título, resumo (3 parágrafos). **Traduza apenas para russo.**""",
             'json_format': """JSON:
 {{"news": [{{"title": "русский", "summary": "русский текст"}}]}}
 
@@ -1112,7 +1119,8 @@ Use web search. Sources: industry publications, press releases. **Translate to R
             source_language='ru',
             author=self.user,
             pub_date=timezone.now(),
-            is_no_news_found=True  # Помечаем как запись "новостей не найдено"
+            is_no_news_found=True,  # Помечаем как запись "новостей не найдено"
+            star_rating=1,  # Автоматически 1 звезда
         )
         
         # Устанавливаем переводы

@@ -17,6 +17,8 @@ export type EstimateItemsEditorProps = {
   columnConfig?: ColumnDefAPI[];
   onOpenColumnConfig?: () => void;
   projectFiles?: ProjectFileForImport[];
+  onColumnResize?: (sizing: Record<string, number>) => void;
+  initialColumnSizing?: Record<string, number>;
 };
 
 // Union type for mixed table rows (sections as virtual header rows + real items)

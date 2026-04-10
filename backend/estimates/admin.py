@@ -1,8 +1,9 @@
 from django.contrib import admin
 from .models import (
-    Project, ProjectNote, Estimate, EstimateSection,
+    Project, ProjectNote, ProjectFileType, ProjectFile,
+    Estimate, EstimateSection,
     EstimateSubsection, EstimateCharacteristic, EstimateItem,
-    MountingEstimate, SpecificationItem
+    MountingEstimate, SpecificationItem, EstimateMarkupDefaults
 )
 
 
@@ -10,6 +11,12 @@ class ProjectNoteInline(admin.TabularInline):
     model = ProjectNote
     extra = 0
     readonly_fields = ['created_at', 'updated_at']
+
+
+class ProjectFileInline(admin.TabularInline):
+    model = ProjectFile
+    extra = 0
+    readonly_fields = ['created_at', 'updated_at', 'uploaded_by']
 
 
 @admin.register(Project)
@@ -23,10 +30,25 @@ class ProjectAdmin(admin.ModelAdmin):
         'secondary_check_done', 'is_approved_for_production'
     ]
     search_fields = ['cipher', 'name']
-    inlines = [ProjectNoteInline]
+    inlines = [ProjectNoteInline, ProjectFileInline]
     readonly_fields = [
         'version_number', 'parent_version', 'created_at', 'updated_at'
     ]
+
+
+@admin.register(ProjectFileType)
+class ProjectFileTypeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'code', 'sort_order', 'is_active']
+    list_filter = ['is_active']
+    search_fields = ['name', 'code']
+
+
+@admin.register(ProjectFile)
+class ProjectFileAdmin(admin.ModelAdmin):
+    list_display = ['original_filename', 'project', 'file_type', 'uploaded_by', 'created_at']
+    list_filter = ['file_type', 'project']
+    search_fields = ['original_filename', 'title', 'project__cipher']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(ProjectNote)
@@ -47,6 +69,17 @@ class EstimateCharacteristicInline(admin.TabularInline):
     model = EstimateCharacteristic
     extra = 0
     readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(EstimateMarkupDefaults)
+class EstimateMarkupDefaultsAdmin(admin.ModelAdmin):
+    list_display = ['material_markup_percent', 'work_markup_percent']
+
+    def has_add_permission(self, request):
+        return not EstimateMarkupDefaults.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Estimate)

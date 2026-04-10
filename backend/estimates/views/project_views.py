@@ -4,9 +4,10 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from core.version_mixin import VersioningMixin
-from estimates.models import Project, ProjectNote
+from estimates.models import Project, ProjectNote, ProjectFileType, ProjectFile
 from estimates.serializers import (
     ProjectSerializer, ProjectListSerializer, ProjectNoteSerializer,
+    ProjectFileTypeSerializer, ProjectFileSerializer,
 )
 from estimates.services.project_service import (
     mark_primary_check,
@@ -20,7 +21,10 @@ class ProjectViewSet(VersioningMixin, viewsets.ModelViewSet):
 
     queryset = Project.objects.select_related(
         'object', 'primary_check_by', 'secondary_check_by', 'parent_version'
-    ).prefetch_related('project_notes', 'project_notes__author')
+    ).prefetch_related(
+        'project_notes', 'project_notes__author',
+        'project_files', 'project_files__file_type', 'project_files__uploaded_by',
+    )
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = [
         'object', 'stage', 'is_approved_for_production',
@@ -81,3 +85,31 @@ class ProjectNoteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
+
+
+class ProjectFileTypeViewSet(viewsets.ModelViewSet):
+    """ViewSet для справочника типов файлов проекта"""
+
+    queryset = ProjectFileType.objects.all()
+    serializer_class = ProjectFileTypeSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['is_active']
+    search_fields = ['name', 'code']
+
+
+class ProjectFileViewSet(viewsets.ModelViewSet):
+    """ViewSet для файлов проекта"""
+
+    queryset = ProjectFile.objects.select_related(
+        'project', 'file_type', 'uploaded_by'
+    )
+    serializer_class = ProjectFileSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['project', 'file_type']
+
+    def perform_create(self, serializer):
+        file_obj = self.request.FILES.get('file')
+        serializer.save(
+            uploaded_by=self.request.user,
+            original_filename=file_obj.name if file_obj else '',
+        )

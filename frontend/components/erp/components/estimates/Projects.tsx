@@ -426,31 +426,31 @@ export function Projects() {
               </div>
 
               <div>
-                <Label htmlFor="object">Объект *</Label>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <select
-                    id="object"
-                    value={formData.object}
-                    onChange={(e) => setFormData({ ...formData, object: Number(e.target.value) })}
-                    className="flex-1 px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-                    required
-                  >
-                    <option value={0}>Выберите объект</option>
-                    {objects.map((obj) => (
-                      <option key={obj.id} value={obj.id}>{obj.name}</option>
-                    ))}
-                  </select>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="object">Объект *</Label>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="icon"
                     onClick={() => setCreateObjectOpen(true)}
                     title="Создать новый объект"
-                    className="shrink-0"
+                    className="h-6 w-6"
                   >
                     <PlusCircle className="w-4 h-4" />
                   </Button>
                 </div>
+                <select
+                  id="object"
+                  value={formData.object}
+                  onChange={(e) => setFormData({ ...formData, object: Number(e.target.value) })}
+                  className="mt-1.5 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                  required
+                >
+                  <option value={0}>Выберите объект</option>
+                  {objects.map((obj) => (
+                    <option key={obj.id} value={obj.id}>{obj.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

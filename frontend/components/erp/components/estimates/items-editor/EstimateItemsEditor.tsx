@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useEstimateApi } from '@/lib/api/estimate-api-context';
 import { formatCurrency } from '@/lib/utils';
 import { createSelectColumn } from '@/components/ui/data-table';
 import { DataTable } from '@/components/ui/data-table';
@@ -14,6 +15,7 @@ import { toast } from 'sonner';
 import { EstimateImportDialog } from '../EstimateImportDialog';
 import { AutoMatchDialog } from '../AutoMatchDialog';
 import { WorkMatchingDialog } from '../work-matching/WorkMatchingDialog';
+import { WorkItemPicker } from '../work-matching/WorkItemPicker';
 import { type EstimateItemsEditorProps, type TableRow } from './types';
 import { useEstimateItems } from './useEstimateItems';
 import { useEditorColumns } from './useEditorColumns';
@@ -26,13 +28,16 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
   columnConfig,
   onOpenColumnConfig,
   projectFiles,
+  onColumnResize,
+  initialColumnSizing,
 }) => {
+  const estimateApi = useEstimateApi();
   const queryClient = useQueryClient();
   const [isBulkMarkupOpen, setIsBulkMarkupOpen] = useState(false);
   const state = useEstimateItems(estimateId, readOnly, columnConfig);
 
   const bulkMarkupMutation = useMutation({
-    mutationFn: (data: BulkMarkupData) => api.estimates.bulkSetMarkup(data),
+    mutationFn: (data: BulkMarkupData) => estimateApi.bulkSetMarkup(data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
       queryClient.invalidateQueries({ queryKey: ['estimate', String(estimateId)] });
@@ -43,6 +48,9 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
       toast.error(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     },
   });
+
+  // Work item picker state
+  const [workItemPickerItem, setWorkItemPickerItem] = useState<{ id: number; name: string } | null>(null);
 
   // Refs for stable column definitions — cell renderers read latest state without causing column rebuild
   const stateRef = useRef(state);
@@ -158,6 +166,31 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
     // Data columns from useEditorColumns
     cols.push(...dataColumns);
 
+    // Work item column — clickable to open WorkItemPicker
+    cols.push({
+      id: 'work_item_col',
+      header: 'Работа',
+      size: 180,
+      cell: ({ row }) => {
+        if (row.original._isSection) return null;
+        const workItemName = row.original.work_item_name;
+        if (readOnly) {
+          return <span className="text-xs truncate">{workItemName || ''}</span>;
+        }
+        return (
+          <button
+            className="text-xs truncate max-w-[170px] text-left hover:text-primary hover:underline transition-colors block"
+            onClick={() => {
+              setWorkItemPickerItem({ id: row.original.id, name: row.original.name });
+            }}
+            title={workItemName || 'Назначить работу'}
+          >
+            {workItemName || <span className="text-muted-foreground italic">назначить...</span>}
+          </button>
+        );
+      },
+    });
+
     if (!readOnly) {
       cols.push({
         id: 'actions',
@@ -222,6 +255,8 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
         enableRowSelection={!readOnly}
         enableVirtualization
         enableColumnResizing
+        initialColumnSizing={initialColumnSizing}
+        onColumnSizingChanged={onColumnResize}
         globalFilter={state.globalFilter}
         onGlobalFilterChange={state.setGlobalFilter}
         onRowSelectionChange={state.setRowSelection}
@@ -442,6 +477,26 @@ export const EstimateItemsEditor: React.FC<EstimateItemsEditorProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Work Item Picker — inline assignment */}
+      <WorkItemPicker
+        open={workItemPickerItem !== null}
+        onOpenChange={(open) => { if (!open) setWorkItemPickerItem(null); }}
+        onSelect={async (wi) => {
+          if (!workItemPickerItem) return;
+          try {
+            await estimateApi.updateEstimateItem(workItemPickerItem.id, {
+              work_item: wi.id,
+            });
+            queryClient.invalidateQueries({ queryKey: ['estimate-items', estimateId] });
+            toast.success(`Работа "${wi.name}" назначена`);
+          } catch (err) {
+            toast.error(`Ошибка: ${err instanceof Error ? err.message : 'Неизвестная ошибка'}`);
+          }
+          setWorkItemPickerItem(null);
+        }}
+        itemName={workItemPickerItem?.name}
+      />
 
     </div>
   );

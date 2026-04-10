@@ -36,13 +36,19 @@ export function NewsCard({ news }: NewsCardProps) {
             {bodyPreview}
           </p>
         )}
-        {news.manufacturer && (
-          <div className="mt-3">
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          {news.manufacturer && (
             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
               {news.manufacturer.name}
             </span>
-          </div>
-        )}
+          )}
+          {(news as NewsItem & { star_rating?: number }).star_rating != null &&
+           (news as NewsItem & { star_rating?: number }).star_rating! >= 4 && (
+            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
+              {'★'.repeat((news as NewsItem & { star_rating?: number }).star_rating!)}
+            </span>
+          )}
+        </div>
       </div>
     </article>
   );

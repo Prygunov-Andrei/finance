@@ -542,6 +542,18 @@ class Estimate(CachedPropertyMixin, TimestampedModel):
         max_digits=7, decimal_places=2, default=Decimal('300.00'),
         verbose_name='Наценка на работы по умолчанию (%)'
     )
+    public_source = models.BooleanField(
+        default=False,
+        verbose_name='Из публичного портала',
+        help_text='True если смета создана внешним пользователем',
+    )
+    external_user = models.ForeignKey(
+        'api_public.ExternalUser',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='estimates',
+        verbose_name='Внешний пользователь',
+    )
 
     class Meta:
         ordering = ['-created_at']
