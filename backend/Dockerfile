@@ -5,9 +5,10 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Системные зависимости (psycopg2, Pillow, etc.)
+# Системные зависимости (psycopg2, Pillow, git для generate_changelog, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    git \
     libpq-dev \
     libjpeg62-turbo-dev \
     zlib1g-dev \

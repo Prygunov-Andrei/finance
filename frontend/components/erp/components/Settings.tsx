@@ -1,6 +1,6 @@
 import { useSearchParams } from '@/hooks/erp-router';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, CreditCard, FolderTree, ScrollText, ShieldCheck, Sparkles, Landmark, FileStack } from 'lucide-react';
+import { Building2, CreditCard, FolderTree, ScrollText, ShieldCheck, Sparkles, Landmark, FileStack, Info } from 'lucide-react';
 import { TaxSystemsTab } from './TaxSystemsTab';
 import { LLMSettings } from './LLMSettings';
 import { BankConnectionsTab } from './BankConnectionsTab';
@@ -9,8 +9,9 @@ import { AccountsTab } from './settings/AccountsTab';
 import { ExpenseCategoriesTab } from './settings/ExpenseCategoriesTab';
 import { FNSIntegrationTab } from './settings/FNSIntegrationTab';
 import { ProjectFileTypesTab } from './settings/ProjectFileTypesTab';
+import { ChangelogView } from './ChangelogView';
 
-const SETTINGS_TABS = ['tax-systems', 'entities', 'accounts', 'categories', 'file-types', 'fns', 'llm', 'banking'] as const;
+const SETTINGS_TABS = ['tax-systems', 'entities', 'accounts', 'categories', 'file-types', 'fns', 'llm', 'banking', 'about'] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 const DEFAULT_SETTINGS_TAB: SettingsTab = 'entities';
 
@@ -72,6 +73,10 @@ export function Settings() {
               <Landmark className="w-4 h-4" />
               Банковские подключения
             </TabsTrigger>
+            <TabsTrigger value="about" className="flex shrink-0 items-center gap-2">
+              <Info className="w-4 h-4" />
+              О системе
+            </TabsTrigger>
             </TabsList>
           </div>
 
@@ -105,6 +110,19 @@ export function Settings() {
 
           <TabsContent value="banking">
             <BankConnectionsTab />
+          </TabsContent>
+
+          <TabsContent value="about">
+            <div className="max-w-3xl space-y-2">
+              <h2 className="text-xl font-semibold">О системе</h2>
+              <p className="text-sm text-muted-foreground">
+                История релизов ERP. Записи формируются автоматически из
+                Conventional Commits при каждом деплое.
+              </p>
+              <div className="pt-4">
+                <ChangelogView />
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

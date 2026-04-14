@@ -53,6 +53,48 @@ else
     git pull origin main
 fi
 
+echo -e "${GREEN}[1.5/9] Computing release version...${NC}"
+git fetch --tags --prune origin 2>/dev/null || echo -e "${YELLOW}Warning: git fetch --tags failed, using local tags${NC}"
+LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+HEAD_SHA=$(git rev-parse HEAD)
+HEAD_TAG=$(git tag --points-at HEAD 2>/dev/null | head -n1)
+
+if [ -n "$HEAD_TAG" ]; then
+    APP_VERSION="$HEAD_TAG"
+    echo "Using existing tag on HEAD: $APP_VERSION"
+elif [ -n "$LAST_TAG" ]; then
+    NEW_COMMITS=$(git log "$LAST_TAG..HEAD" --oneline 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$NEW_COMMITS" = "0" ]; then
+        APP_VERSION="$LAST_TAG"
+        echo "No new commits since $LAST_TAG — redeploy without version bump"
+    else
+        BASE=${LAST_TAG#v}
+        MAJOR=$(echo "$BASE" | cut -d. -f1)
+        MINOR=$(echo "$BASE" | cut -d. -f2)
+        PATCH=$(echo "$BASE" | cut -d. -f3)
+        if ! [[ "$MAJOR" =~ ^[0-9]+$ && "$MINOR" =~ ^[0-9]+$ && "$PATCH" =~ ^[0-9]+$ ]]; then
+            echo -e "${YELLOW}Warning: тег $LAST_TAG не SemVer, использую как есть${NC}"
+            APP_VERSION="$LAST_TAG"
+        else
+            APP_VERSION="v${MAJOR}.${MINOR}.$((PATCH+1))"
+            git tag "$APP_VERSION" HEAD
+            if git push origin "$APP_VERSION" 2>/dev/null; then
+                echo "Auto-bumped patch: $LAST_TAG → $APP_VERSION ($NEW_COMMITS new commits, pushed)"
+            else
+                echo -e "${YELLOW}Auto-bumped patch: $LAST_TAG → $APP_VERSION (pushed to origin failed — tag only local)${NC}"
+            fi
+        fi
+    fi
+else
+    APP_VERSION="v1.0.0"
+    git tag "$APP_VERSION" HEAD 2>/dev/null || true
+    git push origin "$APP_VERSION" 2>/dev/null || echo -e "${YELLOW}Baseline tag push failed — tag only local${NC}"
+    echo "Baseline release: $APP_VERSION"
+fi
+export APP_VERSION
+export HEAD_SHA
+echo "Release: $APP_VERSION ($HEAD_SHA)"
+
 # Проверка критических переменных окружения
 MISSING_SECRETS=0
 if ! grep -qE '^SECRET_KEY=.+' .env 2>/dev/null || grep -q 'django-insecure' .env 2>/dev/null; then
@@ -102,6 +144,9 @@ echo -e "${GREEN}[7.1/9] Настройка LLM-провайдеров...${NC}"
 
 echo -e "${GREEN}[7.2/9] Collecting static files...${NC}"
 "${COMPOSE[@]}" exec -T backend python manage.py collectstatic --noinput
+
+echo -e "${GREEN}[7.25/9] Recording release in database...${NC}"
+"${COMPOSE[@]}" exec -T backend python manage.py generate_changelog --tag "$APP_VERSION" --sha "$HEAD_SHA" --repo /app || echo -e "${YELLOW}Warning: generate_changelog failed — changelog will not be updated for this release${NC}"
 
 run_backend_check "[7.3/9] Django system checks..." python manage.py check
 run_backend_check "[7.4/9] HVAC smoke checks..." python manage.py hvac_api_smoke --skip-feedback-write

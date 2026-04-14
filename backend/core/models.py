@@ -316,3 +316,57 @@ class NotificationService:
                 data={'invoice_id': invoice.id},
             )
 
+
+# =============================================================================
+# Release — версии системы и changelog (формируется в deploy/deploy.sh)
+# =============================================================================
+
+class Release(TimestampedModel):
+    """Запись о релизе системы.
+
+    Запись создаётся management-командой `generate_changelog` из deploy.sh
+    при каждом деплое. `version` — это git tag (SemVer `vX.Y.Z`), `commits` —
+    разобранные по Conventional Commits сообщения между prev и new тегами.
+    """
+
+    version = models.CharField(
+        max_length=32, unique=True, db_index=True,
+        verbose_name='Версия', help_text='SemVer git-tag, например v1.2.3',
+    )
+    released_at = models.DateTimeField(
+        auto_now_add=True, db_index=True,
+        verbose_name='Дата релиза',
+    )
+    git_sha = models.CharField(
+        max_length=40, blank=True,
+        verbose_name='Commit SHA',
+    )
+    prev_version = models.CharField(
+        max_length=32, blank=True,
+        verbose_name='Предыдущая версия',
+    )
+    commits = models.JSONField(
+        default=list,
+        verbose_name='Коммиты',
+        help_text='[{type, scope, subject, sha, author}]',
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name='Описание (ручное)',
+        help_text='Необязательный человеческий текст для релиза. '
+                  'Если заполнен — UI показывает его над списком коммитов.',
+    )
+    is_published = models.BooleanField(
+        default=True, db_index=True,
+        verbose_name='Опубликован',
+        help_text='Снять галочку, чтобы скрыть ошибочный релиз из changelog.',
+    )
+
+    class Meta:
+        verbose_name = 'Релиз'
+        verbose_name_plural = 'Релизы'
+        ordering = ['-released_at']
+
+    def __str__(self):
+        return f'{self.version} ({self.released_at:%Y-%m-%d})'
+

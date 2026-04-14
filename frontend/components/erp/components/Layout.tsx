@@ -1,26 +1,30 @@
 import { ReactNode, useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from '@/hooks/erp-router';
-import { 
-  Home, Users, Building2, FileText, DollarSign, Settings, 
+import {
+  Home, Users, Building2, FileText, DollarSign, Settings,
   LogOut, Menu, ChevronRight, List, Briefcase,
   FolderOpen, ClipboardList, Wrench, CreditCard, Mail,
   Package, CheckSquare, Landmark, Receipt,
   Truck, CalendarClock, TrendingUp, BarChart3, ShoppingCart, Link2,
   ExternalLink, HardHat, Search, BookOpen, HelpCircle,
-  Calendar, PieChart, Wallet, Scale, Megaphone, Calculator, Globe, Phone, MessageSquareText
+  Calendar, PieChart, Wallet, Scale, Megaphone, Calculator, Globe, Phone, MessageSquareText,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { GlobalSearch } from './GlobalSearch';
 import { NotificationBadge } from './NotificationBadge';
+import { ChangelogDialog } from './VersionBadge';
+import { useVersion } from '@/lib/api/version';
 import { ThemeSwitcher } from '@/components/public/ThemeSwitcher';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useBreadcrumb } from '@/hooks/useBreadcrumb';
@@ -446,6 +450,9 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
     return saved ? parseInt(saved) : 256;
   });
   const [isResizing, setIsResizing] = useState(false);
+  const [changelogOpen, setChangelogOpen] = useState(false);
+  const { data: versionData } = useVersion();
+  const currentVersion = versionData?.current ?? 'dev';
   const sidebarRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -667,6 +674,17 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                     На сайт
                   </a>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setChangelogOpen(true)}
+                  className="cursor-pointer"
+                >
+                  <Info className="w-4 h-4 mr-2" />
+                  <span>Версия</span>
+                  <Badge variant="outline" className="ml-auto font-mono text-xs">
+                    {currentVersion}
+                  </Badge>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="text-red-600">
                   <LogOut className="w-4 h-4 mr-2" />
                   Выйти
@@ -689,6 +707,17 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                 <DropdownMenuLabel>
                   {user?.username || 'Пользователь'}
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setChangelogOpen(true)}
+                  className="cursor-pointer"
+                >
+                  <Info className="w-4 h-4 mr-2" />
+                  <span>Версия</span>
+                  <Badge variant="outline" className="ml-auto font-mono text-xs">
+                    {currentVersion}
+                  </Badge>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="text-red-600">
                   <LogOut className="w-4 h-4 mr-2" />
@@ -816,6 +845,8 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
         </div>
 
       </main>
+
+      <ChangelogDialog open={changelogOpen} onOpenChange={setChangelogOpen} />
     </div>
   );
 }

@@ -32,6 +32,7 @@ from payments.views import (
 from core.views import UserViewSet, NotificationViewSet, cbr_rates
 from core.views import SystemNotificationCreateView
 from core.auth_views import ERPTokenObtainPairView
+from core.version_views import version_info
 
 # Создаём роутер для ViewSets
 router = DefaultRouter()
@@ -108,6 +109,7 @@ def health_check(request):
 
 urlpatterns = [
     path('api/v1/health/', health_check, name='health-check'),
+    path('api/v1/version/', version_info, name='version-info'),
     path('admin/', admin.site.urls),
     path('hvac-admin/', include((admin.site.get_urls(), 'hvac_admin'), namespace='hvac_admin')),
     # OpenAPI/Swagger документация
