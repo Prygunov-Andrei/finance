@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from 'next-themes';
+import { ChunkErrorHandler } from '@/components/ChunkErrorHandler';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -55,6 +56,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen antialiased bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+          <ChunkErrorHandler />
           {children}
         </ThemeProvider>
       </body>
