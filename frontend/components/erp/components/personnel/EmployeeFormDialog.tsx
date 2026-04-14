@@ -13,12 +13,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   UserCircle, Briefcase, Banknote, Landmark, ShieldCheck, Link2, Plus, Loader2,
-  Search, Pencil, Save, X, Building2, BadgeCheck, BadgeMinus,
+  Search, Pencil, Save, X, Building2, BadgeCheck, BadgeMinus, UserPlus, KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PositionRecordsTab } from './PositionRecordsTab';
 import { SalaryHistoryTab } from './SalaryHistoryTab';
+import { CreateUserDialog } from './CreateUserDialog';
 
 const defaultErpPermissions = (existing?: ERPPermissions): ERPPermissions => {
   const perms: ERPPermissions = {};
@@ -91,6 +92,23 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, legalEntities
     onError: (e: Error) => toast.error(`Ошибка: ${e?.message}`),
   });
 
+  const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+
+  const setPasswordMutation = useMutation({
+    mutationFn: () => api.personnel.setEmployeePassword(employee!.id, {
+      new_password: newPassword,
+      new_password_confirm: newPasswordConfirm,
+    }),
+    onSuccess: () => {
+      toast.success('Пароль установлен');
+      setNewPassword('');
+      setNewPasswordConfirm('');
+    },
+    onError: (e: Error) => toast.error(`Ошибка: ${e?.message}`),
+  });
+
   const handleSave = () => { if (!formData.full_name.trim()) { toast.error('Укажите ФИО сотрудника'); return; } saveMutation.mutate(formData); };
   const handleFieldChange = (field: keyof CreateEmployeeData, value: CreateEmployeeData[keyof CreateEmployeeData]) => { setFormData((prev) => ({ ...prev, [field]: value })); };
   const handlePermissionChange = (section: string, level: ERPPermissionLevel) => { setFormData((prev) => ({ ...prev, erp_permissions: { ...prev.erp_permissions, [section]: level } })); };
@@ -120,15 +138,59 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, legalEntities
                 <div className="col-span-2"><Label>ФИО *</Label><Input value={formData.full_name} onChange={(e) => handleFieldChange('full_name', e.target.value)} placeholder="Иванов Иван Иванович" /></div>
                 <div className="col-span-2">
                   <Label>Учётная запись (User)</Label>
-                  <Select value={formData.user ? String(formData.user) : '_none'} onValueChange={(v) => handleFieldChange('user', v === '_none' ? null : Number(v))}>
-                    <SelectTrigger><SelectValue placeholder="Не привязана" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">— Не привязана —</SelectItem>
-                      {availableUsers.map((u) => (<SelectItem key={u.id} value={String(u.id)}>{u.username}{u.first_name || u.last_name ? ` (${[u.first_name, u.last_name].filter(Boolean).join(' ')})` : ''}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={formData.user ? String(formData.user) : '_none'} onValueChange={(v) => handleFieldChange('user', v === '_none' ? null : Number(v))}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Не привязана" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">— Не привязана —</SelectItem>
+                        {availableUsers.map((u) => (<SelectItem key={u.id} value={String(u.id)}>{u.username}{u.first_name || u.last_name ? ` (${[u.first_name, u.last_name].filter(Boolean).join(' ')})` : ''}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    {isEdit && !formData.user && (
+                      <Button type="button" variant="outline" onClick={() => setCreateUserDialogOpen(true)} className="shrink-0">
+                        <UserPlus className="w-4 h-4 mr-1" /> Создать
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">Привязка к учётной записи даёт сотруднику возможность входить в систему и определяет его права доступа</p>
                 </div>
+                {isEdit && (
+                  <div className="col-span-2 rounded-xl border border-dashed border-border p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-primary" />
+                      <Label className="mb-0">Пароль доступа</Label>
+                    </div>
+                    {!formData.user ? (
+                      <p className="text-xs text-muted-foreground">
+                        Сначала создайте или привяжите учётную запись, затем можно будет задать пароль.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor="new_password" className="text-xs">Новый пароль</Label>
+                            <Input id="new_password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Минимум 8 символов" autoComplete="new-password" />
+                          </div>
+                          <div>
+                            <Label htmlFor="new_password_confirm" className="text-xs">Повторите пароль</Label>
+                            <Input id="new_password_confirm" type="password" value={newPasswordConfirm} onChange={(e) => setNewPasswordConfirm(e.target.value)} placeholder="Повтор" autoComplete="new-password" />
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                          <p className="text-xs text-muted-foreground">После установки сотрудник сможет войти в систему.</p>
+                          <Button
+                            type="button"
+                            onClick={() => setPasswordMutation.mutate()}
+                            disabled={!newPassword || !newPasswordConfirm || setPasswordMutation.isPending}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            {setPasswordMutation.isPending ? (<><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Сохранение...</>) : (<><KeyRound className="w-4 h-4 mr-1" /> Установить пароль</>)}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div><Label>Дата рождения</Label><Input type="date" value={formData.date_of_birth || ''} onChange={(e) => handleFieldChange('date_of_birth', e.target.value || null)} /></div>
                 <div>
                   <Label>Пол</Label>
@@ -290,6 +352,16 @@ export function EmployeeFormDialog({ open, onOpenChange, employee, legalEntities
             {saveMutation.isPending ? (<><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Сохранение...</>) : (<><Save className="w-4 h-4 mr-1" /> {isEdit ? 'Сохранить' : 'Создать'}</>)}
           </Button>
         </div>
+
+        {isEdit && employee && (
+          <CreateUserDialog
+            open={createUserDialogOpen}
+            onOpenChange={setCreateUserDialogOpen}
+            employeeId={employee.id}
+            employeeFullName={employee.full_name}
+            onSuccess={(userId) => handleFieldChange('user', userId)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

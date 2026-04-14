@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from .models import Employee, PositionRecord, SalaryHistory, PERMISSION_LEVELS, get_all_permission_keys
 
 
@@ -132,6 +133,30 @@ class EmployeeDetailSerializer(serializers.ModelSerializer):
                     f'Допустимые: {", ".join(PERMISSION_LEVELS)}'
                 )
         return value
+
+
+class EmployeeCreateUserSerializer(serializers.Serializer):
+    """Создание User и привязка к Employee (без пароля — ставится отдельно)."""
+
+    username = serializers.CharField(max_length=150, min_length=3)
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError('Логин уже занят')
+        return value
+
+
+class EmployeeSetPasswordSerializer(serializers.Serializer):
+    """Установка пароля User, привязанного к Employee."""
+
+    new_password = serializers.CharField(write_only=True)
+    new_password_confirm = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError({'new_password_confirm': 'Пароли не совпадают'})
+        validate_password(attrs['new_password'])
+        return attrs
 
 
 class OrgChartNodeSerializer(serializers.Serializer):

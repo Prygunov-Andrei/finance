@@ -1,14 +1,18 @@
 import logging
 
+from django.contrib.auth.models import User
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Prefetch
 
 from .models import Employee, PositionRecord, SalaryHistory
+from .permissions import ERPSectionPermission
 from .serializers import (
     EmployeeListSerializer,
     EmployeeDetailSerializer,
+    EmployeeCreateUserSerializer,
+    EmployeeSetPasswordSerializer,
     PositionRecordSerializer,
     SalaryHistorySerializer,
 )
@@ -106,6 +110,53 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         create_salary_record(employee, serializer.validated_data, serializer.save)
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    # ---------- Создание учётной записи (User) для сотрудника ----------
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='create-user',
+        permission_classes=[permissions.IsAuthenticated, ERPSectionPermission],
+    )
+    def create_user(self, request, pk=None):
+        employee = self.get_object()
+        if employee.user_id:
+            return Response(
+                {'detail': 'К сотруднику уже привязана учётная запись'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = EmployeeCreateUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = User.objects.create(username=serializer.validated_data['username'])
+        user.set_unusable_password()
+        user.save()
+        employee.user = user
+        employee.save(update_fields=['user'])
+        return Response(
+            {'id': user.id, 'username': user.username},
+            status=status.HTTP_201_CREATED,
+        )
+
+    # ---------- Установка пароля для User сотрудника ----------
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='set-password',
+        permission_classes=[permissions.IsAuthenticated, ERPSectionPermission],
+    )
+    def set_password(self, request, pk=None):
+        employee = self.get_object()
+        if not employee.user_id:
+            return Response(
+                {'detail': 'К сотруднику не привязана учётная запись'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = EmployeeSetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = employee.user
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
+        return Response({'status': 'password_set'})
 
     # ---------- Создание контрагента из сотрудника ----------
     @action(detail=True, methods=['post'], url_path='create-counterparty')

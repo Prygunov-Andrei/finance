@@ -100,5 +100,24 @@ export function createPersonnelService(request: RequestFn) {
         { method: 'POST' }
       );
     },
+
+    // Create User account for employee (without password)
+    async createUserForEmployee(employeeId: number, data: { username: string }): Promise<{ id: number; username: string }> {
+      return request<{ id: number; username: string }>(
+        `/personnel/employees/${employeeId}/create-user/`,
+        { method: 'POST', body: JSON.stringify(data) }
+      );
+    },
+
+    // Set password for the User bound to employee
+    async setEmployeePassword(
+      employeeId: number,
+      data: { new_password: string; new_password_confirm: string }
+    ): Promise<{ status: string }> {
+      return request<{ status: string }>(
+        `/personnel/employees/${employeeId}/set-password/`,
+        { method: 'POST', body: JSON.stringify(data) }
+      );
+    },
   };
 }
