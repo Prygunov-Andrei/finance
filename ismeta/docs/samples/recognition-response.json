@@ -1,0 +1,64 @@
+{
+  "document_meta": {
+    "filenames": ["vent-spec.pdf"],
+    "pages_total": 3,
+    "pages_processed": 3,
+    "confidence": 0.89,
+    "processing_time_ms": 18420,
+    "llm_provider": "openai",
+    "llm_model": "gpt-4o",
+    "tokens_total": 52341,
+    "cost_usd": 0.142
+  },
+  "errors": [],
+  "items": [
+    {
+      "raw_name": "Вентилятор крышный MOB2600/45-3a",
+      "model_name": "MOB2600/45-3a",
+      "brand": "MOB",
+      "quantity": 4,
+      "unit": "шт",
+      "section_name": "ОСНОВНОЕ ОБОРУДОВАНИЕ ВЕНТИЛЯЦИИ",
+      "tech_specs": {"flow": "2600 м³/ч", "power": "0.45 кВт", "voltage": "3x400V"},
+      "confidence": 0.91,
+      "source_page": 1,
+      "source_coords": [120, 340, 580, 360]
+    },
+    {
+      "raw_name": "Воздуховод прямоугольный 500х400, оцинк.",
+      "model_name": null,
+      "brand": null,
+      "quantity": 42.5,
+      "unit": "м.п.",
+      "section_name": "ВЕНТИЛЯЦИОННАЯ СЕТЬ",
+      "tech_specs": {"dimensions": "500x400"},
+      "confidence": 0.85,
+      "source_page": 1,
+      "source_coords": [120, 420, 580, 440]
+    },
+    {
+      "raw_name": "Клапан противопожарный КПС-1М 500х400",
+      "model_name": "КПС-1М",
+      "brand": "СВТ",
+      "quantity": 3,
+      "unit": "шт",
+      "section_name": "ВЕНТИЛЯЦИОННАЯ СЕТЬ",
+      "tech_specs": {"dimensions": "500x400"},
+      "confidence": 0.88,
+      "source_page": 2,
+      "source_coords": [120, 120, 580, 140]
+    },
+    {
+      "raw_name": "Пусконаладка системы вентиляции",
+      "model_name": null,
+      "brand": null,
+      "quantity": 1,
+      "unit": "компл",
+      "section_name": "ВЕНТИЛЯЦИОННАЯ СЕТЬ",
+      "tech_specs": {},
+      "confidence": 0.95,
+      "source_page": 3,
+      "source_coords": [120, 120, 580, 140]
+    }
+  ]
+}

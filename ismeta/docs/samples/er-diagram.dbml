@@ -1,0 +1,240 @@
+// ISMeta ER-diagram in DBML.
+// Для визуализации — вставить в https://dbdiagram.io
+// Упрощённая: только ключевые поля и связи.
+
+Table Workspace {
+  id uuid [pk]
+  name varchar
+  slug varchar [unique]
+  settings jsonb
+  status varchar
+  created_at timestamptz
+}
+
+Table WorkspaceMember {
+  id uuid [pk]
+  workspace_id uuid [ref: > Workspace.id]
+  user_id varchar
+  role varchar
+  is_active boolean
+}
+
+Table Folder {
+  id uuid [pk]
+  workspace_id uuid [ref: > Workspace.id]
+  name varchar
+  parent_id uuid [ref: > Folder.id]
+  external_ref jsonb
+  sort_order int
+  deleted_at timestamptz
+}
+
+Table Estimate {
+  id uuid [pk]
+  workspace_id uuid [ref: > Workspace.id]
+  folder_id uuid [ref: > Folder.id]
+  name varchar
+  number varchar
+  status varchar
+  parent_version_id uuid [ref: > Estimate.id]
+  version_number int
+  currency varchar
+  default_material_markup jsonb
+  default_work_markup jsonb
+  price_list_id varchar
+  source_file text
+  source_recognition_id uuid
+  transmitted_at timestamptz
+  transmitted_contract_id varchar
+  version int
+  deleted_at timestamptz
+}
+
+Table EstimateSection {
+  id uuid [pk]
+  workspace_id uuid
+  estimate_id uuid [ref: > Estimate.id]
+  name varchar
+  sort_order int
+  material_markup jsonb
+  work_markup jsonb
+  version int
+}
+
+Table EstimateSubsection {
+  id uuid [pk]
+  workspace_id uuid
+  section_id uuid [ref: > EstimateSection.id]
+  name varchar
+  sort_order int
+  version int
+}
+
+Table EstimateItem {
+  id uuid [pk]
+  workspace_id uuid
+  estimate_id uuid [ref: > Estimate.id]
+  section_id uuid [ref: > EstimateSection.id]
+  subsection_id uuid [ref: > EstimateSubsection.id]
+  row_id uuid
+  source_item_id uuid [ref: > EstimateItem.id]
+  sort_order int
+  original_name varchar
+  name varchar
+  model_name varchar
+  brand varchar
+  unit varchar
+  quantity decimal
+  material_unit_price decimal
+  work_unit_price decimal
+  material_markup jsonb
+  work_markup jsonb
+  product_id varchar [ref: > ProductCache.id]
+  work_item_id varchar
+  supplier_product_id varchar
+  match_source varchar
+  match_confidence decimal
+  match_reasoning text
+  is_analog boolean
+  tech_specs jsonb
+  custom_data jsonb
+  is_deleted boolean
+  version int
+}
+
+Table EstimateCharacteristic {
+  id uuid [pk]
+  workspace_id uuid
+  estimate_id uuid [ref: > Estimate.id]
+  key varchar
+  label varchar
+  value_text text
+  value_type varchar
+}
+
+Table ProductCache {
+  id varchar [pk]  // внешний id из ERP
+  workspace_id uuid
+  name varchar
+  normalized_name varchar
+  unit varchar
+  category_id varchar
+  default_price decimal
+  status varchar
+  last_synced_at timestamptz
+  cached_at timestamptz
+}
+
+Table ProductKnowledge {
+  id uuid [pk]
+  workspace_id uuid
+  item_name_pattern varchar
+  work_item_id varchar
+  work_section_code varchar
+  status varchar
+  source varchar
+  confidence decimal
+  llm_reasoning text
+  usage_count int
+  md_file_path varchar
+}
+
+Table ProductWorkMapping {
+  id uuid [pk]
+  workspace_id uuid
+  product_id varchar
+  work_item_id varchar
+  source varchar
+  confidence decimal
+  usage_count int
+}
+
+Table ChatSession {
+  id uuid [pk]
+  workspace_id uuid
+  estimate_id uuid [ref: > Estimate.id]
+  user_id varchar
+  created_at timestamptz
+  closed_at timestamptz
+}
+
+Table ChatMessage {
+  id uuid [pk]
+  workspace_id uuid
+  session_id uuid [ref: > ChatSession.id]
+  role varchar
+  content text
+  tool_calls jsonb
+  model varchar
+  tokens_in int
+  tokens_out int
+  cost_usd decimal
+}
+
+Table AgentContext {
+  workspace_id uuid
+  estimate_id uuid
+  key varchar
+  value jsonb
+
+  indexes {
+    (workspace_id, estimate_id, key) [pk]
+  }
+}
+
+Table AuditLog {
+  id bigint [pk]
+  workspace_id uuid
+  user_id varchar
+  entity_type varchar
+  entity_id uuid
+  action varchar
+  old_value jsonb
+  new_value jsonb
+  source varchar
+  created_at timestamptz
+}
+
+Table ImportSession {
+  id uuid [pk]
+  workspace_id uuid
+  estimate_id uuid [ref: > Estimate.id]
+  source_type varchar
+  external_ref varchar
+  status varchar
+  rows_total int
+  rows_processed int
+}
+
+Table ProcessedEvents {
+  event_id varchar [pk]
+  workspace_id uuid
+  event_type varchar
+  processed_at timestamptz
+}
+
+Table LLMUsage {
+  id bigint [pk]
+  workspace_id uuid
+  estimate_id uuid
+  user_id varchar
+  task_type varchar
+  provider varchar
+  model varchar
+  tokens_in int
+  tokens_out int
+  cost_usd decimal
+  created_at timestamptz
+}
+
+Table SnapshotTransmission {
+  id uuid [pk]
+  workspace_id uuid
+  estimate_id uuid [ref: > Estimate.id]
+  version_id uuid
+  idempotency_key varchar [unique]
+  erp_contract_estimate_id varchar
+  status varchar
+  attempts int
+  last_error text
+}

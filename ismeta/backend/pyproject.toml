@@ -1,0 +1,45 @@
+[project]
+name = "ismeta-backend"
+version = "0.1.0"
+description = "ISMeta backend — Django 5 приложение для подготовки смет."
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4", "DJ", "RUF"]
+ignore = ["E501"]  # длина строки обрабатывается форматером
+
+[tool.ruff.lint.isort]
+known-first-party = ["ismeta", "workspace", "estimate", "agent", "integration", "common"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+exclude = ["migrations/", "tests/fixtures/"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+strict = false
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "ismeta.settings"
+python_files = ["test_*.py", "tests.py"]
+addopts = "--strict-markers --tb=short"
+markers = [
+    "slow: медленные тесты (golden set, e2e)",
+    "requires_llm: требует реального LLM-ключа",
+    "requires_erp: требует запущенного ERP",
+]
+
+[tool.coverage.run]
+source = ["workspace", "estimate", "agent", "integration", "common"]
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.coverage.report]
+precision = 1
+skip_covered = false
+fail_under = 70

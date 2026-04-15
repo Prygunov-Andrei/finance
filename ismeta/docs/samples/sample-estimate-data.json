@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "schema_version": "v1",
+    "workspace_id": "11111111-1111-1111-1111-111111111111",
+    "estimate_id": "4f3a0000-0000-4000-8000-000000000001",
+    "estimate_version_id": "4f3a0000-0000-4000-8000-000000000001",
+    "estimate_number": "СМ-2026-001",
+    "estimate_name": "Вентиляция корпус А (демо)",
+    "currency": "RUB",
+    "usd_rate": "92.5",
+    "exported_at": "2026-04-15T10:23:45Z",
+    "exported_by": "user-42",
+    "source_hash": "sha256:abc123...",
+    "row_count": 20
+  },
+  "sections": [
+    {
+      "name": "Основное оборудование вентиляции",
+      "items": [
+        {"row_id": "9b810001-0000-4000-8000-000000000001", "name": "Вентилятор крышный MOB2600/45-3a", "model_name": "MOB2600/45-3a", "brand": "MOB", "unit": "шт", "quantity": 4, "material_unit_price": 85000, "work_unit_price": 7315},
+        {"row_id": "9b810001-0000-4000-8000-000000000002", "name": "Вентилятор канальный VENTS TT 150", "model_name": "TT 150", "brand": "VENTS", "unit": "шт", "quantity": 2, "material_unit_price": 12500, "work_unit_price": 2100}
+      ]
+    },
+    {
+      "name": "Вентиляционная сеть",
+      "items": [
+        {"row_id": "9b810001-0000-4000-8000-000000000003", "name": "Воздуховод прямоугольный 500х400", "unit": "м.п.", "quantity": 42.5, "material_unit_price": 1200, "work_unit_price": 180},
+        {"row_id": "9b810001-0000-4000-8000-000000000004", "name": "Воздуховод прямоугольный 300х200", "unit": "м.п.", "quantity": 28.0, "material_unit_price": 850, "work_unit_price": 145},
+        {"row_id": "9b810001-0000-4000-8000-000000000005", "name": "Отвод 90° 500х400", "unit": "шт", "quantity": 6, "material_unit_price": 2800, "work_unit_price": 400},
+        {"row_id": "9b810001-0000-4000-8000-000000000006", "name": "Клапан противопожарный КПС-1М 500х400", "model_name": "КПС-1М", "brand": "СВТ", "unit": "шт", "quantity": 3, "material_unit_price": 18500, "work_unit_price": 2400},
+        {"row_id": "9b810001-0000-4000-8000-000000000007", "name": "Решётка вентиляционная АМН 500х400", "model_name": "АМН", "brand": "Арктика", "unit": "шт", "quantity": 8, "material_unit_price": 1400, "work_unit_price": 250},
+        {"row_id": "9b810001-0000-4000-8000-000000000008", "name": "Диффузор 4АПР 200", "model_name": "4АПР-200", "brand": "Арктос", "unit": "шт", "quantity": 12, "material_unit_price": 950, "work_unit_price": 200},
+        {"row_id": "9b810001-0000-4000-8000-000000000009", "name": "Шумоглушитель пластинчатый 500х400", "unit": "шт", "quantity": 2, "material_unit_price": 9500, "work_unit_price": 1800},
+        {"row_id": "9b810001-0000-4000-8000-000000000010", "name": "Гибкая вставка 500х400", "unit": "шт", "quantity": 4, "material_unit_price": 1250, "work_unit_price": 250},
+        {"row_id": "9b810001-0000-4000-8000-000000000011", "name": "Обратный клапан 500х400", "unit": "шт", "quantity": 2, "material_unit_price": 3200, "work_unit_price": 450},
+        {"row_id": "9b810001-0000-4000-8000-000000000012", "name": "Утеплитель 50 мм", "unit": "м²", "quantity": 85, "material_unit_price": 380, "work_unit_price": 90}
+      ]
+    },
+    {
+      "name": "Пусконаладка и автоматика",
+      "items": [
+        {"row_id": "9b810001-0000-4000-8000-000000000013", "name": "Пусконаладка системы вентиляции", "unit": "компл", "quantity": 1, "material_unit_price": 0, "work_unit_price": 25000},
+        {"row_id": "9b810001-0000-4000-8000-000000000014", "name": "Кабель ВВГнг 5х2.5", "model_name": "ВВГнг", "unit": "м.п.", "quantity": 120, "material_unit_price": 185, "work_unit_price": 42},
+        {"row_id": "9b810001-0000-4000-8000-000000000015", "name": "Щит автоматики ЩАВ-1", "model_name": "ЩАВ-1", "brand": "АВТЭКС", "unit": "шт", "quantity": 1, "material_unit_price": 35000, "work_unit_price": 4800},
+        {"row_id": "9b810001-0000-4000-8000-000000000016", "name": "Автомат 3P 16A", "model_name": "BA47-29", "brand": "IEK", "unit": "шт", "quantity": 4, "material_unit_price": 820, "work_unit_price": 180},
+        {"row_id": "9b810001-0000-4000-8000-000000000017", "name": "Контактор 25А", "unit": "шт", "quantity": 2, "material_unit_price": 1400, "work_unit_price": 320},
+        {"row_id": "9b810001-0000-4000-8000-000000000018", "name": "Термореле ТРЛМ", "model_name": "ТРЛМ", "unit": "шт", "quantity": 2, "material_unit_price": 950, "work_unit_price": 200},
+        {"row_id": "9b810001-0000-4000-8000-000000000019", "name": "Датчик температуры ТСМ", "model_name": "ТСМ", "brand": "ОВЕН", "unit": "шт", "quantity": 3, "material_unit_price": 620, "work_unit_price": 140},
+        {"row_id": "9b810001-0000-4000-8000-000000000020", "name": "Пусконаладка автоматики", "unit": "компл", "quantity": 1, "material_unit_price": 0, "work_unit_price": 18000}
+      ]
+    }
+  ],
+  "defaults": {
+    "material_markup_percent": 30,
+    "work_markup_percent": 300
+  }
+}

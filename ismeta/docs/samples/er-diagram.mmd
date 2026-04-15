@@ -1,0 +1,236 @@
+---
+title: ISMeta ER-diagram (упрощённая)
+---
+erDiagram
+    Workspace ||--o{ WorkspaceMember : has
+    Workspace ||--o{ Folder : contains
+    Workspace ||--o{ Estimate : owns
+    Workspace ||--o{ ProductCache : caches
+    Workspace ||--o{ ProductKnowledge : owns
+    Workspace ||--o{ ProductWorkMapping : owns
+    Workspace ||--o{ AuditLog : logs
+    Workspace ||--o{ LLMUsage : tracks
+
+    Folder ||--o{ Folder : "parent"
+    Folder ||--o{ Estimate : "optional"
+
+    Estimate ||--o{ EstimateSection : has
+    Estimate ||--o{ EstimateCharacteristic : has
+    Estimate ||--o| Estimate : "parent_version"
+    Estimate ||--o{ ChatSession : "has (agent)"
+    Estimate ||--o{ ImportSession : "has"
+    Estimate ||--o{ SnapshotTransmission : transmits
+    Estimate ||--o{ AgentContext : "has memory"
+
+    EstimateSection ||--o{ EstimateSubsection : contains
+    EstimateSection ||--o{ EstimateItem : "directly"
+    EstimateSubsection ||--o{ EstimateItem : "via subsection"
+
+    EstimateItem ||--o| EstimateItem : "source_item (prev version)"
+    EstimateItem ||--o| ProductCache : "product_id (cached)"
+
+    ChatSession ||--o{ ChatMessage : has
+
+    Workspace {
+        UUID id PK
+        string name
+        string slug
+        jsonb settings
+        string status
+    }
+
+    Folder {
+        UUID id PK
+        UUID workspace_id FK
+        string name
+        UUID parent_id FK
+        jsonb external_ref
+        int sort_order
+    }
+
+    Estimate {
+        UUID id PK
+        UUID workspace_id FK
+        UUID folder_id FK
+        string name
+        string number
+        string status
+        UUID parent_version_id FK
+        int version_number
+        string currency
+        jsonb default_material_markup
+        jsonb default_work_markup
+        string price_list_id
+        string source_file
+        UUID source_recognition_id
+        timestamp transmitted_at
+        string transmitted_contract_id
+        int version
+    }
+
+    EstimateSection {
+        UUID id PK
+        UUID workspace_id FK
+        UUID estimate_id FK
+        string name
+        int sort_order
+        jsonb material_markup
+        jsonb work_markup
+        int version
+    }
+
+    EstimateSubsection {
+        UUID id PK
+        UUID workspace_id FK
+        UUID section_id FK
+        string name
+        int sort_order
+        int version
+    }
+
+    EstimateItem {
+        UUID id PK
+        UUID workspace_id FK
+        UUID estimate_id FK
+        UUID section_id FK
+        UUID subsection_id FK
+        UUID row_id
+        UUID source_item_id FK
+        int sort_order
+        string name
+        string model_name
+        string brand
+        string unit
+        decimal quantity
+        decimal material_unit_price
+        decimal work_unit_price
+        jsonb material_markup
+        jsonb work_markup
+        string product_id
+        string work_item_id
+        string supplier_product_id
+        string match_source
+        decimal match_confidence
+        string match_reasoning
+        bool is_analog
+        jsonb tech_specs
+        jsonb custom_data
+        bool is_deleted
+        int version
+    }
+
+    EstimateCharacteristic {
+        UUID id PK
+        UUID estimate_id FK
+        string key
+        string label
+        string value_text
+        string value_type
+    }
+
+    ProductCache {
+        string id PK
+        UUID workspace_id FK
+        string name
+        string normalized_name
+        string unit
+        string category_id
+        decimal default_price
+        string status
+        timestamp last_synced_at
+    }
+
+    ProductKnowledge {
+        UUID id PK
+        UUID workspace_id FK
+        string item_name_pattern
+        string work_item_id
+        string status
+        string source
+        decimal confidence
+        string md_file_path
+        int usage_count
+    }
+
+    ProductWorkMapping {
+        UUID id PK
+        UUID workspace_id FK
+        string product_id
+        string work_item_id
+        string source
+        decimal confidence
+        int usage_count
+    }
+
+    ChatSession {
+        UUID id PK
+        UUID workspace_id FK
+        UUID estimate_id FK
+        string user_id
+        timestamp closed_at
+    }
+
+    ChatMessage {
+        UUID id PK
+        UUID session_id FK
+        string role
+        text content
+        jsonb tool_calls
+        int tokens_in
+        int tokens_out
+        decimal cost_usd
+    }
+
+    AgentContext {
+        UUID workspace_id FK
+        UUID estimate_id FK
+        string key
+        jsonb value
+    }
+
+    AuditLog {
+        bigserial id PK
+        UUID workspace_id FK
+        string user_id
+        string entity_type
+        UUID entity_id
+        string action
+        jsonb old_value
+        jsonb new_value
+        string source
+    }
+
+    ImportSession {
+        UUID id PK
+        UUID workspace_id FK
+        UUID estimate_id FK
+        string source_type
+        string external_ref
+        string status
+        int rows_total
+        int rows_processed
+    }
+
+    LLMUsage {
+        bigserial id PK
+        UUID workspace_id FK
+        UUID estimate_id FK
+        string user_id
+        string task_type
+        string provider
+        string model
+        int tokens_in
+        int tokens_out
+        decimal cost_usd
+    }
+
+    SnapshotTransmission {
+        UUID id PK
+        UUID workspace_id FK
+        UUID estimate_id FK
+        UUID version_id FK
+        string idempotency_key
+        string erp_contract_estimate_id
+        string status
+        int attempts
+    }

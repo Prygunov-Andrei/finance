@@ -1,0 +1,34 @@
+[
+  {
+    "event_id": "00000000-0000-0000-0000-000000000001",
+    "event_type": "product.updated",
+    "occurred_at": "2026-04-15T09:00:00Z",
+    "schema_version": "v1",
+    "data": {
+      "product_id": "prod-1",
+      "changed_fields": ["default_price"],
+      "product": {
+        "id": "prod-1",
+        "name": "Вентилятор крышный MOB2600/45-3a",
+        "normalized_name": "вентилятор крышный mob2600 45 3a",
+        "unit": "шт",
+        "category_id": "cat-vent-500",
+        "default_price": 85000.00,
+        "status": "verified"
+      }
+    }
+  },
+  {
+    "event_id": "00000000-0000-0000-0000-000000000002",
+    "event_type": "worker_grade.rate_changed",
+    "occurred_at": "2026-04-15T10:00:00Z",
+    "schema_version": "v1",
+    "data": {
+      "price_list_id": "pl-2026",
+      "grade": 3,
+      "old_rate": 800.00,
+      "new_rate": 900.00,
+      "effective_from": "2026-05-01T00:00:00Z"
+    }
+  }
+]

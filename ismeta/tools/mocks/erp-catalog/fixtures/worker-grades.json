@@ -1,0 +1,7 @@
+[
+  {"grade": 1, "name": "Монтажник 1 разряда", "hourly_rate_rub": 500, "price_list_id": "pl-2026"},
+  {"grade": 2, "name": "Монтажник 2 разряда", "hourly_rate_rub": 650, "price_list_id": "pl-2026"},
+  {"grade": 3, "name": "Монтажник 3 разряда", "hourly_rate_rub": 800, "price_list_id": "pl-2026"},
+  {"grade": 4, "name": "Монтажник 4 разряда", "hourly_rate_rub": 950, "price_list_id": "pl-2026"},
+  {"grade": 5, "name": "Монтажник 5 разряда", "hourly_rate_rub": 1100, "price_list_id": "pl-2026"}
+]

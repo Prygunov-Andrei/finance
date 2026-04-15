@@ -1,0 +1,171 @@
+{
+  "ismeta_version_id": "4f3a0000-0000-4000-8000-000000000001",
+  "ismeta_parent_version_id": null,
+  "workspace_id": "11111111-1111-1111-1111-111111111111",
+  "contract_hint": {
+    "contract_id": null,
+    "is_amendment": false
+  },
+  "estimate": {
+    "name": "Вентиляция корпус А",
+    "number": "СМ-2026-001",
+    "currency": "RUB",
+    "usd_rate": 92.5,
+    "eur_rate": 99.3,
+    "cny_rate": 12.7,
+    "total_materials_purchase": 1250000.00,
+    "total_materials_sale": 1625000.00,
+    "total_works_purchase": 380000.00,
+    "total_works_sale": 1140000.00,
+    "vat_rate": 20,
+    "with_vat": true,
+    "man_hours_total": 1240.5,
+    "profit_amount": 1135000.00,
+    "profit_percent": 69.7,
+    "created_by_user_id": "user-42",
+    "created_at": "2026-04-15T09:30:00Z",
+    "transmitted_at": "2026-04-20T15:15:00Z"
+  },
+  "external_refs": {
+    "object_id": "obj-1",
+    "object_name": "Офис на Мясницкой",
+    "legal_entity_id": "le-1",
+    "legal_entity_name": "ООО «ГК Август»",
+    "counterparty_id": "cp-123",
+    "counterparty_name": "ООО «Покупатель Тестовый»",
+    "price_list_id": "pl-2026"
+  },
+  "sections": [
+    {
+      "external_id": "sec-1",
+      "name": "Основное оборудование вентиляции",
+      "sort_order": 1,
+      "material_markup": {"type": "percent", "value": 30},
+      "work_markup": {"type": "percent", "value": 300},
+      "subsections": [],
+      "items": [
+        {
+          "external_id": "item-1",
+          "row_id": "9b810000-0000-4000-8000-000000000001",
+          "source_item_id": null,
+          "sort_order": 1,
+          "name": "Вентилятор крышный MOB2600/45-3a",
+          "model_name": "MOB2600/45-3a",
+          "brand": "MOB",
+          "unit": "шт",
+          "quantity": 4,
+          "material_unit_price": 85000.00,
+          "work_unit_price": 7315.00,
+          "material_markup": null,
+          "work_markup": null,
+          "product_id": "prod-1",
+          "work_item_id": "wi-504",
+          "supplier_product_id": "sp-11",
+          "match_source": "knowledge",
+          "match_confidence": 0.87,
+          "match_reasoning": "ProductKnowledge verified: 'вентилятор крышный' → wi-504 (Монтаж крышного вентилятора до 200 кг)",
+          "is_analog": false,
+          "tech_specs": {"flow": "2600 м³/ч", "power": "0.45 кВт"}
+        }
+      ]
+    },
+    {
+      "external_id": "sec-2",
+      "name": "Вентиляционная сеть",
+      "sort_order": 2,
+      "material_markup": null,
+      "work_markup": null,
+      "subsections": [],
+      "items": [
+        {
+          "external_id": "item-2",
+          "row_id": "9b810000-0000-4000-8000-000000000002",
+          "source_item_id": null,
+          "sort_order": 1,
+          "name": "Воздуховод прямоугольный 500х400",
+          "model_name": null,
+          "brand": null,
+          "unit": "м.п.",
+          "quantity": 42.5,
+          "material_unit_price": 1200.00,
+          "work_unit_price": 180.00,
+          "material_markup": null,
+          "work_markup": null,
+          "product_id": "prod-42",
+          "work_item_id": "wi-520",
+          "supplier_product_id": null,
+          "match_source": "history",
+          "match_confidence": 0.95,
+          "match_reasoning": "ProductWorkMapping usage_count=12",
+          "is_analog": false,
+          "tech_specs": {"dimensions": "500x400"}
+        },
+        {
+          "external_id": "item-3",
+          "row_id": "9b810000-0000-4000-8000-000000000003",
+          "source_item_id": null,
+          "sort_order": 2,
+          "name": "Клапан противопожарный КПС-1М 500х400",
+          "model_name": "КПС-1М",
+          "brand": "СВТ",
+          "unit": "шт",
+          "quantity": 3,
+          "material_unit_price": 18500.00,
+          "work_unit_price": 2400.00,
+          "material_markup": null,
+          "work_markup": null,
+          "product_id": "prod-67",
+          "work_item_id": "wi-567",
+          "supplier_product_id": "sp-88",
+          "match_source": "knowledge",
+          "match_confidence": 0.76,
+          "match_reasoning": "ProductKnowledge (pending): 'клапан противопожарный' → wi-567",
+          "is_analog": false,
+          "tech_specs": {"dimensions": "500x400"}
+        }
+      ]
+    },
+    {
+      "external_id": "sec-3",
+      "name": "Пусконаладка",
+      "sort_order": 3,
+      "material_markup": null,
+      "work_markup": {"type": "percent", "value": 200},
+      "subsections": [],
+      "items": [
+        {
+          "external_id": "item-4",
+          "row_id": "9b810000-0000-4000-8000-000000000004",
+          "source_item_id": null,
+          "sort_order": 1,
+          "name": "Пусконаладка системы вентиляции",
+          "model_name": null,
+          "brand": null,
+          "unit": "компл",
+          "quantity": 1,
+          "material_unit_price": 0,
+          "work_unit_price": 25000.00,
+          "material_markup": null,
+          "work_markup": null,
+          "product_id": null,
+          "work_item_id": "wi-700",
+          "supplier_product_id": null,
+          "match_source": "pricelist",
+          "match_confidence": 0.82,
+          "match_reasoning": "Fuzzy match по PriceList: 'пусконаладка' → wi-700 ('ПНР системы вентиляции')",
+          "is_analog": false,
+          "tech_specs": {}
+        }
+      ]
+    }
+  ],
+  "characteristics": [
+    {"key": "system", "label": "Система", "value_text": "П1"},
+    {"key": "air_flow_total", "label": "Расход воздуха, м³/ч", "value_text": "10400"}
+  ],
+  "audit": {
+    "actions_total": 87,
+    "last_action_at": "2026-04-20T15:10:23Z",
+    "created_via": "recognition"
+  }
+}
