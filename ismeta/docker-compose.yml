@@ -1,6 +1,9 @@
 # ISMeta — dev оркестрация (E1.1).
 # ADR-0018: docker-compose как prod-подобная среда MVP.
-# Поднимает 4 сервиса: postgres, redis, backend (8000), frontend (3000).
+# Поднимает 4 сервиса: postgres (host 5433), redis (6380), backend (8001),
+# frontend (3001). Нестандартные host-порты — чтобы работать параллельно
+# с ERP-стеком, который занимает 5432/6379/8000/3000. Внутри контейнеров
+# стандартные порты.
 # Миграции НЕ запускаются (apps ещё не созданы — E1.2).
 
 name: ismeta
@@ -15,7 +18,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-ismeta}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ismeta}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -30,7 +33,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-6380}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -66,7 +69,7 @@ services:
       LOG_FORMAT: ${LOG_FORMAT:-text}
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_PORT:-8001}:8000"
     volumes:
       # Bind mount исходников для hot reload через runserver.
       - ./backend:/app
@@ -85,13 +88,13 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      NEXT_PUBLIC_ISMETA_API_URL: ${NEXT_PUBLIC_ISMETA_API_URL:-http://localhost:8000/api/v1}
+      NEXT_PUBLIC_ISMETA_API_URL: ${NEXT_PUBLIC_ISMETA_API_URL:-http://localhost:8001/api/v1}
       NEXT_PUBLIC_DEFAULT_WORKSPACE: ${NEXT_PUBLIC_DEFAULT_WORKSPACE:-11111111-1111-1111-1111-111111111111}
       NEXT_PUBLIC_FEATURE_AGENT: ${NEXT_PUBLIC_FEATURE_AGENT:-true}
       NEXT_PUBLIC_FEATURE_EXCEL_ROUNDTRIP: ${NEXT_PUBLIC_FEATURE_EXCEL_ROUNDTRIP:-true}
       NEXT_PUBLIC_FEATURE_PUBLIC_MODE: ${NEXT_PUBLIC_FEATURE_PUBLIC_MODE:-false}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3001}:3000"
     volumes:
       # Bind mount исходников; node_modules остаётся в образе.
       - ./frontend:/app

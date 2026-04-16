@@ -24,12 +24,14 @@ cp .env.example .env     # при первом запуске
 docker compose up -d     # билд + старт, ~2-3 мин в первый раз
 ```
 
-После старта:
-- backend: <http://localhost:8000/health> — liveness
-- backend: <http://localhost:8000/api/v1/health/ready> — readiness (БД + Redis)
-- frontend: <http://localhost:3000> — заглушка dev-окружения
-- postgres: `localhost:5432` (db/user/password: `ismeta`)
-- redis: `localhost:6379`
+После старта (порты host-side — нестандартные, чтобы параллельно работал
+ERP-стек на 5432/6379/8000/3000):
+
+- backend: <http://localhost:8001/health> — liveness
+- backend: <http://localhost:8001/api/v1/health/ready> — readiness (БД + Redis)
+- frontend: <http://localhost:3001> — заглушка dev-окружения
+- postgres: `localhost:5433` (db/user/password: `ismeta`)
+- redis: `localhost:6380`
 
 Полезные команды:
 ```bash
@@ -41,6 +43,14 @@ docker compose down -v                      # стоп + очистка БД и 
 ```
 
 **Важно:** миграции и Django apps появляются в E1.2 — сейчас backend стартует, но `/api/v1/health/ready` может падать из-за отсутствия таблиц до первой миграции. Liveness (`/health`) работает всегда.
+
+Порты можно переопределить через `.env`:
+```
+POSTGRES_PORT=5433
+REDIS_PORT=6380
+BACKEND_PORT=8001
+FRONTEND_PORT=3001
+```
 
 ### Чтение и онбординг
 
