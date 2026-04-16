@@ -438,7 +438,7 @@ export default function NewsList() {
                           <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection(item.id)} className="h-5 w-5" />
                         </div>
                       )}
-                      <Link to={`/hvac/news/${item.id}`} className="flex flex-col md:flex-row flex-1 min-w-0">
+                      <Link to={`/hvac/news/edit/${item.id}`} className="flex flex-col md:flex-row flex-1 min-w-0">
                         {imageUrl && (
                           <div className="w-full md:w-80 flex-shrink-0 min-h-48 bg-white flex items-center justify-center p-4">
                             <ImageWithFallback src={imageUrl} alt={title} className="max-w-full max-h-56 object-contain" />
