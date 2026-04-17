@@ -28,10 +28,10 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     # ISMeta apps — добавляются по мере реализации эпиков
-    # "workspace",
-    # "estimate",
-    # "agent",
-    # "integration",
+    "apps.workspace",
+    # "apps.estimate",  # E2
+    # "apps.agent",     # E5
+    # "apps.integration",  # E13
 ]
 
 MIDDLEWARE = [
@@ -91,7 +91,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 100,
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
-        # TODO(E2): добавить WorkspaceFilterBackend
+        "apps.workspace.filters.WorkspaceFilterBackend",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",

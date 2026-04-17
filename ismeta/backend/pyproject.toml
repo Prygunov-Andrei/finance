@@ -14,7 +14,7 @@ select = ["E", "F", "I", "W", "UP", "B", "C4", "DJ", "RUF"]
 ignore = ["E501"]  # длина строки обрабатывается форматером
 
 [tool.ruff.lint.isort]
-known-first-party = ["ismeta", "workspace", "estimate", "agent", "integration", "common"]
+known-first-party = ["ismeta", "apps"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -36,7 +36,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["workspace", "estimate", "agent", "integration", "common"]
+source = ["apps"]
 omit = ["*/migrations/*", "*/tests/*"]
 
 [tool.coverage.report]
