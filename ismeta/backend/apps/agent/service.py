@@ -79,8 +79,14 @@ class AgentService:
         )
 
         # Build messages from history (last 20)
+        estimate = Estimate.objects.get(id=estimate_id, workspace_id=workspace_id)
+        context = (
+            f"\n\nТекущая смета: «{estimate.name}» (id: {estimate_id}). "
+            f"При вызове инструментов используй estimate_id = \"{estimate_id}\"."
+        )
+
         history = ChatMessage.objects.filter(session=session).order_by("created_at")[:20]
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT + context}]
         for msg in history:
             messages.append({"role": msg.role, "content": msg.content})
 
