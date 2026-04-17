@@ -5,7 +5,7 @@ import logging
 from decimal import Decimal
 
 from apps.estimate.models import Estimate, EstimateItem
-from apps.llm.service import LLMService
+from apps.llm.service import LLMService, calc_cost
 
 from .models import ChatMessage, ChatSession
 from .prompts.system_v1 import SYSTEM_PROMPT, VALIDATE_USER_PROMPT
@@ -62,9 +62,7 @@ class AgentService:
             "issues": issues,
             "summary": summary,
             "tokens_used": resp.tokens_in + resp.tokens_out,
-            "cost_usd": float(LLMService._calc_cost(resp.model, resp.tokens_in, resp.tokens_out)
-                               if hasattr(LLMService, '_calc_cost')
-                               else 0),
+            "cost_usd": float(calc_cost(resp.model, resp.tokens_in, resp.tokens_out)),
         }
 
     @staticmethod
@@ -111,9 +109,7 @@ class AgentService:
                 messages.append({"role": "assistant", "content": "", "tool_calls": [{"function": {"name": tc.name, "arguments": json.dumps(tc.arguments)}}]})
                 messages.append({"role": "tool", "content": json.dumps(result)})
 
-        # Save assistant message
-        from apps.llm.service import _calc_cost
-        cost = _calc_cost(resp.model, total_tokens_in, total_tokens_out)
+        cost = calc_cost(resp.model, total_tokens_in, total_tokens_out)
 
         assistant_msg = ChatMessage.objects.create(
             session=session,

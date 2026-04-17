@@ -47,10 +47,15 @@ def _get_provider(provider_name: str) -> AbstractProvider:
     raise ValueError(f"Unknown LLM provider: {provider_name} (mode={mode})")
 
 
-def _calc_cost(model: str, tokens_in: int, tokens_out: int) -> Decimal:
+def calc_cost(model: str, tokens_in: int, tokens_out: int) -> Decimal:
+    """Публичный API: стоимость вызова в USD."""
     rates = COST_RATES.get(model, DEFAULT_RATE)
     cost = (tokens_in * rates["in"] + tokens_out * rates["out"]) / 1_000_000
     return Decimal(str(cost)).quantize(Decimal("0.000001"))
+
+
+# Обратная совместимость (тесты ссылаются на _calc_cost)
+_calc_cost = calc_cost
 
 
 class LLMService:

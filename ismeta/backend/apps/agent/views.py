@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from .models import ChatMessage, ChatSession
 from .service import AgentService
 
 
@@ -55,8 +56,6 @@ def chat_history(request, estimate_pk):
     workspace_id = _get_workspace_id(request)
     if not workspace_id:
         return Response({"workspace_id": "Required"}, status=status.HTTP_400_BAD_REQUEST)
-
-    from .models import ChatMessage, ChatSession
 
     session = ChatSession.objects.filter(
         estimate_id=estimate_pk, workspace_id=workspace_id
