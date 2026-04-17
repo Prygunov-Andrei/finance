@@ -1,25 +1,29 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import "./globals.css";
+import { Providers } from "./providers";
+import { Sidebar } from "@/components/layout/sidebar";
+import { Header } from "@/components/layout/header";
+
 export const metadata: Metadata = {
-  title: "ISMeta — dev environment",
-  description: "ISMeta сметный сервис, dev-окружение.",
+  title: "ISMeta",
+  description: "ISMeta — сервис составления смет для климатических проектов.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ru">
-      <body
-        style={{
-          fontFamily:
-            "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-          margin: 0,
-          padding: 0,
-          background: "#0b0b0f",
-          color: "#e6e6ea",
-        }}
-      >
-        {children}
+    <html lang="ru" suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        <Providers>
+          <div className="flex h-screen">
+            <Sidebar />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <Header />
+              <main className="flex-1 overflow-auto">{children}</main>
+            </div>
+          </div>
+        </Providers>
       </body>
     </html>
   );
