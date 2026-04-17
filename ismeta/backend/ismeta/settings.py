@@ -100,7 +100,8 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
+        "rest_framework.permissions.AllowAny" if config("ISMETA_AUTH_DISABLED", default=False, cast=bool)
+        else "rest_framework.permissions.IsAuthenticated",
     ],
 }
 
