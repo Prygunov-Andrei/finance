@@ -38,3 +38,4 @@
 | [0019](./0019-feature-flags-db-only.md) | Feature Flags в БД без отдельной админки | Accepted |
 | [0020](./0020-django-admin-in-mvp.md) | Django Admin для админки в MVP | Accepted |
 | [0021](./0021-partition-from-day-one.md) | Партиционирование append-heavy таблиц с первой миграции | Accepted |
+| [0022](./0022-semi-boxed-product.md) | Полукоробочный продукт: под Август, с архитектурой для адаптации | Accepted |
