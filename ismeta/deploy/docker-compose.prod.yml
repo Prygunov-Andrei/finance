@@ -1,0 +1,125 @@
+# ISMeta — production compose.
+# Запускается на том же сервере что ERP (216.57.110.41).
+# Порты: postgres 5434, redis 6381, backend 8002, frontend 3002
+# (не конфликтуют с ERP 5432/6379/8000/3000 и dev 5433/6380/8001/3001).
+# Nginx проксирует с поддомена на 8002/3002.
+
+name: ismeta-prod
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: ismeta-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ismeta-prod-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    ports:
+      - "127.0.0.1:6381:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      target: production
+    container_name: ismeta-prod-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: "0"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/3
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/3
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/2
+      ISMETA_ERP_BASE_URL: ${ISMETA_ERP_BASE_URL:-http://host.docker.internal:8000}
+      ISMETA_ERP_MASTER_TOKEN: ${ISMETA_ERP_MASTER_TOKEN}
+      ISMETA_ERP_WEBHOOK_SECRET: ${ISMETA_ERP_WEBHOOK_SECRET}
+      ISMETA_JWT_SECRET: ${ISMETA_JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ISMETA_LLM_MODE: ${ISMETA_LLM_MODE:-mock}
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+      OTEL_ENABLED: "false"
+    ports:
+      - "127.0.0.1:8002:8000"
+    command: ["gunicorn", "ismeta.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "300"]
+
+  frontend:
+    build:
+      context: ../frontend
+      target: production
+    container_name: ismeta-prod-frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "127.0.0.1:3002:3000"
+
+  celery-worker:
+    build:
+      context: ../backend
+      target: production
+    container_name: ismeta-prod-celery
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: "0"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/3
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/3
+      ISMETA_ERP_BASE_URL: ${ISMETA_ERP_BASE_URL:-http://host.docker.internal:8000}
+      ISMETA_ERP_MASTER_TOKEN: ${ISMETA_ERP_MASTER_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ISMETA_LLM_MODE: ${ISMETA_LLM_MODE:-mock}
+    command: ["celery", "-A", "ismeta", "worker", "-l", "info", "--concurrency=2"]
+    mem_limit: 2g
+
+volumes:
+  postgres-data:
+  redis-data:
