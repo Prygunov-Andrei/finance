@@ -7,7 +7,7 @@ Health-check по трём уровням — см. docs/SLO.md §7.1.
 from django.contrib import admin
 from django.db import connection
 from django.http import JsonResponse
-from django.urls import path
+from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 
@@ -94,9 +94,9 @@ urlpatterns = [
     path(
         "api/v1/schema/swagger/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger"
     ),
-    # ISMeta endpoints (подключаются по эпикам E4+)
-    # path("api/v1/workspaces/", include("workspace.urls")),
-    # path("api/v1/estimates/", include("estimate.urls")),
-    # path("api/v1/chat/", include("agent.urls")),
-    # path("api/v1/webhooks/", include("integration.webhooks.urls")),
+    # ISMeta endpoints
+    path("api/v1/", include("apps.estimate.urls")),
+    # path("api/v1/workspaces/", include("apps.workspace.urls")),
+    # path("api/v1/chat/", include("apps.agent.urls")),  # E5
+    # path("api/v1/webhooks/", include("apps.integration.webhooks.urls")),  # E13
 ]
