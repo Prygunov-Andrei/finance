@@ -155,6 +155,7 @@ ISMETA_ERP_MASTER_TOKEN = config("ERP_MASTER_TOKEN", default="")
 ISMETA_ERP_WEBHOOK_SECRET = config("ERP_WEBHOOK_SECRET", default="")
 ISMETA_LLM_PROVIDER_DEFAULT = config("LLM_PROVIDER_DEFAULT", default="openai")
 ISMETA_LLM_MODE = config("LLM_MODE", default="real")  # real | cassette | mock
+OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 ISMETA_KNOWLEDGE_MD_ROOT = config("KNOWLEDGE_MD_ROOT", default=str(BASE_DIR / "data/knowledge"))
 
 # ==== Logging ====
