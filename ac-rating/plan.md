@@ -71,7 +71,7 @@
 - Создать пустые apps: `ac_brands`, `ac_catalog`, `ac_methodology`, `ac_scoring`, `ac_reviews`, `ac_submissions`
 - Добавить в `INSTALLED_APPS`
 - Зарегистрировать URL-ноды (пустые `urlpatterns = []`): `/api/public/v1/rating/` и `/api/hvac/rating/`
-- Переиспользовать существующий `TimestampMixin` из ERP (НЕ копировать из ac-rating `core/`)
+- Переиспользовать существующий `TimestampedModel` из `backend/core/models.py:14` (НЕ использовать `TimestampMixin` из `backend/core/mixins.py:314` — это пустая заглушка). Не копировать из ac-rating `core/`.
 - Добавить пакеты в `requirements.txt`: `openpyxl`, `xlrd`, `Pillow` (уже есть), `django-ratelimit`
 - Настроить `MEDIA_ROOT` подпапки: `media/ac_rating/photos/`, `media/ac_rating/brands/`, `media/ac_rating/submissions/`
 
@@ -514,7 +514,8 @@
 | Дата | Фаза | Статус | Ветка | Ревьюер | Примечания |
 |------|------|--------|-------|---------|------------|
 | 2026-04-18 | 0 | ✅ done | — | — | Разведка, утверждение плана |
-| — | 1 | pending | — | — | Ждёт старта |
+| 2026-04-18 | 1 | ✅ done | `ac-rating/01-backend-skeleton` | Claude | Агент: Петя. Чисто, `manage.py check` зелёный. Нюанс: `TimestampedModel`, не `TimestampMixin` (поправлено в плане). Полный pytest не прогнан (нет SSH-туннеля к prod-БД) — риск нулевой, изменения чисто аддитивные. |
+| — | 2 | pending | — | — | Ждёт старта (модели + миграции) |
 
 (Заполняется по ходу работы.)
 
