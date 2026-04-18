@@ -515,7 +515,8 @@
 |------|------|--------|-------|---------|------------|
 | 2026-04-18 | 0 | ✅ done | — | — | Разведка, утверждение плана |
 | 2026-04-18 | 1 | ✅ done | `ac-rating/01-backend-skeleton` | Claude | Агент: Петя. Чисто, `manage.py check` зелёный. Нюанс: `TimestampedModel`, не `TimestampMixin` (поправлено в плане). Полный pytest не прогнан (нет SSH-туннеля к prod-БД) — риск нулевой, изменения чисто аддитивные. |
-| — | 2 | pending | — | — | Ждёт старта (модели + миграции) |
+| 2026-04-18 | 2 | ✅ done | `ac-rating/02-models` | Claude | Агент: Петя. 14 моделей в 6 apps, 6 clean initial миграций, 45 unit-тестов зелёных у Пети (локальный PG). FK кросс-app строкой. `manage.py check` + `makemigrations --dry-run` чисто. Live pytest у ревьюера не прогнан (нет туннеля), но diff чисто аддитивный, existing миграции не тронуты. Nit: constraint names без `ac_` префикса — чинить по ходу. |
+| — | 3 | pending | — | — | Ждёт старта (scoring engine). ТЗ готово: `ac-rating/tz/03-scoring-engine.md` |
 
 (Заполняется по ходу работы.)
 
