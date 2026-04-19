@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:ac_methodology_methodologyversion_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Дублирование: {{ source }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Дублировать версию методики</h1>
+<p>Исходная запись: <strong>{{ source }}</strong></p>
+<form method="post" id="duplicate-methodology-form">{% csrf_token %}
+  <fieldset class="module aligned">
+    {% for field in form %}
+      <div class="form-row{% if field.errors %} errors{% endif %}">
+        {{ field.errors }}
+        {{ field.label_tag }} {{ field }}
+        {% if field.help_text %}<div class="help">{{ field.help_text|safe }}</div>{% endif %}
+      </div>
+    {% endfor %}
+  </fieldset>
+  <div class="submit-row">
+    <input type="submit" value="Создать копию" class="default" name="_save">
+    <a href="{% url 'admin:ac_methodology_methodologyversion_change' source.pk %}" class="button">Отмена</a>
+  </div>
+</form>
+{% endblock %}

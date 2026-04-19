@@ -1,0 +1,338 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+{{ block.super }}
+{% if duplicate_url %}
+<li><a href="{{ duplicate_url }}" class="addlink">Дублировать как новую версию</a></li>
+{% endif %}
+{% endblock %}
+
+{% block after_field_sets %}
+{{ block.super }}
+<div id="criteria-weight-banner" class="criteria-weight-banner">
+  <div class="criteria-weight-banner__label">Сумма весов критериев (все строки таблицы ниже)</div>
+  <div class="criteria-weight-banner__value" id="criteria-weight-total">{{ criteria_weight_total_initial|default:0|floatformat:2 }}%</div>
+</div>
+<style>
+  .criteria-weight-banner {
+    margin: 1.5rem 0 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--body-bg, #f8f8f8);
+    border: 1px solid var(--hairline-color, #ddd);
+    border-radius: 6px;
+  }
+  .criteria-weight-banner__label {
+    font-size: 0.85rem;
+    color: var(--body-quiet-color, #666);
+    margin-bottom: 0.35rem;
+  }
+  .criteria-weight-banner__value {
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+</style>
+<script>
+(function () {
+  var methodologyId = "{{ original.pk|default:'' }}";
+
+  function parseNum(v) {
+    if (v == null || v === "") return 0;
+    var n = parseFloat(String(v).replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function recalc() {
+    var group = document.getElementById("methodology_criteria-group");
+    if (!group) return;
+    var inputs = group.querySelectorAll('input[name$="-weight"]');
+    var sum = 0;
+    inputs.forEach(function (inp) {
+      var row = inp.closest("tr");
+      if (!row) return;
+      // Исключаем строки, отмеченные на удаление.
+      var del = row.querySelector('input[name$="-DELETE"]');
+      if (del && del.checked) return;
+      // Учитываем только строки с активным чек-боксом «Активен».
+      var act = row.querySelector('input[name$="-is_active"]');
+      if (act && !act.checked) return;
+      sum += parseNum(inp.value);
+    });
+    var el = document.getElementById("criteria-weight-total");
+    if (el) el.textContent = sum.toFixed(2) + "%";
+  }
+
+  function bind() {
+    var group = document.getElementById("methodology_criteria-group");
+    if (!group) return;
+    function shouldRecalc(name) {
+      return name && (
+        name.endsWith("-weight") ||
+        name.endsWith("-DELETE") ||
+        name.endsWith("-is_active")
+      );
+    }
+    group.addEventListener("input", function (e) {
+      if (shouldRecalc(e.target && e.target.name)) recalc();
+    });
+    group.addEventListener("change", function (e) {
+      if (shouldRecalc(e.target && e.target.name)) recalc();
+    });
+  }
+
+  function getCSRF() {
+    var input = document.querySelector("input[name=csrfmiddlewaretoken]");
+    return input ? input.value : "";
+  }
+
+  function setupDeleteButtons() {
+    var group = document.getElementById("methodology_criteria-group");
+    if (!group) return;
+    var rows = group.querySelectorAll("tr.form-row, tr.dynamic-methodology_criteria");
+    rows.forEach(function (row) {
+      if (row.querySelector(".criterion-delete-btn")) return; // уже есть кнопка
+      var delCheckbox = row.querySelector('input[name$="-DELETE"]');
+      if (!delCheckbox) return;
+      var idInput = row.querySelector('input[name$="-id"]');
+      var criterionId = idInput ? idInput.value : "";
+
+      // Скрываем чекбокс и его label, но TD оставляем
+      delCheckbox.style.display = "none";
+      var delLabel = delCheckbox.parentElement;
+      if (delLabel && delLabel.tagName === "LABEL") delLabel.style.display = "none";
+
+      // Переименуем заголовок колонки DELETE
+      var thead = group.querySelector("thead");
+      if (thead && !thead._headerFixed) {
+        var ths = thead.querySelectorAll("th");
+        ths.forEach(function (th) {
+          if (th.textContent.trim().toLowerCase() === "удалить?") {
+            th.textContent = "";
+          }
+        });
+        thead._headerFixed = true;
+      }
+
+      // Кнопка удаления — вставляем в ту же ячейку где был чекбокс
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "criterion-delete-btn";
+      btn.title = "Удалить параметр";
+      btn.textContent = "✕";
+
+      var delTd = delCheckbox.closest("td");
+      if (delTd) {
+        delTd.appendChild(btn);
+      }
+
+      btn.addEventListener("click", function () {
+        var nameInput = row.querySelector('input[name$="-name_ru"]');
+        var name = nameInput ? nameInput.value : "этот параметр";
+
+        if (!confirm('Удалить параметр «' + name + '»?')) return;
+
+        // Новая строка (не сохранена) — просто убираем из DOM
+        if (!criterionId) {
+          row.style.display = "none";
+          delCheckbox.checked = true;
+          recalc();
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = "…";
+        var url = "../delete-criterion/" + criterionId + "/";
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCSRF(),
+            "Content-Type": "application/json",
+          },
+        }).then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        }).then(function () {
+          row.style.transition = "opacity 0.3s";
+          row.style.opacity = "0";
+          setTimeout(function () {
+            row.style.display = "none";
+            recalc();
+          }, 300);
+        }).catch(function (err) {
+          alert("Ошибка удаления: " + err.message);
+          btn.disabled = false;
+          btn.textContent = "✕";
+        });
+      });
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    recalc();
+    bind();
+    setupDeleteButtons();
+    if (typeof django !== "undefined" && django.jQuery) {
+      django.jQuery(document).on("formset:added", function () {
+        recalc();
+        setupDeleteButtons();
+      });
+    }
+  });
+})();
+</script>
+<style>
+  .criterion-delete-btn {
+    background: #ba2121;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    line-height: 28px;
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+  }
+  .criterion-delete-btn:hover {
+    background: #a11;
+  }
+  .criterion-delete-btn:disabled {
+    background: #999;
+    cursor: wait;
+  }
+
+  /* Сжимаем инлайн-таблицу параметров методики, чтобы влезала по ширине. */
+  #methodology_criteria-group table { table-layout: auto; }
+  #methodology_criteria-group th,
+  #methodology_criteria-group td {
+    padding: 10px 6px;
+    vertical-align: top;
+  }
+
+  /* --- Ячейка «Параметр» --- */
+  /* Жёстко фиксируем ширину и обрезаем всё, что не влезает, чтобы ничего
+     не налезало на соседние ячейки. */
+  #methodology_criteria-group td.field-criterion {
+    width: 260px;
+    min-width: 260px;
+    max-width: 260px;
+    overflow: hidden;
+    position: relative;
+  }
+  /* Прячем всё, что не является related-widget-wrapper или скрытыми input/label.
+     Это гарантированно убирает любые побочные текстовые узлы
+     (tooltip/title/object-repr), которые лезут в ячейку. */
+  #methodology_criteria-group td.field-criterion > *:not(.related-widget-wrapper):not(input[type="hidden"]):not(label) {
+    display: none !important;
+  }
+  /* Оригинальный <select> — всегда скрыт (его заменяет select2). */
+  #methodology_criteria-group td.field-criterion select[name$="-criterion"] {
+    display: none !important;
+  }
+  #methodology_criteria-group td.field-criterion .related-widget-wrapper {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    margin-bottom: 4px;
+  }
+  #methodology_criteria-group td.field-criterion .select2-container {
+    width: 180px !important;
+    min-width: 180px;
+    max-width: 180px;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  #methodology_criteria-group td.field-criterion .select2-selection--single {
+    height: 30px;
+    line-height: 28px;
+  }
+  #methodology_criteria-group td.field-criterion .select2-selection__rendered {
+    line-height: 28px !important;
+    padding-left: 8px;
+  }
+  #methodology_criteria-group td.field-criterion .select2-selection__arrow {
+    height: 28px;
+  }
+
+  /* --- help_text / подписи под полями --- */
+  /* В инлайне их скрываем — дублируют имя параметра и налезают на select2.
+     Описание критерия доступно на странице самого параметра в админке. */
+  #methodology_criteria-group .help,
+  #methodology_criteria-group p.help,
+  #methodology_criteria-group div.help,
+  #methodology_criteria-group .help-tooltip,
+  #methodology_criteria-group small.form-text {
+    display: none !important;
+  }
+
+  /* --- td.original (дубль __str__ объекта) --- */
+  /* Django админка рендерит в каждой строке инлайна `td.original > p` с текстом
+     `str(obj)` — у нас он не скрывается старым трюком margin-left:-100px и
+     лезет поверх ячеек. Прячем <p> целиком, <td> оставляем ради
+     скрытых hidden input'ов (id). */
+  #methodology_criteria-group td.original > p,
+  #methodology_criteria-group td.original p {
+    display: none !important;
+    margin: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+  #methodology_criteria-group td.original {
+    width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  /* --- Числовые поля --- */
+  #methodology_criteria-group input[name$="-weight"],
+  #methodology_criteria-group input[name$="-min_value"],
+  #methodology_criteria-group input[name$="-median_value"],
+  #methodology_criteria-group input[name$="-max_value"],
+  #methodology_criteria-group input[name$="-display_order"] {
+    width: 56px;
+    min-width: 56px;
+    padding: 3px 4px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Селекты --- */
+  #methodology_criteria-group select[name$="-scoring_type"] {
+    width: 140px;
+    min-width: 140px;
+  }
+  #methodology_criteria-group select[name$="-region_scope"] {
+    width: 90px;
+    min-width: 90px;
+  }
+
+  /* --- Чек-боксы --- */
+  #methodology_criteria-group input[type="checkbox"] { margin: 0; }
+  #methodology_criteria-group th.column-is_inverted,
+  #methodology_criteria-group th.column-is_public,
+  #methodology_criteria-group th.column-is_active,
+  #methodology_criteria-group td.field-is_inverted,
+  #methodology_criteria-group td.field-is_public,
+  #methodology_criteria-group td.field-is_active {
+    width: 36px;
+    max-width: 36px;
+    text-align: center;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  /* --- Шапка колонок --- */
+  #methodology_criteria-group th {
+    font-size: 0.78rem;
+    line-height: 1.15;
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: bottom;
+  }
+</style>
+{% endblock %}

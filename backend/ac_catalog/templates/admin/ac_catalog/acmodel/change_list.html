@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+{% block object-tools-items %}
+<li>
+  <a href="{{ import_models_url }}" class="addlink">Импорт моделей</a>
+</li>
+{% if import_template_available %}
+<li>
+  <a href="{{ import_template_url }}" class="addlink">Скачать XLSX (все модели и критерии)</a>
+</li>
+{% endif %}
+{{ block.super }}
+{% endblock %}

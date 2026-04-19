@@ -1,0 +1,40 @@
+{% load i18n %}
+<details data-filter-title="{{ title }}" open>
+  <summary>
+    {% blocktranslate with filter_title=title %} By {{ filter_title }} {% endblocktranslate %}
+  </summary>
+  <form method="get" style="margin-top: 0.5rem;">
+    {% for k, v in cl.params.items %}
+      {% if k != spec.parameter_name and k != "p" %}
+        <input type="hidden" name="{{ k }}" value="{{ v }}">
+      {% endif %}
+    {% endfor %}
+    <input type="hidden" name="{{ spec.parameter_name }}" id="id-{{ spec.parameter_name }}">
+    <div style="display: grid; gap: 0.25rem; margin-bottom: 0.5rem;">
+      {% for choice in choices %}
+        <label style="display: flex; gap: 0.4rem; align-items: center;">
+          <input type="checkbox" data-methodology-choice value="{{ choice.lookup }}"{% if choice.selected %} checked{% endif %}>
+          <span>{{ choice.title }}</span>
+        </label>
+      {% empty %}
+        <span>{% trans "Нет методик" %}</span>
+      {% endfor %}
+    </div>
+    <button type="submit">{% trans "Apply" %}</button>
+    <a href="?" style="margin-left: 0.5rem;">{% trans "All" %}</a>
+  </form>
+</details>
+<script>
+  (function () {
+    var root = document.querySelector('input#id-{{ spec.parameter_name }}');
+    if (!root) return;
+    var form = root.closest("form");
+    if (!form) return;
+    form.addEventListener("submit", function () {
+      var boxes = form.querySelectorAll('input[data-methodology-choice]:checked');
+      var values = [];
+      boxes.forEach(function (box) { values.push(box.value); });
+      root.value = values.join(",");
+    });
+  })();
+</script>
