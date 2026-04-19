@@ -37,6 +37,14 @@ class ACModelFactory(DjangoModelFactory):
     total_index = 0
 
 
+class PublishedACModelFactory(ACModelFactory):
+    publish_status = ACModel.PublishStatus.PUBLISHED
+
+
+class ArchivedACModelFactory(ACModelFactory):
+    publish_status = ACModel.PublishStatus.ARCHIVED
+
+
 class ModelRegionFactory(DjangoModelFactory):
     class Meta:
         model = ModelRegion
