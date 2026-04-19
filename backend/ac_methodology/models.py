@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 
 from core.models import TimestampedModel
 
@@ -45,11 +45,17 @@ class MethodologyVersion(TimestampedModel):
         return f"{self.name} (v{self.version}){active}"
 
     def save(self, *args, **kwargs):
-        if self.is_active:
-            MethodologyVersion.objects.filter(is_active=True).exclude(pk=self.pk).update(
-                is_active=False
-            )
-        super().save(*args, **kwargs)
+        # Атомарность: деактивация других активных + сохранение себя — одной
+        # транзакцией. Без atomic между двумя SQL-запросами есть окно гонки,
+        # в котором два параллельных save() могут оставить 0 или 2 активных
+        # методики (Ф2 риск #9). UPDATE ... WHERE is_active=True держит
+        # row-level lock на затронутых строках до конца транзакции.
+        with transaction.atomic():
+            if self.is_active:
+                MethodologyVersion.objects.filter(is_active=True).exclude(pk=self.pk).update(
+                    is_active=False
+                )
+            super().save(*args, **kwargs)
 
 
 class Criterion(TimestampedModel):
