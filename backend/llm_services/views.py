@@ -332,3 +332,28 @@ def parse_invoice(request):
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['POST'])
+@parser_classes([MultiPartParser])
+@permission_classes([AllowAny])
+def parse_specification(request):
+    """POST /api/v1/specifications/parse/ — парсинг PDF-спецификации через LLM Vision."""
+    file = request.FILES.get('file')
+    if not file:
+        return Response({'error': 'file required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not file.name.lower().endswith('.pdf'):
+        return Response({'error': 'Only PDF files'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        from llm_services.services.specification_parser import SpecificationParser
+        parser = SpecificationParser()
+        result = parser.parse_pdf(file.read(), filename=file.name)
+        return Response(result, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.exception("Specification parse error: %s", e)
+        return Response(
+            {'error': f'Parse error: {e}', 'items': [], 'pages_total': 0},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
