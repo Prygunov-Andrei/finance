@@ -3,6 +3,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .bulk_views import bulk_create_items, bulk_delete_items, bulk_update_items
 from .import_views import import_excel
 from .matching_views import match_works, match_works_apply, match_works_progress
 from .views import EstimateItemViewSet, EstimateSectionViewSet, EstimateViewSet
@@ -31,7 +32,10 @@ urlpatterns = [
         EstimateItemViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
         name="item-detail",
     ),
-    # Matching (E5.1)
+    # Bulk (E4.2)
+    path("estimates/<uuid:estimate_pk>/items/bulk-create/", bulk_create_items, name="bulk-create-items"),
+    path("estimates/<uuid:estimate_pk>/items/bulk-update/", bulk_update_items, name="bulk-update-items"),
+    path("estimates/<uuid:estimate_pk>/items/bulk-delete/", bulk_delete_items, name="bulk-delete-items"),
     # Import (E7)
     path("estimates/<uuid:estimate_pk>/import/excel/", import_excel, name="import-excel"),
     # Matching (E5.1)
