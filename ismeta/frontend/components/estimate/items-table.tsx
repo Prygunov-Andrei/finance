@@ -27,7 +27,7 @@ import { ProcurementStatusSelect } from "./procurement-status-select";
 import type { EquipmentTrack } from "./track-tabs";
 import { ApiError, itemApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatDecimal } from "@/lib/utils";
 import {
   MATCH_SOURCE_LABELS,
   type CreateItemDto,
@@ -237,6 +237,7 @@ export function ItemsTable({
             value={row.original.quantity}
             type="number"
             align="right"
+            display={(v) => formatDecimal(v)}
             onCommit={(next) => commitField(row.original, "quantity", next)}
           />
         ),
