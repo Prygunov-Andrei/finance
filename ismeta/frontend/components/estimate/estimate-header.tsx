@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Archive,
   ArrowLeft,
   Download,
   GitBranch,
@@ -104,6 +105,16 @@ export function EstimateHeader({ estimate, onOpenValidate, onOpenChat }: Props) 
         toast.error("Не удалось запустить подбор");
       }
     },
+  });
+
+  const archive = useMutation({
+    mutationFn: () => estimateApi.archive(estimate.id, workspaceId),
+    onSuccess: () => {
+      toast.success("Смета архивирована");
+      qc.invalidateQueries({ queryKey: ["estimates"] });
+      router.push("/estimates");
+    },
+    onError: () => toast.error("Не удалось архивировать смету"),
   });
 
   const commitName = () => {
@@ -215,6 +226,24 @@ export function EstimateHeader({ estimate, onOpenValidate, onOpenChat }: Props) 
               <GitBranch className="h-4 w-4" />
             )}
             Создать версию
+          </Button>
+          <Button
+            variant="ghost"
+            className="text-destructive hover:bg-destructive/10"
+            onClick={() => {
+              if (window.confirm("Архивировать смету? Она исчезнет из списка.")) {
+                archive.mutate();
+              }
+            }}
+            disabled={archive.isPending || estimate.status === "transmitted"}
+            title={estimate.status === "transmitted" ? "Переданная смета не может быть архивирована" : "Архивировать смету"}
+          >
+            {archive.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Archive className="h-4 w-4" />
+            )}
+            Архивировать
           </Button>
         </div>
       </div>

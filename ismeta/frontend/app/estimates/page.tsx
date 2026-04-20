@@ -26,13 +26,17 @@ export default function EstimatesPage() {
 
   const filtered = React.useMemo(() => {
     if (!data) return [];
+    // Скрыть архивированные из списка
+    let items = data.filter((e) => e.status !== "archived");
     const q = search.trim().toLowerCase();
-    if (!q) return data;
-    return data.filter(
-      (e) =>
-        e.name.toLowerCase().includes(q) ||
-        (e.folder_name ?? "").toLowerCase().includes(q),
-    );
+    if (q) {
+      items = items.filter(
+        (e) =>
+          e.name.toLowerCase().includes(q) ||
+          (e.folder_name ?? "").toLowerCase().includes(q),
+      );
+    }
+    return items;
   }, [data, search]);
 
   return (
