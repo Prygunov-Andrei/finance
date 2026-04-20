@@ -213,6 +213,7 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
     photos = ACModelPhotoSerializer(many=True, read_only=True)
     suppliers = ACModelSupplierSerializer(many=True, read_only=True)
     rank = serializers.SerializerMethodField()
+    median_total_index = serializers.SerializerMethodField()
 
     class Meta:
         model = ACModel
@@ -225,13 +226,23 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
             "photos", "suppliers",
             "parameter_scores", "raw_values",
             "methodology_version",
-            "rank",
+            "rank", "median_total_index",
         ]
         read_only_fields = fields
 
     def get_rank(self, obj: ACModel) -> int | None:
         from ac_catalog.stats import rank_for_model
         return rank_for_model(obj)
+
+    def get_median_total_index(self, obj: ACModel) -> float | None:
+        """Медиана по всему published каталогу. Кладётся в context
+        ACModelDetailView.get_serializer_context (одно вычисление за
+        запрос); если context не заполнен — считается здесь on-demand."""
+        median = self.context.get("median_total_index", ...)
+        if median is ...:
+            from ac_catalog.stats import published_median_total_index
+            return published_median_total_index()
+        return median
 
     def _get_methodology_for_detail(self, obj: ACModel) -> MethodologyVersion | None:
         results = list(obj.calculation_results.all())

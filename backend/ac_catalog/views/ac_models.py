@@ -87,6 +87,14 @@ class ACModelDetailView(LangMixin, generics.RetrieveAPIView):
     serializer_class = ACModelDetailSerializer
     permission_classes = [AllowAny]
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        # Один вычисленный median на весь запрос (а не на каждый
+        # SerializerMethodField вызов).
+        from ..stats import published_median_total_index
+        ctx["median_total_index"] = published_median_total_index()
+        return ctx
+
     def get_queryset(self):
         return ACModel.objects.select_related("brand").prefetch_related(
             "regions",
