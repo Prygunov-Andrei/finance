@@ -159,6 +159,11 @@ ISMETA_LLM_MODE = config("ISMETA_LLM_MODE", default=config("LLM_MODE", default="
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 ISMETA_KNOWLEDGE_MD_ROOT = config("KNOWLEDGE_MD_ROOT", default=str(BASE_DIR / "data/knowledge"))
 
+# ==== Recognition Service (E15.02b) ====
+# standalone PDF-parsing microservice (recognition/)
+RECOGNITION_URL = config("RECOGNITION_URL", default="http://recognition:8003")
+RECOGNITION_API_KEY = config("RECOGNITION_API_KEY", default="")
+
 # ==== Logging ====
 LOG_LEVEL = config("LOG_LEVEL", default="INFO")
 LOG_FORMAT = config("LOG_FORMAT", default="json")
