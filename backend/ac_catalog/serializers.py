@@ -110,6 +110,7 @@ class ACModelListSerializer(serializers.ModelSerializer):
     noise_score = serializers.SerializerMethodField()
     has_noise_measurement = serializers.SerializerMethodField()
     scores = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
 
     class Meta:
         model = ACModel
@@ -118,9 +119,15 @@ class ACModelListSerializer(serializers.ModelSerializer):
             "nominal_capacity", "total_index", "index_max",
             "publish_status", "region_availability",
             "price", "noise_score", "has_noise_measurement", "scores",
-            "is_ad", "ad_position",
+            "is_ad", "ad_position", "rank",
         ]
         read_only_fields = fields
+
+    def get_rank(self, obj: ACModel) -> int | None:
+        """rank приходит из annotation в ACModelListView.get_queryset.
+        Для архивных моделей annotation не применяется — возвращаем None."""
+        rank = getattr(obj, "rank", None)
+        return int(rank) if rank is not None else None
 
     def get_brand_logo(self, obj: ACModel) -> str:
         if not obj.brand.logo:
@@ -205,6 +212,7 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
     index_max = serializers.SerializerMethodField()
     photos = ACModelPhotoSerializer(many=True, read_only=True)
     suppliers = ACModelSupplierSerializer(many=True, read_only=True)
+    rank = serializers.SerializerMethodField()
 
     class Meta:
         model = ACModel
@@ -217,8 +225,13 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
             "photos", "suppliers",
             "parameter_scores", "raw_values",
             "methodology_version",
+            "rank",
         ]
         read_only_fields = fields
+
+    def get_rank(self, obj: ACModel) -> int | None:
+        from ac_catalog.stats import rank_for_model
+        return rank_for_model(obj)
 
     def _get_methodology_for_detail(self, obj: ACModel) -> MethodologyVersion | None:
         results = list(obj.calculation_results.all())

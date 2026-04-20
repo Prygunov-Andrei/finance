@@ -8,6 +8,7 @@ from ac_scoring.engine import max_possible_total_index
 
 from ..models import ACModel
 from ..serializers import ACModelDetailSerializer, ACModelListSerializer
+from ..stats import rank_subquery
 from .base import LangMixin, parse_float_param
 
 
@@ -42,6 +43,11 @@ class ACModelListView(LangMixin, generics.ListAPIView):
             "raw_values__criterion",
         ).filter(
             publish_status=ACModel.PublishStatus.PUBLISHED,
+        ).annotate(
+            # rank коррелирует с total_index конкретной строки; фильтры ниже
+            # не меняют значение rank, т.к. subquery смотрит на весь
+            # published-каталог, не на внешний WHERE.
+            rank=rank_subquery(),
         ).order_by("-total_index")
 
         brand = self.request.query_params.get("brand")
