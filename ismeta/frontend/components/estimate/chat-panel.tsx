@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Loader2, Send, User, Wrench, X } from "lucide-react";
+import { AlertTriangle, Bot, Loader2, Send, Sparkles, User, Wrench, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,17 @@ export function ChatPanel({ estimateId, open, onClose }: Props) {
     },
   });
 
+  const validate = useMutation({
+    mutationFn: () => agentApi.validate(estimateId, workspaceId),
+    onError: (e: unknown) => {
+      if (e instanceof ApiError) {
+        toast.error(e.problem?.detail ?? "Не удалось проверить смету");
+      } else {
+        toast.error("Не удалось проверить смету");
+      }
+    },
+  });
+
   // Esc для закрытия
   React.useEffect(() => {
     if (!open) return;
@@ -94,15 +105,63 @@ export function ChatPanel({ estimateId, open, onClose }: Props) {
           <Bot className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">ИИ-помощник</h2>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Закрыть чат"
-          onClick={onClose}
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => validate.mutate()}
+            disabled={validate.isPending}
+            title="Проверить смету на ошибки"
+          >
+            {validate.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            <span className="ml-1 text-xs">Проверить</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Закрыть чат"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
+
+      {validate.data ? (
+        <div className="border-b px-3 py-2 text-sm">
+          <div className="mb-1 font-medium">
+            {validate.data.issues.length > 0
+              ? `Найдено ${validate.data.issues.length} замечаний`
+              : "Ошибок не найдено"}
+          </div>
+          {validate.data.issues.length > 0 ? (
+            <ul className="space-y-1">
+              {validate.data.issues.map((issue: any, i: number) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs">
+                  <AlertTriangle className={cn(
+                    "mt-0.5 h-3 w-3 shrink-0",
+                    issue.severity === "error" ? "text-rose-600" :
+                    issue.severity === "warning" ? "text-amber-600" : "text-sky-600"
+                  )} />
+                  <span>
+                    <span className="font-medium">{issue.item_name}</span>
+                    {" — "}{issue.message}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">{validate.data.summary}</p>
+          )}
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Токены: {validate.data.tokens_used} · ${validate.data.cost_usd?.toFixed(4)}
+          </p>
+        </div>
+      ) : null}
 
       <div
         ref={scrollRef}

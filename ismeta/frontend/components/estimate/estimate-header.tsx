@@ -9,6 +9,7 @@ import {
   Archive,
   ArrowLeft,
   Download,
+  FileText,
   GitBranch,
   Loader2,
   MessageSquare,
@@ -47,6 +48,7 @@ interface Props {
   onOpenValidate?: () => void;
   onOpenChat?: () => void;
   onOpenImport?: () => void;
+  onOpenPdfImport?: () => void;
 }
 
 export function EstimateHeader({
@@ -54,6 +56,7 @@ export function EstimateHeader({
   onOpenValidate,
   onOpenChat,
   onOpenImport,
+  onOpenPdfImport,
 }: Props) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -211,6 +214,7 @@ export function EstimateHeader({
           onOpenValidate={onOpenValidate}
           onOpenChat={onOpenChat}
           onOpenImport={onOpenImport}
+          onOpenPdfImport={onOpenPdfImport}
           startMatching={startMatching}
           exportXlsx={exportXlsx}
           createVersion={createVersion}
@@ -264,6 +268,7 @@ interface HeaderActionsProps {
   onOpenValidate?: () => void;
   onOpenChat?: () => void;
   onOpenImport?: () => void;
+  onOpenPdfImport?: () => void;
   onOpenArchive: () => void;
   startMatching: { mutate: () => void; isPending: boolean };
   exportXlsx: { mutate: () => void; isPending: boolean };
@@ -277,6 +282,7 @@ function HeaderActions(props: HeaderActionsProps) {
     onOpenValidate,
     onOpenChat,
     onOpenImport,
+    onOpenPdfImport,
     onOpenArchive,
     startMatching,
     exportXlsx,
@@ -297,12 +303,6 @@ function HeaderActions(props: HeaderActionsProps) {
         className="hidden items-center gap-2 lg:flex"
         data-testid="header-actions-desktop"
       >
-        {onOpenValidate ? (
-          <Button variant="outline" onClick={onOpenValidate}>
-            <Sparkles className="h-4 w-4" />
-            Проверить ИИ
-          </Button>
-        ) : null}
         {onOpenChat ? (
           <Button variant="outline" onClick={onOpenChat}>
             <MessageSquare className="h-4 w-4" />
@@ -325,6 +325,12 @@ function HeaderActions(props: HeaderActionsProps) {
           <Button variant="outline" onClick={onOpenImport}>
             <Upload className="h-4 w-4" />
             Импорт Excel
+          </Button>
+        ) : null}
+        {onOpenPdfImport ? (
+          <Button variant="outline" onClick={onOpenPdfImport}>
+            <FileText className="h-4 w-4" />
+            Загрузить PDF
           </Button>
         ) : null}
         <Button
@@ -377,12 +383,6 @@ function HeaderActions(props: HeaderActionsProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[14rem]">
-            {onOpenValidate ? (
-              <DropdownMenuItem onSelect={onOpenValidate}>
-                <Sparkles className="h-4 w-4" />
-                Проверить ИИ
-              </DropdownMenuItem>
-            ) : null}
             {onOpenChat ? (
               <DropdownMenuItem onSelect={onOpenChat}>
                 <MessageSquare className="h-4 w-4" />
@@ -400,6 +400,12 @@ function HeaderActions(props: HeaderActionsProps) {
               <DropdownMenuItem onSelect={onOpenImport}>
                 <Upload className="h-4 w-4" />
                 Импорт Excel
+              </DropdownMenuItem>
+            ) : null}
+            {onOpenPdfImport ? (
+              <DropdownMenuItem onSelect={onOpenPdfImport}>
+                <FileText className="h-4 w-4" />
+                Загрузить PDF
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem
