@@ -17,17 +17,23 @@ recognition/
     logging_setup.py     JSON logger + request_id contextvars
     middleware.py        request_id + access log
     api/
-      parse.py           POST /v1/parse/spec
+      parse.py           POST /v1/parse/{spec,invoice,quote} + shared validation
       health.py          GET  /v1/healthz
       errors.py          RecognitionError иерархия + handlers (§5)
     providers/
       base.py            BaseLLMProvider (async)
       openai_vision.py   gpt-4o-mini Vision с retry 429/5xx
-    schemas/spec.py      SpecItem, PagesStats, SpecParseResponse
+    schemas/
+      spec.py            SpecItem / PagesStats / SpecParseResponse (§1)
+      invoice.py         InvoiceItem / SupplierInfo / InvoiceMeta / InvoiceParseResponse (§2)
+      quote.py           QuoteItem / QuoteSupplier / QuoteMeta / QuoteParseResponse (§3)
     services/
-      spec_parser.py     async parser: classify → extract → dedup
+      _common.py         vision_json (retry+JSON), determine_status, dedupe_by_key
+      spec_parser.py     async spec parser: classify → extract → dedup
+      invoice_parser.py  async invoice parser: classify → header + items → dedup
+      quote_parser.py    async quote parser (КП): + lead_time, warranty, valid_until
       pdf_render.py      PyMuPDF page → base64 PNG
-  tests/                 pytest (17 tests, ~84% coverage на app/)
+  tests/                 pytest (35 tests, ≥85% coverage на app/)
   Dockerfile
   openapi.yaml           экспорт из FastAPI (регенерируем при изменении API)
   requirements.txt
@@ -66,7 +72,7 @@ PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8003
 curl -s http://localhost:8003/v1/healthz | jq
 ```
 
-### Парсинг спецификации
+### Парсинг спецификации — §1
 
 ```bash
 curl -s -X POST http://localhost:8003/v1/parse/spec \
@@ -74,7 +80,33 @@ curl -s -X POST http://localhost:8003/v1/parse/spec \
   -F "file=@/path/to/spec.pdf" | jq
 ```
 
-Ответ по контракту §1 — `{status, items[], errors[], pages_stats}`.
+Ответ: `{status, items[], errors[], pages_stats}`. `items[].tech_specs` — строка.
+
+### Парсинг счёта поставщика — §2
+
+```bash
+curl -s -X POST http://localhost:8003/v1/parse/invoice \
+  -H "X-API-Key: $RECOGNITION_API_KEY" \
+  -F "file=@/path/to/invoice.pdf" | jq
+```
+
+Ответ: `{status, items[], supplier, invoice_meta, errors[], pages_stats}`.
+- `supplier`: `{name, inn, kpp, bank_account, bik, correspondent_account}`.
+- `invoice_meta`: `{number, date, total_amount, vat_amount, currency}`.
+- `items[]` дополнительно содержит `price_unit, price_total, currency, vat_rate`.
+
+### Парсинг КП — §3
+
+```bash
+curl -s -X POST http://localhost:8003/v1/parse/quote \
+  -H "X-API-Key: $RECOGNITION_API_KEY" \
+  -F "file=@/path/to/quote.pdf" | jq
+```
+
+Ответ: `{status, items[], supplier, quote_meta, errors[], pages_stats}`.
+- `supplier`: `{name, inn}` (ИНН опционален).
+- `quote_meta`: `{number, date, valid_until, currency, total_amount}`.
+- `items[]` дополнительно содержит `price_unit, price_total, currency, tech_specs, lead_time_days, warranty_months`.
 
 ### Ошибки (см. §5 контракта)
 
@@ -120,6 +152,6 @@ yaml.safe_dump(app.openapi(), open('openapi.yaml','w'), sort_keys=False, allow_u
 
 ## Что НЕ в этом сервисе
 
-- `/parse/invoice`, `/parse/quote` — следующая итерация (E15.02).
 - Persistence / cache / sessions — сервис stateless.
 - Прямых вызовов в ERP/Айсмету нет — recognition изолирован.
+- Клиенты (ISMeta, ERP payments) подключаются в отдельной итерации (E15.02b).
