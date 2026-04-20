@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfidenceBadge, getConfidenceLevel } from "./confidence-badge";
+import { techSpecsSubLabel, techSpecsTitle } from "./tech-specs";
 import { estimateApi, matchingApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -323,8 +324,26 @@ export function MatchingReview({ estimateId, sessionId, session }: Props) {
                   )}
                   <span className="tabular-nums">{i + 1}</span>
                 </div>
-                <div role="gridcell" className="min-w-0 px-3 py-2 text-sm">
+                <div
+                  role="gridcell"
+                  className="min-w-0 px-3 py-2 text-sm"
+                  title={techSpecsTitle(itemsMap.get(r.item_ids[0]!)?.tech_specs)}
+                >
                   <div className="truncate font-medium">{r.group_name}</div>
+                  {(() => {
+                    const sub = techSpecsSubLabel(
+                      itemsMap.get(r.item_ids[0]!)?.tech_specs,
+                    );
+                    return sub ? (
+                      <div
+                        className="truncate text-xs text-muted-foreground"
+                        data-testid="matching-sub-label"
+                        aria-hidden="true"
+                      >
+                        {sub}
+                      </div>
+                    ) : null;
+                  })()}
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
                       {r.unit}

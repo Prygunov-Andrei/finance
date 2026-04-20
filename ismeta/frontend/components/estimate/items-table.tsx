@@ -25,6 +25,7 @@ import {
 import { EditableCell } from "./editable-cell";
 import { ProcurementStatusSelect } from "./procurement-status-select";
 import type { EquipmentTrack } from "./track-tabs";
+import { techSpecsSubLabel, techSpecsTitle } from "./tech-specs";
 import { ApiError, itemApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
 import { cn, formatCurrency, formatDecimal } from "@/lib/utils";
@@ -211,12 +212,29 @@ export function ItemsTable({
       {
         accessorKey: "name",
         header: "Наименование",
-        cell: ({ row }) => (
-          <EditableCell
-            value={row.original.name}
-            onCommit={(next) => commitField(row.original, "name", next)}
-          />
-        ),
+        cell: ({ row }) => {
+          const sub = techSpecsSubLabel(row.original.tech_specs);
+          return (
+            <div className="flex min-w-0 flex-col">
+              <EditableCell
+                value={row.original.name}
+                onCommit={(next) => commitField(row.original, "name", next)}
+              />
+              {sub ? (
+                <div
+                  className="truncate px-2 text-xs text-muted-foreground"
+                  data-testid="item-sub-label"
+                  // aria-hidden, чтобы screen reader читал кнопку имени
+                  // (accessible name = item.name), а model/brand не
+                  // попадали в её лейбл.
+                  aria-hidden="true"
+                >
+                  {sub}
+                </div>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "unit",
@@ -413,11 +431,13 @@ export function ItemsTable({
                 const isHighlighted =
                   highlightItemId !== null &&
                   row.original.id === highlightItemId;
+                const specsTitle = techSpecsTitle(row.original.tech_specs);
                 return (
                   <TableRow
                     key={row.id}
                     id={`item-row-${row.original.id}`}
                     data-highlighted={isHighlighted || undefined}
+                    title={specsTitle}
                     className={cn(
                       isHighlighted &&
                         "animate-pulse bg-amber-100/60 dark:bg-amber-900/30",

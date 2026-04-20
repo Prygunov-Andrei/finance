@@ -15,10 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ResizableSidebar } from "@/components/ui/resizable-sidebar";
 import { ApiError, sectionApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { EstimateSection, UUID } from "@/lib/api/types";
+
+const SIDEBAR_WIDTH_STORAGE_KEY = "ismeta.sidebar.sections.width";
 
 interface Props {
   estimateId: UUID;
@@ -105,7 +108,14 @@ export function SectionsPanel({
   });
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r bg-card">
+    <ResizableSidebar
+      storageKey={SIDEBAR_WIDTH_STORAGE_KEY}
+      defaultWidth={256}
+      minWidth={200}
+      maxWidth={600}
+      className="border-r bg-card"
+      handleLabel="Изменить ширину панели разделов"
+    >
       <div className="flex h-10 items-center justify-between border-b px-3">
         <h2 className="text-sm font-semibold">Разделы</h2>
         <span className="text-xs text-muted-foreground">{sections.length}</span>
@@ -284,6 +294,6 @@ export function SectionsPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </aside>
+    </ResizableSidebar>
   );
 }
