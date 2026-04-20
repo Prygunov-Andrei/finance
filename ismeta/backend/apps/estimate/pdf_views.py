@@ -40,13 +40,18 @@ def import_pdf_preview(request, estimate_pk):
     cache.set(f"pdf-preview:{preview_id}", json.dumps(result), timeout=300)
 
     return Response({
-        "preview_id": preview_id,
+        "session_id": preview_id,
+        "document_meta": {
+            "filenames": [file.name],
+            "pages_total": result.get("pages_total", 0),
+            "pages_processed": result.get("pages_processed", 0),
+            "confidence": result.get("confidence", 0.8),
+            "processing_time_ms": 0,
+            "tokens_total": result.get("tokens_total", 0),
+            "cost_usd": result.get("cost_usd", 0),
+        },
         "items": result.get("items", []),
-        "pages_total": result.get("pages_total", 0),
-        "pages_processed": result.get("pages_processed", 0),
-        "pages_skipped": result.get("pages_skipped", 0),
         "errors": result.get("errors", []),
-        "status": result.get("status", "done"),
     })
 
 

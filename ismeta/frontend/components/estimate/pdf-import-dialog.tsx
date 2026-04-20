@@ -85,7 +85,7 @@ export function PdfImportDialog({ estimateId, open, onOpenChange }: Props) {
 
   const apply = useMutation({
     mutationFn: (items: PdfItem[]) =>
-      importApi.applyPdf(estimateId, items, workspaceId),
+      importApi.applyPdf(estimateId, preview?.session_id ?? "", items, workspaceId),
     onSuccess: (data) => {
       setResult(data);
       setStage("result");

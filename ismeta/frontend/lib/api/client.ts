@@ -325,9 +325,9 @@ export const importApi = {
     );
   },
 
-  applyPdf: (estimateId: UUID, items: PdfItem[], workspaceId: string) =>
+  applyPdf: (estimateId: UUID, sessionId: string, items: PdfItem[], workspaceId: string) =>
     apiFetch<ImportResult>(
-      `/estimates/${estimateId}/import/pdf/apply/`,
+      `/estimates/${estimateId}/import/pdf/${sessionId}/apply/`,
       {
         method: "POST",
         body: { items },
