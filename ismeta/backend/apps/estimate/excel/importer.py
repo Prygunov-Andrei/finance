@@ -57,6 +57,7 @@ def import_estimate_xlsx(estimate_id, workspace_id, file) -> ImportResult:
     sort_order = 0
 
     with transaction.atomic():
+        create_batches: dict[str, list[dict]] = {}
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
             values = [cell.value for cell in row]
 
@@ -134,9 +135,13 @@ def import_estimate_xlsx(estimate_id, workspace_id, file) -> ImportResult:
                     result.updated += 1
                     continue
 
-            # CREATE
-            EstimateService.create_item(current_section, estimate, workspace_id, data)
-            result.created += 1
+            # Collect for bulk create
+            create_batches.setdefault(current_section.id, []).append(data)
+
+        # Flush bulk creates
+        for sec_id, batch in create_batches.items():
+            sec = EstimateSection.objects.get(id=sec_id)
+            result.created += EstimateService.bulk_create_items(sec, estimate, workspace_id, batch)
 
         recalc_estimate_totals(estimate_id, workspace_id)
 
