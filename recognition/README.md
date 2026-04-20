@@ -150,8 +150,60 @@ yaml.safe_dump(app.openapi(), open('openapi.yaml','w'), sort_keys=False, allow_u
 "
 ```
 
+## Как подключить клиента (E15.02b)
+
+В монорепо есть два готовых клиента — асинхронный для ISMeta и синхронный для ERP.
+
+### ISMeta (async, Django 5)
+
+```python
+# ismeta/backend/apps/integration/recognition_client.py
+from apps.integration.recognition_client import RecognitionClient, RecognitionClientError
+
+client = RecognitionClient()  # base_url + api_key из settings
+try:
+    data = await client.parse_spec(pdf_bytes, "spec.pdf")
+    data = await client.parse_invoice(pdf_bytes, "invoice.pdf")
+    data = await client.parse_quote(pdf_bytes, "kp.pdf")
+except RecognitionClientError as e:
+    # e.code: invalid_api_key | file_too_large | parse_failed | llm_unavailable | ...
+    # e.detail: строка от сервиса
+    # e.status_code: HTTP код (None для network errors)
+    # e.extra: {"retry_after_sec": 30, "limit_mb": 50, ...}
+    logger.warning("recognition failed: %s %s", e.code, e.detail)
+```
+
+Env для ISMeta (см. `ismeta/backend/.env.example`):
+- `RECOGNITION_URL` (default `http://recognition:8003`)
+- `RECOGNITION_API_KEY` (shared secret, совпадает с env в recognition/)
+
+### ERP payments (sync)
+
+```python
+# backend/payments/services/recognition_client.py
+from payments.services.recognition_client import (
+    RecognitionClient,
+    RecognitionClientError,
+    response_to_parsed_invoice,
+)
+
+client = RecognitionClient()
+response = client.parse_invoice(pdf_bytes, filename)  # sync, httpx.Client
+parsed_invoice = response_to_parsed_invoice(response)  # legacy ParsedInvoice
+```
+
+`response_to_parsed_invoice` — адаптер под существующий контракт `llm_services.schemas.ParsedInvoice` (vendor/buyer/invoice/totals/items/confidence). Обязательные поля (номер, дата, поставщик) отсутствуют → `ValueError` — оператор доделывает вручную в REVIEW.
+
+Env для ERP (см. `backend/.env.example`, `backend/finans_assistant/settings.py`):
+- `RECOGNITION_URL`, `RECOGNITION_API_KEY` — те же переменные.
+
+### Docker-compose
+
+Корневой `docker-compose.yml`: сервис `recognition` на 8003 c healthcheck, `backend` (ERP) имеет `depends_on: recognition (service_healthy)`. `ismeta/docker-compose.yml`: тот же service name `recognition`, `ismeta-backend` depends_on.
+
 ## Что НЕ в этом сервисе
 
 - Persistence / cache / sessions — сервис stateless.
 - Прямых вызовов в ERP/Айсмету нет — recognition изолирован.
-- Клиенты (ISMeta, ERP payments) подключаются в отдельной итерации (E15.02b).
+- Конвертация PNG/JPG → PDF (для ERP invoice images) — отдельная задача, пока
+  изображения идут через legacy `llm_services.DocumentParser`.

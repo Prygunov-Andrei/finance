@@ -53,6 +53,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      recognition:
+        condition: service_healthy
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
       DEBUG: ${DEBUG:-1}
@@ -68,6 +70,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-text}
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      RECOGNITION_URL: ${RECOGNITION_URL:-http://recognition:8003}
+      RECOGNITION_API_KEY: ${RECOGNITION_API_KEY:-dev-recognition-key}
     ports:
       - "${BACKEND_PORT:-8001}:8000"
     volumes:
