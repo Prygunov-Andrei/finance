@@ -22,7 +22,15 @@ def validate_estimate(request, estimate_pk):
     if not workspace_id:
         return Response({"workspace_id": "Required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    result = AgentService.validate(str(estimate_pk), workspace_id)
+    try:
+        result = AgentService.validate(str(estimate_pk), workspace_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Validate error: %s", e)
+        return Response(
+            {"issues": [], "summary": "ИИ временно недоступен. Попробуйте через минуту.", "pre_check_count": 0, "llm_count": 0, "tokens_used": 0, "cost_usd": 0},
+            status=status.HTTP_200_OK,
+        )
     return Response(result, status=status.HTTP_200_OK)
 
 
@@ -41,7 +49,15 @@ def chat_message(request, estimate_pk):
     if not content:
         return Response({"content": "Required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    result = AgentService.chat(str(estimate_pk), workspace_id, content)
+    try:
+        result = AgentService.chat(str(estimate_pk), workspace_id, content)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Chat error: %s", e)
+        return Response(
+            {"detail": "ИИ временно недоступен. Попробуйте через минуту."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
     accept = request.META.get("HTTP_ACCEPT", "")
     if "text/event-stream" in accept:
