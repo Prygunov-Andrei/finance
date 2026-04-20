@@ -69,6 +69,7 @@ export function ImportNewPdfEstimateDialog() {
         if (preview.items.length > 0) {
           await importApi.applyPdf(
             estimate.id,
+            preview.session_id,
             preview.items as PdfItem[],
             workspaceId,
           );
