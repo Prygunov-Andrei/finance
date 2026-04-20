@@ -61,20 +61,12 @@ export function ImportNewPdfEstimateDialog() {
       // Запустим распознавание; результат применим сразу без ручного review
       // (flow «из пустого состояния» — минимум кликов для демо).
       try {
-        const preview = await importApi.uploadPdf(
+        const result = await importApi.uploadPdf(
           estimate.id,
           args.file,
           workspaceId,
         );
-        if (preview.items.length > 0) {
-          await importApi.applyPdf(
-            estimate.id,
-            preview.session_id,
-            preview.items as PdfItem[],
-            workspaceId,
-          );
-        }
-        return { estimate, count: preview.items.length };
+        return { estimate, count: result.created };
       } catch (e) {
         if (e instanceof ApiError) {
           // Распознавание не удалось — смета всё равно создана

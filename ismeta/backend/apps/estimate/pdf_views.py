@@ -1,15 +1,15 @@
-"""PDF import views — preview + apply."""
+"""PDF import — один endpoint: upload PDF → parse → create items."""
 
-import json
-import uuid
+import logging
 
-from django.core.cache import cache
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 from .services.pdf_import_service import PDFParseError, apply_parsed_items, parse_pdf_via_erp
+
+logger = logging.getLogger(__name__)
 
 
 def _get_workspace_id(request):
@@ -18,8 +18,11 @@ def _get_workspace_id(request):
 
 @api_view(["POST"])
 @parser_classes([MultiPartParser])
-def import_pdf_preview(request, estimate_pk):
-    """POST /api/v1/estimates/{id}/import/pdf/ — upload PDF → preview."""
+def import_pdf(request, estimate_pk):
+    """POST /api/v1/estimates/{id}/import/pdf/ — upload PDF → parse → create items.
+
+    Один endpoint без preview/apply. Загрузил — получил результат.
+    """
     workspace_id = _get_workspace_id(request)
     if not workspace_id:
         return Response({"workspace_id": "Required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -30,53 +33,34 @@ def import_pdf_preview(request, estimate_pk):
     if not file.name.lower().endswith(".pdf"):
         return Response({"file": "Only PDF files"}, status=status.HTTP_400_BAD_REQUEST)
 
+    # 1. Parse через ERP
     try:
         result = parse_pdf_via_erp(file.read(), file.name)
     except PDFParseError as e:
+        logger.error("PDF parse failed: %s", e)
         return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-    # Сохраняем preview в cache (5 мин) для apply
-    preview_id = str(uuid.uuid4())
-    cache.set(f"pdf-preview:{preview_id}", json.dumps(result), timeout=300)
-
-    return Response({
-        "session_id": preview_id,
-        "document_meta": {
-            "filenames": [file.name],
+    items = result.get("items", [])
+    if not items:
+        return Response({
+            "created": 0,
+            "sections": 0,
+            "errors": result.get("errors", ["Не удалось распознать позиции"]),
             "pages_total": result.get("pages_total", 0),
             "pages_processed": result.get("pages_processed", 0),
-            "confidence": result.get("confidence", 0.8),
-            "processing_time_ms": 0,
-            "tokens_total": result.get("tokens_total", 0),
-            "cost_usd": result.get("cost_usd", 0),
-        },
-        "items": result.get("items", []),
-        "errors": result.get("errors", []),
-    })
+        })
 
-
-@api_view(["POST"])
-def import_pdf_apply(request, estimate_pk, preview_id):
-    """POST /api/v1/estimates/{id}/import/pdf/{preview_id}/apply/ — применить preview."""
-    workspace_id = _get_workspace_id(request)
-    if not workspace_id:
-        return Response({"workspace_id": "Required"}, status=status.HTTP_400_BAD_REQUEST)
-
-    cached = cache.get(f"pdf-preview:{preview_id}")
-    if not cached:
-        return Response(
-            {"error": "Preview expired or not found. Re-upload PDF."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    result = json.loads(cached)
-    items = result.get("items", [])
-
-    applied = apply_parsed_items(str(estimate_pk), workspace_id, items)
-    cache.delete(f"pdf-preview:{preview_id}")
+    # 2. Создать позиции сразу
+    try:
+        applied = apply_parsed_items(str(estimate_pk), workspace_id, items)
+    except Exception as e:
+        logger.error("PDF apply failed: %s", e)
+        return Response({"error": f"Ошибка создания позиций: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
         "created": applied["created"],
         "sections": applied["sections"],
+        "errors": result.get("errors", []),
+        "pages_total": result.get("pages_total", 0),
         "pages_processed": result.get("pages_processed", 0),
     })

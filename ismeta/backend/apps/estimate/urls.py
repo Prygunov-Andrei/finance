@@ -6,7 +6,7 @@ from rest_framework.routers import DefaultRouter
 from .bulk_views import bulk_create_items, bulk_delete_items, bulk_update_items
 from .import_views import import_excel
 from .matching_views import match_works, match_works_apply, match_works_progress
-from .pdf_views import import_pdf_apply, import_pdf_preview
+from .pdf_views import import_pdf
 from .views import EstimateItemViewSet, EstimateSectionViewSet, EstimateViewSet
 
 router = DefaultRouter()
@@ -39,9 +39,8 @@ urlpatterns = [
     path("estimates/<uuid:estimate_pk>/items/bulk-delete/", bulk_delete_items, name="bulk-delete-items"),
     # Import (E7)
     path("estimates/<uuid:estimate_pk>/import/excel/", import_excel, name="import-excel"),
-    # PDF import (E32)
-    path("estimates/<uuid:estimate_pk>/import/pdf/", import_pdf_preview, name="import-pdf-preview"),
-    path("estimates/<uuid:estimate_pk>/import/pdf/<str:preview_id>/apply/", import_pdf_apply, name="import-pdf-apply"),
+    # PDF import (E32) — один endpoint, без preview/apply
+    path("estimates/<uuid:estimate_pk>/import/pdf/", import_pdf, name="import-pdf"),
     # Matching (E5.1)
     path("estimates/<uuid:estimate_pk>/match-works/", match_works, name="match-works"),
     path("estimates/<uuid:estimate_pk>/match-works/<str:session_id>/", match_works_progress, name="match-works-progress"),

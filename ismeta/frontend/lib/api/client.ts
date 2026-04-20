@@ -315,7 +315,7 @@ export const importApi = {
   uploadPdf: (estimateId: UUID, file: File, workspaceId: string) => {
     const form = new FormData();
     form.append("file", file);
-    return apiFetch<PdfImportPreview>(
+    return apiFetch<ImportResult & { pages_total?: number; pages_processed?: number }>(
       `/estimates/${estimateId}/import/pdf/`,
       {
         method: "POST",
@@ -324,14 +324,4 @@ export const importApi = {
       },
     );
   },
-
-  applyPdf: (estimateId: UUID, sessionId: string, items: PdfItem[], workspaceId: string) =>
-    apiFetch<ImportResult>(
-      `/estimates/${estimateId}/import/pdf/${sessionId}/apply/`,
-      {
-        method: "POST",
-        body: { items },
-        workspaceId,
-      },
-    ),
 };
