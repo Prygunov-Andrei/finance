@@ -1,5 +1,11 @@
 export type UUID = string;
 
+export interface PaginatedResponse<T> {
+  results: T[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
 export type EstimateStatus =
   | "draft"
   | "in_progress"

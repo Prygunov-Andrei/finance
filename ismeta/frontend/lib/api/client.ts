@@ -119,11 +119,14 @@ export interface EstimateListFilters {
 }
 
 export const estimateApi = {
-  list: (workspaceId: string, filters: EstimateListFilters = {}) =>
-    apiFetch<EstimateListItem[]>(
+  list: async (workspaceId: string, filters: EstimateListFilters = {}): Promise<EstimateListItem[]> => {
+    const resp = await apiFetch<{ results: EstimateListItem[] } | EstimateListItem[]>(
       `/estimates/${q(filters as Record<string, string | undefined>)}`,
       { workspaceId },
-    ),
+    );
+    // Backend может вернуть {results: [...]} (с pagination) или [...] (без)
+    return Array.isArray(resp) ? resp : resp.results;
+  },
 
   get: (id: UUID, workspaceId: string) =>
     apiFetch<Estimate>(`/estimates/${id}/`, { workspaceId }),
