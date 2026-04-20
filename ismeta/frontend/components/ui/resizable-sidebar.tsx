@@ -50,6 +50,17 @@ export function ResizableSidebar({
   );
 
   const [width, setWidth] = React.useState<number>(defaultWidth);
+  // widthRef хранит актуальную ширину без повторного рендера —
+  // нужен, чтобы читать значение из event-хэндлеров (pointermove/keyboard)
+  // без захвата устаревшего state из замыкания, и для persist в
+  // onPointerUp без setState-updater с side-effect (страхует от
+  // двойного вызова в React strict mode).
+  const widthRef = React.useRef<number>(defaultWidth);
+  const commitWidth = React.useCallback((next: number) => {
+    widthRef.current = next;
+    setWidth(next);
+  }, []);
+
   const dragStateRef = React.useRef<{
     startX: number;
     startWidth: number;
@@ -63,12 +74,12 @@ export function ResizableSidebar({
       if (raw === null) return;
       const n = Number.parseInt(raw, 10);
       if (Number.isFinite(n)) {
-        setWidth(clamp(n));
+        commitWidth(clamp(n));
       }
     } catch {
       // localStorage may be unavailable (private mode); ignore.
     }
-  }, [storageKey, clamp]);
+  }, [storageKey, clamp, commitWidth]);
 
   const persist = React.useCallback(
     (value: number) => {
@@ -91,9 +102,9 @@ export function ResizableSidebar({
       const next = clamp(
         side === "right" ? state.startWidth + dx : state.startWidth - dx,
       );
-      setWidth(next);
+      commitWidth(next);
     },
-    [clamp, side],
+    [clamp, side, commitWidth],
   );
 
   const onPointerUp = React.useCallback(() => {
@@ -103,10 +114,9 @@ export function ResizableSidebar({
     document.removeEventListener("pointerup", onPointerUp);
     document.body.style.userSelect = "";
     document.body.style.cursor = "";
-    setWidth((w) => {
-      persist(w);
-      return w;
-    });
+    // Читаем актуальное значение из ref, чтобы избежать setState-updater
+    // с side-effect (в React strict mode updater вызывается дважды).
+    persist(widthRef.current);
   }, [onPointerMove, persist]);
 
   const onPointerDown = React.useCallback(
@@ -142,13 +152,13 @@ export function ResizableSidebar({
     let handled = true;
     const dir = side === "right" ? 1 : -1;
     if (e.key === "ArrowLeft") {
-      setWidth((w) => clamp(w - step * dir));
+      commitWidth(clamp(widthRef.current - step * dir));
     } else if (e.key === "ArrowRight") {
-      setWidth((w) => clamp(w + step * dir));
+      commitWidth(clamp(widthRef.current + step * dir));
     } else if (e.key === "Home") {
-      setWidth(minWidth);
+      commitWidth(minWidth);
     } else if (e.key === "End") {
-      setWidth(maxWidth);
+      commitWidth(maxWidth);
     } else {
       handled = false;
     }
@@ -164,7 +174,7 @@ export function ResizableSidebar({
       e.key === "Home" ||
       e.key === "End"
     ) {
-      persist(width);
+      persist(widthRef.current);
     }
   };
 
@@ -184,7 +194,11 @@ export function ResizableSidebar({
       title={handleLabel}
       className={cn(
         "absolute top-0 z-10 h-full w-1 cursor-col-resize bg-transparent transition-colors",
-        "hover:bg-primary/40 focus:bg-primary/40 focus:outline-none",
+        "hover:bg-primary/40",
+        // focus-visible — виден при keyboard-навигации (Tab), не триггерится
+        // при клике мышкой. Outline 2px наружу влево от handle, чтобы не
+        // обрезалось overflow-hidden родителя.
+        "focus:outline-none focus-visible:bg-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-[-2px]",
         side === "right" ? "right-0" : "left-0",
       )}
     />

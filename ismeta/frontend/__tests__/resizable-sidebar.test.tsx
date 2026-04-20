@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as React from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar";
@@ -215,5 +216,58 @@ describe("ResizableSidebar", () => {
     });
     // После pointerup — обновлено
     expect(window.localStorage.getItem(KEY)).not.toBe("300");
+  });
+
+  it("focus outline: handle имеет focus-visible:outline-primary класс (видим фокус для keyboard)", () => {
+    setup();
+    const handle = screen.getByTestId("resizable-sidebar-handle");
+    expect(handle.className).toContain("focus-visible:outline");
+    expect(handle.className).toContain("focus-visible:outline-primary");
+    // focus:outline-none — оставлен, чтобы браузер не рисовал default outline
+    // поверх наших focus-visible стилей.
+    expect(handle.className).toContain("focus:outline-none");
+  });
+
+  it("pointerup пишет LS один раз (не двойной persist из setState-updater)", () => {
+    // Регрессионный тест для замечания ревьюера: раньше persist жил
+    // внутри setState((w) => {persist(w); return w;}) updater, который
+    // React мог вызвать дважды в strict mode → двойная запись. Фикс —
+    // читать widthRef.current напрямую в onPointerUp. Здесь проверяем
+    // через LS-наблюдатель: считаем сколько раз за один pointerup
+    // значение меняется.
+    setup();
+    const handle = screen.getByTestId("resizable-sidebar-handle");
+
+    // Выставляем известное стартовое значение в LS
+    window.localStorage.setItem(KEY, "256");
+    let writesAfterUp = 0;
+    const originalSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (this: Storage, k: string, v: string) {
+      if (k === KEY) writesAfterUp++;
+      return originalSet.call(this, k, v);
+    };
+
+    try {
+      // Сбросить счётчик (выставление "256" тоже посчиталось)
+      writesAfterUp = 0;
+
+      fireEvent.pointerDown(handle, {
+        clientX: 100,
+        button: 0,
+        pointerType: "mouse",
+      });
+      act(() => {
+        document.dispatchEvent(
+          new PointerEvent("pointermove", { clientX: 180 }),
+        );
+      });
+      act(() => {
+        document.dispatchEvent(new PointerEvent("pointerup"));
+      });
+
+      expect(writesAfterUp).toBe(1);
+    } finally {
+      Storage.prototype.setItem = originalSet;
+    }
   });
 });
