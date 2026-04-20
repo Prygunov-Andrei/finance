@@ -27,11 +27,13 @@ def parse_pdf_via_erp(pdf_bytes: bytes, filename: str) -> dict:
     erp_url = getattr(settings, "ISMETA_ERP_BASE_URL", "http://localhost:8000")
     url = f"{erp_url}/api/v1/specifications/parse/"
 
+    master_token = getattr(settings, "ISMETA_ERP_MASTER_TOKEN", "")
     try:
         with httpx.Client(timeout=300.0) as client:
             resp = client.post(
                 url,
                 files={"file": (filename, pdf_bytes, "application/pdf")},
+                headers={"Host": "localhost", "Authorization": f"Bearer {master_token}"},
             )
             resp.raise_for_status()
         return resp.json()
