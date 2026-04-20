@@ -55,19 +55,32 @@ Monorepo with 5 services:
 - `frontend/app/layout.tsx` (корневой) — **НИКТО не трогает**
 - `CLAUDE.md` (этот файл)
 
+### Agent-идентификаторы
+
+По 2 агента в каждой команде, симметрично. Префикс используется в worktree-именах, Co-authored-by, именах задач и ссылках в отчётах:
+- **IS-Петя** (ISMeta+Recognition, backend), **IS-Федя** (ISMeta+Recognition, frontend)
+- **AC-Петя** (AC Rating, backend), **AC-Федя** (AC Rating, frontend)
+
+В чате/переписке префикс можно опускать, если контекст ясен; в git/worktree — обязателен.
+
 ### Процесс для всех агентов
 
-1. **Один агент = один git worktree.** Запрещено параллельно работать двум агентам в одном checkout — приводит к cross-contamination коммитов (чужие коммиты попадают в твою ветку).
+1. **Один агент + одна задача = один git worktree.** Запрещено параллельно работать двум агентам в одном checkout — приводит к cross-contamination коммитов.
+2. **Naming convention:** `ERP_Avgust_<team>_<agent>_<task>` (team ∈ {is, ac}, agent ∈ {petya, fedya}, task — короткий слаг).
    ```bash
    git fetch origin
-   git worktree add -b <prefix>/<task> ../ERP_Avgust_<agent>_<task> origin/main
+   git worktree add -b <team>/<task-slug> ../ERP_Avgust_<team>_<agent>_<task> origin/main
+   # примеры:
+   #   ../ERP_Avgust_is_petya_e15_02b
+   #   ../ERP_Avgust_ac_fedya_f1_design
    ```
-2. **Перед push** — всегда `git fetch origin && git rebase origin/main`. Main движется быстро (обе команды пушат напрямую).
-3. **При правке shared файла** — пинг в общий чат ДО коммита: «собираюсь добавить X в backend/finans_assistant/settings.py».
-4. **После merge в main** — пинг в общий чат: «смержил X, pull origin».
-5. **Force-push в main запрещён.** Всегда обычный push после rebase.
-6. **Ветка перед мержем**: rebase на свежий main, убедиться что `git log main..HEAD` содержит только твои коммиты (без чужих, которые могли попасть через parallel checkout).
-7. **Merge strategy:** `--no-ff` с осмысленным сообщением о scope (какой эпик / какие коммиты влились).
+   После мержа задачи — `git worktree remove ../ERP_Avgust_<team>_<agent>_<task>`.
+3. **Перед push** — всегда `git fetch origin && git rebase origin/main`. Main движется быстро (обе команды пушат напрямую).
+4. **При правке shared файла** — пинг в общий чат ДО коммита: «собираюсь добавить X в backend/finans_assistant/settings.py».
+5. **После merge в main** — пинг в общий чат: «смержил X, pull origin».
+6. **Force-push в main запрещён.** Всегда обычный push после rebase.
+7. **Перед мержем** — убедиться что `git log main..HEAD` содержит только твои коммиты (чужие, попавшие через parallel checkout, вычистить через `rebase --onto`).
+8. **Merge strategy:** `--no-ff` с осмысленным сообщением о scope (какой эпик / какие коммиты влились).
 
 ### Общий чат для пингов
 
