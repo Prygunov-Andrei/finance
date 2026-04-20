@@ -1,12 +1,12 @@
-"""X-API-Key authentication."""
+"""X-API-Key authentication dependency."""
 
-from fastapi import HTTPException, Request
+from fastapi import Request
+
+from .api.errors import InvalidApiKeyError
+from .config import settings
 
 
-def verify_api_key(request: Request) -> None:
-    """Validate X-API-Key header against config."""
-    from .config import settings
-
+async def verify_api_key(request: Request) -> None:
     key = request.headers.get("X-API-Key", "")
     if not key or key != settings.recognition_api_key:
-        raise HTTPException(status_code=401, detail={"error": "invalid_api_key"})
+        raise InvalidApiKeyError()
