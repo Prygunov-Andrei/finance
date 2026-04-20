@@ -21,6 +21,71 @@ Monorepo with 5 services:
 - `backend/api_public/migrations/0001_initial.py` — hardcoded defaults
 - `.env`, `.env.example` — credentials
 
+## Multi-agent collaboration
+
+На `main` одновременно работают **две параллельные команды**. Обе пушат напрямую в main; долгоживущая integration-ветка не используется.
+
+### Команды и их территории
+
+Не заходить на чужую территорию без согласования.
+
+**ISMeta + Recognition** (Claude tech lead + Петя backend + Федя frontend):
+- `recognition/` — standalone FastAPI микросервис (порт 8003)
+- `ismeta/` — весь поддиректорий (`ismeta/backend`, `ismeta/frontend`, `ismeta/docs`, `ismeta/specs`, `ismeta/deploy`)
+- `backend/payments/services/invoice_service.py`, `backend/payments/services/recognition_client.py`
+- `backend/llm_services/services/specification_parser.py`, `backend/llm_services/services/document_parser.py` — **deprecated**, удаление в E28 (предупредить AC Rating до удаления)
+- `docs/ismeta/`
+- Префикс веток: `recognition/*`, `ismeta/*`
+
+**AC Rating** (публичная часть — рейтинг кондиционеров + HVAC-новости):
+- `backend/ac_brands`, `backend/ac_catalog`, `backend/ac_methodology`, `backend/ac_scoring`, `backend/ac_reviews`, `backend/ac_submissions`
+- `frontend/app/ratings/`
+- `frontend/lib/api/types/rating.ts`, `frontend/lib/api/services/rating.ts`
+- `frontend/app/news/` — будет редизайн в Ф7, предупредить отдельно
+- `ac-rating/`, `docs/ac_rating/`
+- Префикс веток: `ac-rating/*`
+
+### Shared файлы (требуют пинга ДО правки)
+
+- `backend/finans_assistant/settings.py` — AC Rating добавили ratelimit/middleware (M1); ISMeta добавит `RECOGNITION_URL`, `RECOGNITION_API_KEY` (E15.02b)
+- `backend/finans_assistant/urls.py` — AC Rating подключили `/api/public/v1/rating/` и `/api/hvac/rating/`; ISMeta НЕ планирует трогать
+- `docker-compose.yml` (корневой) и `docker-compose.prod.yml` — ISMeta добавила сервис `recognition` на порт 8003
+- `.env.example`
+- `frontend/app/globals.css` — shadcn tokens, **НИКТО не трогает** (AC Rating использует scoped `.rating-scope`)
+- `frontend/app/layout.tsx` (корневой) — **НИКТО не трогает**
+- `CLAUDE.md` (этот файл)
+
+### Agent-идентификаторы
+
+По 2 агента в каждой команде, симметрично. Префикс используется в worktree-именах, Co-authored-by, именах задач и ссылках в отчётах:
+- **IS-Петя** (ISMeta+Recognition, backend), **IS-Федя** (ISMeta+Recognition, frontend)
+- **AC-Петя** (AC Rating, backend), **AC-Федя** (AC Rating, frontend)
+
+В чате/переписке префикс можно опускать, если контекст ясен; в git/worktree — обязателен.
+
+### Процесс для всех агентов
+
+1. **Один агент + одна задача = один git worktree.** Запрещено параллельно работать двум агентам в одном checkout — приводит к cross-contamination коммитов.
+2. **Naming convention:** `ERP_Avgust_<team>_<agent>_<task>` (team ∈ {is, ac}, agent ∈ {petya, fedya}, task — короткий слаг).
+   ```bash
+   git fetch origin
+   git worktree add -b <team>/<task-slug> ../ERP_Avgust_<team>_<agent>_<task> origin/main
+   # примеры:
+   #   ../ERP_Avgust_is_petya_e15_02b
+   #   ../ERP_Avgust_ac_fedya_f1_design
+   ```
+   После мержа задачи — `git worktree remove ../ERP_Avgust_<team>_<agent>_<task>`.
+3. **Перед push** — всегда `git fetch origin && git rebase origin/main`. Main движется быстро (обе команды пушат напрямую).
+4. **При правке shared файла** — пинг в общий чат ДО коммита: «собираюсь добавить X в backend/finans_assistant/settings.py».
+5. **После merge в main** — пинг в общий чат: «смержил X, pull origin».
+6. **Force-push в main запрещён.** Всегда обычный push после rebase.
+7. **Перед мержем** — убедиться что `git log main..HEAD` содержит только твои коммиты (чужие, попавшие через parallel checkout, вычистить через `rebase --onto`).
+8. **Merge strategy:** `--no-ff` с осмысленным сообщением о scope (какой эпик / какие коммиты влились).
+
+### Общий чат для пингов
+
+Канал координации: [TBD — согласовать формат: Telegram / GitHub issue / Slack]. До согласования — пинг через Андрея (PO).
+
 ## Development
 
 ```bash
