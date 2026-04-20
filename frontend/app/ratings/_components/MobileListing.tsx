@@ -59,7 +59,7 @@ export default function MobileListing({
         onOpen={() => setDrawer(true)}
       />
       {tab === 'custom' ? (
-        <CustomRatingTab models={filtered} methodology={methodology} />
+        <CustomRatingTab models={filtered} methodology={methodology} variant="mobile" />
       ) : (
         <MobileRows models={filtered} mode={tab} />
       )}

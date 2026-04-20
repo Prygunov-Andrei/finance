@@ -51,7 +51,7 @@ export default function DesktopListing({
         resetAll={resetAll}
       />
       {tab === 'custom' ? (
-        <CustomRatingTab models={filtered} methodology={methodology} />
+        <CustomRatingTab models={filtered} methodology={methodology} variant="desktop" />
       ) : (
         <RankedTable models={filtered} mode={tab} />
       )}
