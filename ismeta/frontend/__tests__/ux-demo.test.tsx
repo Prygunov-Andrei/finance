@@ -158,13 +158,13 @@ describe("SectionsPanel — subtotals", () => {
     );
 
     const sec1 = screen.getByTestId("section-subtotal-sec-1");
-    expect(stripSpaces(sec1.textContent ?? "")).toContain("120000₽");
+    expect(stripSpaces(sec1.textContent ?? "")).toContain("120000,00₽");
 
     const sec2 = screen.getByTestId("section-subtotal-sec-2");
-    expect(stripSpaces(sec2.textContent ?? "")).toContain("45000₽");
+    expect(stripSpaces(sec2.textContent ?? "")).toContain("45000,00₽");
 
     const all = screen.getByTestId("section-subtotal-all");
-    expect(stripSpaces(all.textContent ?? "")).toContain("165000₽");
+    expect(stripSpaces(all.textContent ?? "")).toContain("165000,00₽");
   });
 
   it("без subtotals проп — subtotal-элементы не рендерятся", () => {

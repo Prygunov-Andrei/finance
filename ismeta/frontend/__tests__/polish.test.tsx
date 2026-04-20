@@ -29,7 +29,7 @@ describe("formatCurrency — форматирование чисел", () => {
   it("1 250 000 → '1 250 000 ₽' с пробелами-разделителями", () => {
     const raw = formatCurrency(1250000);
     // Убираем все пробельные варианты для проверки цифровой структуры
-    expect(raw.replace(SPACE, "")).toBe("1250000₽");
+    expect(raw.replace(SPACE, "")).toBe("1250000,00₽");
     // В строке должны быть три пробела-разделителя (тысячи/миллионы + перед ₽)
     const spacesCount = (raw.match(SPACE) ?? []).length;
     expect(spacesCount).toBeGreaterThanOrEqual(3);
@@ -37,12 +37,12 @@ describe("formatCurrency — форматирование чисел", () => {
 
   it("строковый вход 500 парсится и форматируется", () => {
     const result = formatCurrency("500");
-    expect(result.replace(SPACE, "")).toBe("500₽");
+    expect(result.replace(SPACE, "")).toBe("500,00₽");
   });
 
   it("0 → '0 ₽'", () => {
     const result = formatCurrency(0);
-    expect(result.replace(SPACE, "")).toBe("0₽");
+    expect(result.replace(SPACE, "")).toBe("0,00₽");
   });
 
   it("NaN / нечисло → '—'", () => {
@@ -52,7 +52,7 @@ describe("formatCurrency — форматирование чисел", () => {
 
   it("округляет до целых (без копеек)", () => {
     const result = formatCurrency(1234.56);
-    expect(result.replace(SPACE, "")).toBe("1235₽");
+    expect(result.replace(SPACE, "")).toBe("1234,56₽");
   });
 });
 
