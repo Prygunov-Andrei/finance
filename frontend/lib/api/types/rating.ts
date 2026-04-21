@@ -158,7 +158,19 @@ export interface RatingMethodology {
 export interface RatingReview {
   id: number;
   author_name: string;
-  body: string;
-  stars: number;
+  rating: number;
+  pros: string;
+  cons: string;
+  comment: string;
   created_at: string;
+}
+
+export interface RatingReviewCreatePayload {
+  model: number;
+  author_name: string;
+  rating: number;
+  pros: string;
+  cons: string;
+  comment: string;
+  website: string;
 }
