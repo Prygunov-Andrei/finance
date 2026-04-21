@@ -6,7 +6,7 @@ export function Meter({
   height = 5,
 }: {
   value: number;
-  width?: number;
+  width?: number | string;
   height?: number;
 }) {
   const pct = Math.max(0, Math.min(100, value));
@@ -189,6 +189,7 @@ export function T({
   mono = false,
   children,
   style,
+  className,
 }: {
   size?: number;
   weight?: 400 | 500 | 600 | 700;
@@ -196,9 +197,11 @@ export function T({
   mono?: boolean;
   children: ReactNode;
   style?: CSSProperties;
+  className?: string;
 }) {
   return (
     <span
+      className={className}
       style={{
         fontSize: size,
         fontWeight: weight,
