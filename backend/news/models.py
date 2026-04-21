@@ -74,6 +74,18 @@ class NewsPost(models.Model):
         default=Category.OTHER,
         help_text=_("Категория новости. Показывается как eyebrow-label и chip-filter в ленте."),
     )
+    lede = models.TextField(
+        _("Lede"),
+        blank=True,
+        default="",
+        help_text=_("Вводный абзац (serif 15px) отдельно от body. Если пустой — фронт берёт первые 2 абзаца body."),
+    )
+    reading_time_minutes = models.PositiveSmallIntegerField(
+        _("Reading Time (minutes)"),
+        null=True,
+        blank=True,
+        help_text=_("Оценка времени чтения в минутах. Если null — вычисляется из body при save()."),
+    )
 
     # AI-рейтинг (звёзды 0-5)
     STAR_RATING_CHOICES = [
@@ -161,7 +173,15 @@ class NewsPost(models.Model):
 
     def __str__(self):
         return self.title
-    
+
+    def save(self, *args, **kwargs):
+        # Auto-calc reading_time_minutes из body при save если редактор не заполнил вручную.
+        # Heuristic: 200 wpm — стандарт editorial. Минимум 1 мин.
+        if self.body and self.reading_time_minutes is None:
+            word_count = len(self.body.split())
+            self.reading_time_minutes = max(1, round(word_count / 200))
+        super().save(*args, **kwargs)
+
     def is_published(self):
         """Проверяет, опубликована ли новость"""
         return (
