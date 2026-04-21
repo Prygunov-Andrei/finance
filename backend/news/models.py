@@ -209,6 +209,17 @@ class NewsPost(models.Model):
             "Можно оставить пустым — тогда подпись скрывается."
         ),
     )
+    mentioned_ac_models = models.ManyToManyField(
+        "ac_catalog.ACModel",
+        related_name="news_mentions",
+        blank=True,
+        verbose_name=_("Mentioned AC Models"),
+        help_text=_(
+            "AC-модели, упомянутые в новости. Показываются как «Упомянутая "
+            "модель» card в детальной странице новости и в секции «Упоминания "
+            "в прессе» на детальной странице модели AC."
+        ),
+    )
 
     # Для хранения оригинального архива (опционально, для истории)
     source_file = models.FileField(upload_to='news/archives/', blank=True, null=True)
