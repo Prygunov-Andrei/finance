@@ -10,6 +10,45 @@ def get_today_date():
     """Возвращает сегодняшнюю дату (без времени) для использования как default в DateField"""
     return timezone.now().date()
 
+class NewsAuthor(models.Model):
+    """Отображаемый автор/редактор новости на публичном HVAC-портале.
+    Отдельно от NewsPost.author=User (внутренняя ERP-оркестрация: кто в ERP
+    закоммитил запись). На публичной странице показывается avatar + name + role."""
+
+    name = models.CharField(
+        _("Name"),
+        max_length=200,
+        help_text=_("Имя для отображения: «Евгений Лаврентьев»."),
+    )
+    role = models.CharField(
+        _("Role"),
+        max_length=200,
+        blank=True,
+        default="",
+        help_text=_("Должность/роль: «Редактор отраслевой ленты»."),
+    )
+    avatar = models.ImageField(
+        _("Avatar"),
+        upload_to="news/authors/",
+        blank=True,
+        null=True,
+    )
+    is_active = models.BooleanField(_("Is Active"), default=True)
+    order = models.PositiveSmallIntegerField(
+        _("Order"),
+        default=0,
+        help_text=_("Порядок в admin-select."),
+    )
+
+    class Meta:
+        verbose_name = _("News Author")
+        verbose_name_plural = _("News Authors")
+        ordering = ("order", "name")
+
+    def __str__(self):
+        return self.name
+
+
 class NewsPost(models.Model):
     STATUS_CHOICES = [
         ('draft', _('Draft')),
@@ -158,7 +197,19 @@ class NewsPost(models.Model):
         blank=True,
         verbose_name=_("Author"),
     )
-    
+    editorial_author = models.ForeignKey(
+        "NewsAuthor",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="posts",
+        verbose_name=_("Editorial Author"),
+        help_text=_(
+            "Отображаемый автор на публичном HVAC-портале. "
+            "Можно оставить пустым — тогда подпись скрывается."
+        ),
+    )
+
     # Для хранения оригинального архива (опционально, для истории)
     source_file = models.FileField(upload_to='news/archives/', blank=True, null=True)
 
