@@ -1,16 +1,24 @@
-import RatingHeader from '../_components/RatingHeader';
-import ComingSoon from '../_components/ComingSoon';
+import type { Metadata } from 'next';
 
-export default function RatingSubmitPage() {
+import RatingHeader from '../_components/RatingHeader';
+import { getRatingBrands } from '@/lib/api/services/rating';
+
+import SubmitForm from './SubmitForm';
+
+export const metadata: Metadata = {
+  title: 'Добавить модель в рейтинг',
+  description:
+    'Форма заявки на добавление кондиционера в рейтинг Август-климат: замеры, фото, контакты.',
+};
+
+export const revalidate = 3600;
+
+export default async function RatingSubmitPage() {
+  const brands = await getRatingBrands();
   return (
     <>
       <RatingHeader />
-      <ComingSoon
-        title="Добавить модель в рейтинг"
-        phase="Фаза 6C"
-        designRef="ac-rating/design/wf-screens.jsx — SubmitForm"
-        description="Форма заявки (FormData с фото, honeypot, ratelimit 3/ч). POST /api/public/v1/rating/submissions/."
-      />
+      <SubmitForm brands={brands} />
     </>
   );
 }
