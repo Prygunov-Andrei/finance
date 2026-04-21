@@ -23,7 +23,7 @@ export default function NewsArticleHero({ news }: { news: NewsItem }) {
   })();
 
   return (
-    <header style={{ margin: '22px 0 24px' }}>
+    <header style={{ margin: '22px 0 24px' }} className="rt-article-hero">
       <div style={{ marginBottom: 10 }}>
         <Eyebrow>
           {[category, date, reading].filter(Boolean).join(' · ')}
@@ -35,13 +35,20 @@ export default function NewsArticleHero({ news }: { news: NewsItem }) {
         size={34}
         serif
         style={{
-          fontSize: 40,
           letterSpacing: -0.8,
           lineHeight: 1.12,
         }}
+        className="rt-article-h1"
       >
         {news.title}
       </H>
+
+      <style>{`
+        .rt-article-h1 { font-size: 40px; }
+        @media (max-width: 639px) {
+          .rt-article-h1 { font-size: 24px !important; letter-spacing: -0.4px !important; }
+        }
+      `}</style>
 
       <p
         style={{

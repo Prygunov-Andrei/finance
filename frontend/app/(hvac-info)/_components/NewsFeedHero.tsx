@@ -53,6 +53,7 @@ export default function NewsFeedHero({ items }: { items: NewsItem[] }) {
         >
           <div
             aria-hidden
+            className="rt-feed-hero-img"
             style={{
               width: '100%',
               height: 240,
@@ -72,6 +73,7 @@ export default function NewsFeedHero({ items }: { items: NewsItem[] }) {
             size={26}
             serif
             style={{ letterSpacing: -0.4, textWrap: 'balance' } as React.CSSProperties}
+            className="rt-feed-hero-h2"
           >
             {hero.title}
           </H>
@@ -121,6 +123,8 @@ export default function NewsFeedHero({ items }: { items: NewsItem[] }) {
         @media (max-width: 1023px) {
           .rt-feed-hero { padding: 20px 16px 8px !important; }
           .rt-feed-hero-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+          .rt-feed-hero-img { height: 200px !important; }
+          .rt-feed-hero-h2 { font-size: 22px !important; }
         }
       `}</style>
     </section>

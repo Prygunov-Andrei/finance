@@ -154,16 +154,19 @@ export function H({
   serif = false,
   children,
   style,
+  className,
   as: Tag = 'h2',
 }: {
   size?: HSize;
   serif?: boolean;
   children: ReactNode;
   style?: CSSProperties;
+  className?: string;
   as?: 'h1' | 'h2' | 'h3' | 'h4';
 }) {
   return (
     <Tag
+      className={className}
       style={{
         margin: 0,
         fontSize: size,

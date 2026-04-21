@@ -80,18 +80,20 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
               <Link
                 key={item.id}
                 href={`/news/${item.id}`}
+                className="rt-feed-card"
                 style={{
-                  display: 'block',
                   textDecoration: 'none',
                   color: 'inherit',
                   border: '1px solid hsl(var(--rt-border-subtle))',
                   borderRadius: 4,
                   padding: 16,
                   background: 'hsl(var(--rt-paper))',
+                  display: 'block',
                 }}
               >
                 <div
                   aria-hidden
+                  className="rt-feed-card-img"
                   style={{
                     width: '100%',
                     height: 110,
@@ -100,29 +102,32 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
                     background: img
                       ? `center / cover no-repeat url(${img})`
                       : 'repeating-linear-gradient(135deg, hsl(var(--rt-ink-08)) 0 6px, hsl(var(--rt-ink-15)) 6px 12px)',
+                    flexShrink: 0,
                   }}
                 />
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: 'hsl(var(--rt-ink-40))',
-                    fontFamily: 'var(--rt-font-mono)',
-                    textTransform: 'uppercase',
-                    letterSpacing: 1,
-                  }}
-                >
-                  {formatNewsDateShort(item.pub_date)} · {getNewsCategoryLabel(item)}
-                </div>
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 13,
-                    fontWeight: 500,
-                    lineHeight: 1.3,
-                    color: 'hsl(var(--rt-ink))',
-                  }}
-                >
-                  {item.title}
+                <div className="rt-feed-card-body" style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: 'hsl(var(--rt-ink-40))',
+                      fontFamily: 'var(--rt-font-mono)',
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {formatNewsDateShort(item.pub_date)} · {getNewsCategoryLabel(item)}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      lineHeight: 1.3,
+                      color: 'hsl(var(--rt-ink))',
+                    }}
+                  >
+                    {item.title}
+                  </div>
                 </div>
               </Link>
             );
@@ -157,7 +162,9 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
       <style>{`
         @media (max-width: 1023px) {
           .rt-feed-list-wrap { padding: 18px 16px 32px !important; }
-          .rt-feed-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+          .rt-feed-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+          .rt-feed-card { display: flex !important; gap: 12px; padding: 10px !important; }
+          .rt-feed-card-img { width: 72px !important; height: 72px !important; margin-bottom: 0 !important; }
         }
         @media (min-width: 1024px) and (max-width: 1279px) {
           .rt-feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
