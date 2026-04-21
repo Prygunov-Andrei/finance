@@ -24,8 +24,16 @@ class OpenAIVisionProvider(BaseLLMProvider):
         await self._client.aclose()
 
     async def vision_complete(self, image_b64: str, prompt: str) -> str:
+        # response_format=json_object — OpenAI JSON mode: гарантирует валидный
+        # JSON без markdown-обёртки. Без него gpt-4o-mini игнорирует инструкцию
+        # «Ответь строго JSON» и оборачивает ответ в ```json ... ``` — json.loads
+        # падает с "Expecting value: line 1 column 1 (char 0)".
+        # Обнаружено на live PDF-прогоне 2026-04-21, DEV-BACKLOG #10.
+        # Требование OpenAI: хотя бы одно упоминание "json"/"JSON" в messages.
+        # Наши prompts уже содержат "Ответь строго JSON", поэтому безопасно.
         payload = {
             "model": self.model,
+            "response_format": {"type": "json_object"},
             "messages": [
                 {
                     "role": "user",

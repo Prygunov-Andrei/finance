@@ -219,3 +219,90 @@ class TestParseSpecEndpoint:
         body = resp.json()
         assert body["status"] == "error"
         assert body["errors"]
+
+
+# ---------------------------------------------------------------------------
+# DEV-BACKLOG #10: gpt-4o-mini оборачивает JSON в ```json ... ``` fence.
+# Проверяем что defensive strip в _common.vision_json справляется.
+# ---------------------------------------------------------------------------
+
+
+class MarkdownWrappedProvider(BaseLLMProvider):
+    """Имитирует реальное поведение gpt-4o-mini без response_format=json_object:
+    оборачивает ответ в ```json ... ``` fence.
+    """
+
+    async def vision_complete(self, image_b64: str, prompt: str) -> str:  # noqa: ARG002
+        if "Определи тип" in prompt:
+            payload = '{"type": "specification", "section_name": "Вентиляция"}'
+        else:
+            payload = (
+                '{"items": [{"name": "Кабель UTP Cat.6", "model_name": "", '
+                '"brand": "Belden", "unit": "м", "quantity": 50, "tech_specs": ""}]}'
+            )
+        return f"```json\n{payload}\n```"
+
+    async def aclose(self) -> None:
+        return None
+
+
+class PlainFenceProvider(BaseLLMProvider):
+    """Тот же кейс, но без языка: просто ``` ... ```."""
+
+    async def vision_complete(self, image_b64: str, prompt: str) -> str:  # noqa: ARG002
+        if "Определи тип" in prompt:
+            payload = '{"type": "specification", "section_name": ""}'
+        else:
+            payload = '{"items": [{"name": "Гибкая вставка", "unit": "шт", "quantity": 1}]}'
+        return f"```\n{payload}\n```"
+
+
+class TestMarkdownFenceRecovery:
+    @pytest.mark.asyncio
+    async def test_markdown_json_fence_parsed(self):
+        parser = SpecParser(MarkdownWrappedProvider())
+        pdf = _make_real_pdf(1)
+        result = await parser.parse(pdf, "x.pdf")
+        assert result.status == "done"
+        assert len(result.items) == 1
+        assert result.items[0].name == "Кабель UTP Cat.6"
+        assert result.items[0].brand == "Belden"
+
+    @pytest.mark.asyncio
+    async def test_plain_fence_parsed(self):
+        parser = SpecParser(PlainFenceProvider())
+        pdf = _make_real_pdf(1)
+        result = await parser.parse(pdf, "x.pdf")
+        assert result.status == "done"
+        assert len(result.items) == 1
+        assert result.items[0].name == "Гибкая вставка"
+
+
+class TestStripMarkdownFenceUnit:
+    """Прямые unit-тесты на _strip_markdown_fence — edge cases."""
+
+    def test_plain_json_untouched(self):
+        from app.services._common import _strip_markdown_fence
+
+        assert _strip_markdown_fence('{"a": 1}') == '{"a": 1}'
+
+    def test_json_fence(self):
+        from app.services._common import _strip_markdown_fence
+
+        assert _strip_markdown_fence('```json\n{"a": 1}\n```') == '{"a": 1}'
+
+    def test_plain_fence(self):
+        from app.services._common import _strip_markdown_fence
+
+        assert _strip_markdown_fence('```\n{"a": 1}\n```') == '{"a": 1}'
+
+    def test_fence_with_trailing_whitespace(self):
+        from app.services._common import _strip_markdown_fence
+
+        assert _strip_markdown_fence('  ```json\n{"a": 1}\n```  ') == '{"a": 1}'
+
+    def test_fence_without_newline(self):
+        """Корнер-кейс: ```json{"a":1}``` в одну строку."""
+        from app.services._common import _strip_markdown_fence
+
+        assert _strip_markdown_fence('```{"a": 1}```') == '{"a": 1}'

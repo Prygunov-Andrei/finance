@@ -13,6 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from ..config import settings
 from ..providers.base import BaseLLMProvider
 from ..schemas.spec import PagesStats, SpecItem, SpecParseResponse
+from ._common import _strip_markdown_fence
 from .pdf_render import render_page_to_b64
 
 logger = logging.getLogger(__name__)
@@ -140,7 +141,9 @@ class SpecParser:
         for attempt in range(settings.max_page_retries):
             try:
                 response = await self.provider.vision_complete(image_b64, CLASSIFY_PROMPT)
-                parsed = json.loads(response)
+                # DEV-BACKLOG #10: gpt-4o-mini иногда оборачивает JSON в
+                # ```json ... ``` fence — снимаем до json.loads.
+                parsed = json.loads(_strip_markdown_fence(response))
                 return parsed if isinstance(parsed, dict) else {"type": "other", "section_name": ""}
             except (json.JSONDecodeError, KeyError) as e:
                 if attempt == settings.max_page_retries - 1:
@@ -155,7 +158,8 @@ class SpecParser:
         for attempt in range(settings.max_page_retries):
             try:
                 response = await self.provider.vision_complete(image_b64, EXTRACT_PROMPT)
-                data = json.loads(response)
+                # DEV-BACKLOG #10: см. комментарий в _classify_page.
+                data = json.loads(_strip_markdown_fence(response))
                 items = data.get("items", [])
                 return list(items) if isinstance(items, list) else []
             except (json.JSONDecodeError, KeyError) as e:
