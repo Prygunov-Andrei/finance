@@ -11,10 +11,21 @@ import SeoBlock from './_components/SeoBlock';
 import SectionFooter from './_components/SectionFooter';
 
 export default async function RatingHomePage() {
-  const [models, methodology] = await Promise.all([
-    getRatingModels(),
-    getRatingMethodology(),
-  ]);
+  let models: Awaited<ReturnType<typeof getRatingModels>> = [];
+  let methodology: Awaited<ReturnType<typeof getRatingMethodology>> = {
+    version: '',
+    name: '',
+    criteria: [],
+    stats: { total_models: 0, active_criteria_count: 0, median_total_index: 0 },
+  };
+  try {
+    [models, methodology] = await Promise.all([
+      getRatingModels(),
+      getRatingMethodology(),
+    ]);
+  } catch (e) {
+    console.error('[ratings-home] fetch failed, rendering empty:', e);
+  }
   const publishedModels = models.filter((m) => m.publish_status === 'published');
 
   return (

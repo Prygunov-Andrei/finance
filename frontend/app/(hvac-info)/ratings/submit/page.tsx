@@ -14,7 +14,12 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 export default async function RatingSubmitPage() {
-  const brands = await getRatingBrands();
+  let brands: Awaited<ReturnType<typeof getRatingBrands>> = [];
+  try {
+    brands = await getRatingBrands();
+  } catch (e) {
+    console.error('[submit] brands fetch failed, rendering empty list:', e);
+  }
   return (
     <>
       <HvacInfoHeader />

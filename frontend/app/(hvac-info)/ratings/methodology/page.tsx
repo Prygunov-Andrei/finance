@@ -15,7 +15,17 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 export default async function RatingMethodologyPage() {
-  const methodology = await getRatingMethodology();
+  let methodology: Awaited<ReturnType<typeof getRatingMethodology>> = {
+    version: '',
+    name: '',
+    criteria: [],
+    stats: { total_models: 0, active_criteria_count: 0, median_total_index: 0 },
+  };
+  try {
+    methodology = await getRatingMethodology();
+  } catch (e) {
+    console.error('[methodology] fetch failed, rendering empty:', e);
+  }
   const weightSum = methodology.criteria.reduce(
     (sum, c) => sum + (c.weight ?? 0),
     0,

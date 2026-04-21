@@ -15,7 +15,12 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 export default async function RatingArchivePage() {
-  const models = await getRatingArchiveModels();
+  let models: Awaited<ReturnType<typeof getRatingArchiveModels>> = [];
+  try {
+    models = await getRatingArchiveModels();
+  } catch (e) {
+    console.error('[archive] fetch failed, rendering empty:', e);
+  }
   return (
     <>
       <HvacInfoHeader />
