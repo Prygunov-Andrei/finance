@@ -279,6 +279,12 @@ class ACModelPhoto(TimestampedModel):
 
 
 class ACModelSupplier(TimestampedModel):
+    class Availability(models.TextChoices):
+        IN_STOCK = "in_stock", "В наличии"
+        LOW_STOCK = "low_stock", "Осталось мало"
+        OUT_OF_STOCK = "out_of_stock", "Нет в наличии"
+        UNKNOWN = "unknown", "Не известно"
+
     model = models.ForeignKey(
         ACModel, on_delete=models.CASCADE, related_name="suppliers",
         verbose_name="Модель",
@@ -286,6 +292,34 @@ class ACModelSupplier(TimestampedModel):
     name = models.CharField(max_length=200, verbose_name="Название поставщика")
     url = models.URLField(verbose_name="Ссылка")
     order = models.PositiveSmallIntegerField(default=0, verbose_name="Порядок")
+
+    # M4.3: enrichment-поля для блока «Где купить» на детальной странице.
+    price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name="Цена (руб.)",
+        help_text="Цена у поставщика. null = не известна.",
+    )
+    city = models.CharField(
+        max_length=100, blank=True, default="",
+        verbose_name="Город",
+        help_text="Город склада / магазина, например «Москва».",
+    )
+    rating = models.DecimalField(
+        max_digits=3, decimal_places=1, null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(5)],
+        verbose_name="Рейтинг магазина",
+        help_text="0.0–5.0.",
+    )
+    availability = models.CharField(
+        max_length=20, choices=Availability.choices,
+        default=Availability.UNKNOWN,
+        verbose_name="Наличие",
+    )
+    note = models.CharField(
+        max_length=200, blank=True, default="",
+        verbose_name="Пометка",
+        help_text="Например: «с монтажом · 2 дня», «самовывоз · завтра».",
+    )
 
     class Meta:
         ordering = ["order", "id"]
