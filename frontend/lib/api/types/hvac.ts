@@ -24,6 +24,7 @@ export interface HvacManufacturerRef {
 }
 
 export interface HvacNewsEditorialAuthor {
+  id: number;
   name: string;
   role?: string;
   avatar_url?: string;
@@ -74,7 +75,7 @@ export interface HvacNews {
   category?: string;
   category_display?: string;
   lede?: string;
-  reading_time_minutes?: number;
+  reading_time_minutes?: number | null;
   editorial_author?: HvacNewsEditorialAuthor | null;
   mentioned_ac_models?: HvacNewsMentionedAcModel[];
 }

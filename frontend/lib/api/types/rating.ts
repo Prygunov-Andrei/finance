@@ -132,7 +132,7 @@ export interface RatingNewsMention {
   pub_date: string;
   category?: string;
   category_display?: string;
-  reading_time_minutes?: number;
+  reading_time_minutes?: number | null;
 }
 
 export type RatingCriterionGroup =
