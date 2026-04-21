@@ -130,7 +130,8 @@ describe("MaterialPickerCell — autocomplete", () => {
     const opt0 = screen.getByTestId("material-picker-option-0");
     expect(opt0.textContent).toMatch(/Кабель UTP Cat\.6/);
     expect(opt0.textContent).toMatch(/ExtraLink/);
-    expect(opt0.textContent).toMatch(/95%/); // score отображается как %
+    // Score % убран из dropdown в cleanup перед демо (f92921c) — отображается
+    // только в модалке «Подобрать материалы» через bucket-badges.
   });
 
   it("debounce: typing — только один fetch после паузы", async () => {
