@@ -30,4 +30,18 @@ class Migration(migrations.Migration):
             name='outer_unit_weight_kg',
             field=models.DecimalField(blank=True, decimal_places=1, max_digits=5, null=True, verbose_name='Вес наружного блока (кг)'),
         ),
+        # SQL DEFAULT '' для CharField NOT NULL — нужно для COPY-загрузки
+        # старых дампов без новых колонок. Weight-поля nullable, дефолт не нужен.
+        migrations.RunSQL(
+            sql=(
+                "ALTER TABLE ac_catalog_acmodel "
+                "ALTER COLUMN inner_unit_dimensions SET DEFAULT '', "
+                "ALTER COLUMN outer_unit_dimensions SET DEFAULT '';"
+            ),
+            reverse_sql=(
+                "ALTER TABLE ac_catalog_acmodel "
+                "ALTER COLUMN inner_unit_dimensions DROP DEFAULT, "
+                "ALTER COLUMN outer_unit_dimensions DROP DEFAULT;"
+            ),
+        ),
     ]

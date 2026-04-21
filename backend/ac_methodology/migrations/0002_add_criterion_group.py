@@ -15,4 +15,14 @@ class Migration(migrations.Migration):
             name='group',
             field=models.CharField(choices=[('climate', 'Климат'), ('compressor', 'Компрессор и контур'), ('acoustics', 'Акустика'), ('control', 'Управление и датчики'), ('dimensions', 'Габариты и комплектация'), ('other', 'Прочее')], default='other', help_text='Группа в таблице «Характеристики». «Прочее» — без группы.', max_length=20, verbose_name='Группа'),
         ),
+        # Django удаляет DEFAULT после AddField, оставляя NOT NULL без
+        # SQL-уровневого default. Возвращаем DEFAULT 'other' на уровне
+        # колонки — нужно для COPY-based загрузки старых pg_dump'ов
+        # (`load_ac_rating_dump`), где колонка `group` отсутствует.
+        migrations.RunSQL(
+            sql="ALTER TABLE ac_methodology_criterion "
+                "ALTER COLUMN \"group\" SET DEFAULT 'other';",
+            reverse_sql="ALTER TABLE ac_methodology_criterion "
+                        "ALTER COLUMN \"group\" DROP DEFAULT;",
+        ),
     ]

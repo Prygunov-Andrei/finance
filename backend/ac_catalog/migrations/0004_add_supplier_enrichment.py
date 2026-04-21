@@ -36,4 +36,20 @@ class Migration(migrations.Migration):
             name='rating',
             field=models.DecimalField(blank=True, decimal_places=1, help_text='0.0–5.0.', max_digits=3, null=True, validators=[django.core.validators.MinValueValidator(0), django.core.validators.MaxValueValidator(5)], verbose_name='Рейтинг магазина'),
         ),
+        # SQL DEFAULT для NOT NULL колонок — нужно для COPY-загрузки
+        # старых дампов без этих колонок. price/rating nullable, дефолт не нужен.
+        migrations.RunSQL(
+            sql=(
+                "ALTER TABLE ac_catalog_acmodelsupplier "
+                "ALTER COLUMN city SET DEFAULT '', "
+                "ALTER COLUMN note SET DEFAULT '', "
+                "ALTER COLUMN availability SET DEFAULT 'unknown';"
+            ),
+            reverse_sql=(
+                "ALTER TABLE ac_catalog_acmodelsupplier "
+                "ALTER COLUMN city DROP DEFAULT, "
+                "ALTER COLUMN note DROP DEFAULT, "
+                "ALTER COLUMN availability DROP DEFAULT;"
+            ),
+        ),
     ]

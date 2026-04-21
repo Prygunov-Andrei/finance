@@ -31,4 +31,23 @@ class Migration(migrations.Migration):
             name='editorial_quote_author',
             field=models.CharField(blank=True, default='', help_text='Например: «А. Петров, главред».', max_length=200, verbose_name='Обзор: автор цитаты'),
         ),
+        # Django удаляет SQL DEFAULT после AddField — возвращаем '' для
+        # совместимости с COPY-based загрузкой старых pg_dump'ов
+        # (`load_ac_rating_dump`), где этих колонок нет.
+        migrations.RunSQL(
+            sql=(
+                "ALTER TABLE ac_catalog_acmodel "
+                "ALTER COLUMN editorial_lede SET DEFAULT '', "
+                "ALTER COLUMN editorial_body SET DEFAULT '', "
+                "ALTER COLUMN editorial_quote SET DEFAULT '', "
+                "ALTER COLUMN editorial_quote_author SET DEFAULT '';"
+            ),
+            reverse_sql=(
+                "ALTER TABLE ac_catalog_acmodel "
+                "ALTER COLUMN editorial_lede DROP DEFAULT, "
+                "ALTER COLUMN editorial_body DROP DEFAULT, "
+                "ALTER COLUMN editorial_quote DROP DEFAULT, "
+                "ALTER COLUMN editorial_quote_author DROP DEFAULT;"
+            ),
+        ),
     ]
