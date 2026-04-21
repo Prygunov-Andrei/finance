@@ -259,6 +259,72 @@ UX (конфликт позиций) + section_name в ключе.
 
 ---
 
+### 18. E15.05 prompt-тюнинг — recall 96.7% → 99%
+
+**Контекст:** E15.04 live-QA на golden показал 147/152 (96.7%). Цель ТЗ ≥95% достигнута, но 5 позиций всё ещё теряются (в т.ч. частично #7 «Дефлектор Цаги на узле прохода УП1» — укорочено до «Дефлектор Цаги»).
+
+**Решение:** few-shot примеры в NORMALIZE_PROMPT + дополнительные правила для склейки имён-пояснений без явного переноса; возможно — двухпроходный промпт (extract → verify).
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/app/services/spec_normalizer.py:NORMALIZE_PROMPT_TEMPLATE`.
+
+---
+
+### 19. Section МОП склеена с «Общеобменной вытяжной вентиляции»
+
+**Контекст:** E15.04 live-QA показал 7 секций вместо 8-9. Multi-line section heading «Система общеобменной вытяжной вентиляции. МОП и Коммерческие помещения» склеивается в одну строку без разделителя — теряется граница подсистем.
+
+**Решение:** в NORMALIZE_PROMPT уточнить правило: если multi-line heading содержит точку в конце первой строки, использовать `. ` как разделитель, иначе — два отдельных section. Либо: heuristic на стороне `extract_structured_rows` — разделять heading rows по `is_section_heading` с разной y-bucket группой.
+
+**Исполнитель:** IS-Петя.
+**Файлы:** `recognition/app/services/spec_normalizer.py` + `recognition/app/services/pdf_text.py`.
+
+---
+
+### 20. LLM_MIN_ITEMS 135 → 142 после стабилизации промпта
+
+**Контекст:** `recognition/tests/golden/test_spec_ov2.py:LLM_MIN_ITEMS = 135` — слишком слабая защита (32 позиции запаса от фактических 147). Regression escape-зона: prompt может деградировать до 89% recall и golden_llm тест пропустит.
+
+**Решение:** после #18 (stabilize prompt) поднять `LLM_MIN_ITEMS` до 142 или 144. При прогонах в CI отслеживать флакость.
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/tests/golden/test_spec_ov2.py`.
+
+---
+
+### 21. Cost E15.04 $0.011/doc → $0.005
+
+**Контекст:** ТЗ E15.04 ожидал ~$0.005/документ, факт — $0.011 (9 стр × ~4400 tokens prompt). Длинный `rows_json` — основной driver стоимости.
+
+**Решение:** (a) OpenAI prompt caching (структура промпта стабильна, инструкции 60-70% от tokens — кэшируются при повторных вызовах); (b) более компактный row-json (убрать избыточные ключи); (c) batch'ить несколько страниц в один call для шаринга инструкций.
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/app/services/spec_normalizer.py`.
+
+---
+
+### 22. Time 34 с cold-start → стабильно ≤30 с
+
+**Контекст:** E15.04 live-QA показал 34 с end-to-end на cold-start OpenAI client, 27 с на прогретом. ТЗ требовал ≤30 с — на cold-start не попадаем.
+
+**Решение:** connection pool warming (инициализировать `httpx.AsyncClient` в FastAPI lifespan, не в каждом запросе); либо warm-retry strategy (первый 429 → немедленный retry без backoff). Альтернатива — streaming LLM response.
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/app/providers/openai_vision.py` + `recognition/app/main.py` lifespan.
+
+---
+
+### 23. CI валидация golden_llm через GitHub Actions secrets
+
+**Контекст:** `pytest -m golden_llm` пропускается без `OPENAI_API_KEY` в env (skipif). Значит в CI регрессии recall после mergе промпта/парсера не ловятся — видны только при локальном прогоне.
+
+**Решение:** добавить `OPENAI_API_KEY` в GitHub Actions secrets + отдельный workflow `recognition-golden-llm.yml` который запускает `pytest -m golden_llm` (раз в сутки или на PR в `recognition/`). Учесть стоимость (~$0.01 за прогон × N).
+
+**Исполнитель:** IS-Петя + DevOps.
+**Файл:** `.github/workflows/recognition-golden-llm.yml` (новый).
+
+---
+
 ## Записано
 - 2026-04-20: #1 seed_dev_data tech_specs (UI-03, Федя)
 - 2026-04-21: #2–5 (UI-PDF-verify, Федя)
@@ -267,3 +333,5 @@ UX (конфликт позиций) + section_name в ключе.
 - 2026-04-21: #10 (Live PDF-прогон Claude — Recognition JSON parsing BLOCKER)
 - 2026-04-21: #11–12 (Вопрос Андрея «что будет с отдельными столбцами Модель/Наименование» — UI-редактирование и Excel round-trip gaps)
 - 2026-04-21: #13–16 (E15.03 review минорные — sticky на Vision-пути, хрупкие стампы, SECTION_RE coverage, except без traceback)
+- 2026-04-21: #17 (E15.03-hotfix — dedup убран, varchar truncate)
+- 2026-04-21: #18–23 (E15.05 — prompt recall 99%, section МОП split, LLM_MIN_ITEMS 142, cost, time, CI golden_llm)
