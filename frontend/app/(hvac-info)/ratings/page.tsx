@@ -10,6 +10,8 @@ import MobileListing from './_components/MobileListing';
 import SeoBlock from './_components/SeoBlock';
 import SectionFooter from './_components/SectionFooter';
 
+export const revalidate = 3600;
+
 export default async function RatingHomePage() {
   let models: Awaited<ReturnType<typeof getRatingModels>> = [];
   let methodology: Awaited<ReturnType<typeof getRatingMethodology>> = {
