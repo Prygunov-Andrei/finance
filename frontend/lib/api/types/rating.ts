@@ -45,10 +45,12 @@ export interface RatingModelSupplier {
   id: number;
   name: string;
   url: string;
+  order: number;
   price: string | null;
   city: string;
   rating: string | null;
   availability: RatingSupplierAvailability;
+  availability_display: string;
   note: string;
 }
 
@@ -94,6 +96,7 @@ export interface RatingModelDetail {
   photos: RatingModelPhoto[];
   suppliers: RatingModelSupplier[];
   parameter_scores: RatingParameterScore[];
+  raw_values: unknown[];
   methodology_version: string;
   rank: number | null;
   median_total_index: number | null;
@@ -125,6 +128,7 @@ export interface RatingMethodologyCriterion {
   value_type: string;
   scoring_type: string;
   group: RatingCriterionGroup;
+  group_display: string;
 }
 
 export interface RatingMethodologyStats {

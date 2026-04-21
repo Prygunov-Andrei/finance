@@ -17,6 +17,7 @@ const crit = (
   value_type: 'number',
   scoring_type: 'linear',
   group: 'other',
+  group_display: 'Прочее',
 });
 
 const mkModel = (

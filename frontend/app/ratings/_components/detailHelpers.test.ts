@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import {
   fallbackLede,
+  formatNominalCapacity,
   minSupplierPrice,
   parsePoints,
   parseRutubeId,
@@ -94,10 +95,12 @@ describe('minSupplierPrice', () => {
     id: 1,
     name: 'S',
     url: '',
+    order: 0,
     price,
     city: '',
     rating: null,
     availability: 'unknown' as const,
+    availability_display: 'Не известно',
     note: '',
   });
 
@@ -110,6 +113,24 @@ describe('minSupplierPrice', () => {
   it('возвращает null если все цены null или invalid', () => {
     expect(minSupplierPrice([mk(null), mk('abc')])).toBeNull();
     expect(minSupplierPrice([])).toBeNull();
+  });
+});
+
+describe('formatNominalCapacity', () => {
+  // Intl.NumberFormat('ru-RU') разделяет тысячи non-breaking space (\u00A0 / \u202F),
+  // не обычным. Сверяем по regex с \s.
+  it('API отдаёт ватты — не умножать на 1000 (регрессия: раньше рендерило «2 800 000 Вт»)', () => {
+    expect(formatNominalCapacity(2800)).toMatch(/^2\s800 Вт$/);
+    expect(formatNominalCapacity(3500)).toMatch(/^3\s500 Вт$/);
+  });
+
+  it('округляет дробные до ближайшего ватта', () => {
+    expect(formatNominalCapacity(2800.4)).toMatch(/^2\s800 Вт$/);
+    expect(formatNominalCapacity(2800.6)).toMatch(/^2\s801 Вт$/);
+  });
+
+  it('возвращает «—» для null', () => {
+    expect(formatNominalCapacity(null)).toBe('—');
   });
 });
 

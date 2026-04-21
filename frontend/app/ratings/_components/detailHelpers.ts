@@ -56,7 +56,7 @@ export function rankLabel(rank: number | null): string {
 
 export function formatNominalCapacity(capacity: number | null): string {
   if (capacity == null) return '—';
-  return `${new Intl.NumberFormat('ru-RU').format(Math.round(capacity * 1000))} Вт`;
+  return `${new Intl.NumberFormat('ru-RU').format(Math.round(capacity))} Вт`;
 }
 
 export function minSupplierPrice(
