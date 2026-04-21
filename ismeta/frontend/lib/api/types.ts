@@ -230,6 +230,12 @@ export interface MaterialApplyResponse {
   updated: number;
 }
 
+export interface PdfProbeResponse {
+  pages_total: number;
+  has_text_layer: boolean;
+  estimated_seconds: number;
+}
+
 export interface ImportResult {
   created: number;
   // updated — только Excel-импорт возвращает это поле (update-aware по row_id).

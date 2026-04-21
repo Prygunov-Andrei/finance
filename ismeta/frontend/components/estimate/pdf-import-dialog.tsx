@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileText, Loader2, Upload } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { ApiError, importApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
-import type { ImportResult, UUID } from "@/lib/api/types";
+import type { ImportResult, PdfProbeResponse, UUID } from "@/lib/api/types";
 
 interface Props {
   estimateId: UUID;
@@ -24,34 +24,81 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-type Stage = "choose" | "uploading" | "result";
+type Stage = "choose" | "probing" | "uploading" | "result";
+
+const HINTS_TEXT = [
+  "Извлекаем текст таблиц",
+  "Парсим строки спецификации",
+  "Определяем разделы",
+  "Группируем одинаковые позиции",
+  "Сохраняем в смету",
+];
+
+const HINTS_VISION = [
+  "Рендерим страницы PDF",
+  "LLM анализирует страницы",
+  "Извлекаем позиции оборудования",
+  "Проверяем дубликаты",
+  "Сохраняем в смету",
+];
+
+const HINT_INTERVAL_MS = 2500;
+const FALLBACK_ESTIMATED_SECONDS = 45;
+
+function formatMmSs(totalSeconds: number): string {
+  const mm = Math.floor(totalSeconds / 60);
+  const ss = totalSeconds % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
 
 export function PdfImportDialog({ estimateId, open, onOpenChange }: Props) {
   const workspaceId = getWorkspaceId();
   const qc = useQueryClient();
   const [stage, setStage] = React.useState<Stage>("choose");
-  const [file, setFile] = React.useState<File | null>(null);
+  const [, setFile] = React.useState<File | null>(null);
   const [result, setResult] = React.useState<ImportResult | null>(null);
   const [elapsed, setElapsed] = React.useState(0);
+  const [probe, setProbe] = React.useState<PdfProbeResponse | null>(null);
+  const [hintIndex, setHintIndex] = React.useState(0);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const hintTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const reset = () => {
+  const clearTimers = React.useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (hintTimerRef.current) {
+      clearInterval(hintTimerRef.current);
+      hintTimerRef.current = null;
+    }
+  }, []);
+
+  const reset = React.useCallback(() => {
     setStage("choose");
     setFile(null);
     setResult(null);
     setElapsed(0);
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
+    setProbe(null);
+    setHintIndex(0);
+    clearTimers();
+  }, [clearTimers]);
 
   React.useEffect(() => {
     if (!open) reset();
-  }, [open]);
+  }, [open, reset]);
+
+  React.useEffect(() => () => clearTimers(), [clearTimers]);
+
+  const hints = probe?.has_text_layer === false ? HINTS_VISION : HINTS_TEXT;
+  const estimatedSeconds = probe?.estimated_seconds ?? FALLBACK_ESTIMATED_SECONDS;
+  const progressPct = Math.min(100, Math.round((elapsed / Math.max(1, estimatedSeconds)) * 100));
 
   const upload = useMutation({
     mutationFn: (f: File) => importApi.uploadPdf(estimateId, f, workspaceId),
     onSuccess: (data) => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearTimers();
       setResult(data);
       setStage("result");
       qc.invalidateQueries({ queryKey: ["estimate-items", estimateId] });
@@ -59,7 +106,7 @@ export function PdfImportDialog({ estimateId, open, onOpenChange }: Props) {
       toast.success(`Распознано: ${data.created} позиций`);
     },
     onError: (e: unknown) => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearTimers();
       setStage("choose");
       if (e instanceof ApiError) {
         toast.error(e.problem?.detail ?? e.message ?? "Ошибка распознавания");
@@ -69,23 +116,42 @@ export function PdfImportDialog({ estimateId, open, onOpenChange }: Props) {
     },
   });
 
-  const handleFile = (f: File) => {
+  const startUploading = (f: File, probeData: PdfProbeResponse | null) => {
+    setProbe(probeData);
+    setStage("uploading");
+    setElapsed(0);
+    setHintIndex(0);
+    timerRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
+    const hintList = probeData?.has_text_layer === false ? HINTS_VISION : HINTS_TEXT;
+    hintTimerRef.current = setInterval(() => {
+      setHintIndex((i) => (i + 1) % hintList.length);
+    }, HINT_INTERVAL_MS);
+    upload.mutate(f);
+  };
+
+  const handleFile = async (f: File) => {
     if (!f.name.toLowerCase().endsWith(".pdf")) {
       toast.error("Нужен файл .pdf");
       return;
     }
     setFile(f);
-    setStage("uploading");
-    setElapsed(0);
-    timerRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
-    upload.mutate(f);
+    setStage("probing");
+    try {
+      const probeData = await importApi.probePdf(estimateId, f, workspaceId);
+      startUploading(f, probeData);
+    } catch {
+      // Probe failure — fallback: start uploading without estimate.
+      startUploading(f, null);
+    }
   };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f) handleFile(f);
+    if (f) void handleFile(f);
   };
+
+  const pagesLabel = probe ? `${probe.pages_total} ${pluralPages(probe.pages_total)}` : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,21 +181,66 @@ export function PdfImportDialog({ estimateId, open, onOpenChange }: Props) {
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) handleFile(f);
+                if (f) void handleFile(f);
               }}
             />
           </div>
         )}
 
-        {stage === "uploading" && (
-          <div className="flex flex-col items-center gap-3 py-8">
+        {stage === "probing" && (
+          <div
+            data-testid="pdf-import-probing"
+            className="flex flex-col items-center gap-3 py-8"
+          >
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <div className="text-sm font-medium">Распознавание...</div>
-            <div className="text-xs text-muted-foreground">
-              Прошло: {Math.floor(elapsed / 60)} мин {elapsed % 60} сек
+            <div className="text-sm font-medium">Анализируем PDF…</div>
+          </div>
+        )}
+
+        {stage === "uploading" && (
+          <div
+            data-testid="pdf-import-uploading"
+            className="flex flex-col gap-3 py-4"
+          >
+            <div className="text-sm font-medium">
+              {pagesLabel
+                ? `PDF-спецификация, ${pagesLabel}`
+                : "Распознаём PDF…"}
             </div>
             <div className="text-xs text-muted-foreground">
-              Обычно занимает 1-3 минуты
+              Примерное время ≈ {estimatedSeconds} сек
+              {probe?.has_text_layer === false ? " (Vision-режим)" : ""}
+            </div>
+
+            <div
+              data-testid="pdf-import-progress"
+              role="progressbar"
+              aria-valuenow={progressPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="h-2 w-full overflow-hidden rounded-full bg-secondary"
+            >
+              <div
+                className="h-full bg-primary transition-all duration-500 ease-out"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span data-testid="pdf-import-elapsed">
+                Прошло: {formatMmSs(elapsed)} / ~{formatMmSs(estimatedSeconds)}
+              </span>
+              <span>{progressPct}%</span>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span
+                data-testid="pdf-import-hint"
+                className="text-sm text-foreground"
+              >
+                {hints[hintIndex]}
+              </span>
             </div>
           </div>
         )}
@@ -166,4 +277,12 @@ export function PdfImportDialog({ estimateId, open, onOpenChange }: Props) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function pluralPages(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "страница";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "страницы";
+  return "страниц";
 }

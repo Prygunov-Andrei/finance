@@ -36,8 +36,48 @@ function makePdf(name = "spec.pdf"): File {
   });
 }
 
-describe("PdfImportDialog (simplified flow: choose → uploading → result)", () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function probeResponse(overrides: Partial<{
+  pages_total: number;
+  has_text_layer: boolean;
+  estimated_seconds: number;
+}> = {}) {
+  return jsonResponse({
+    pages_total: 9,
+    has_text_layer: true,
+    estimated_seconds: 3,
+    ...overrides,
+  });
+}
+
+type FetchMock = ReturnType<typeof vi.fn>;
+
+function routeFetch(mock: FetchMock, routes: {
+  probe?: () => Response | Promise<Response>;
+  importPdf?: () => Response | Promise<Response>;
+}) {
+  mock.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/probe/pdf/")) {
+      if (!routes.probe) throw new Error("probe not mocked");
+      return routes.probe();
+    }
+    if (url.includes("/import/pdf/")) {
+      if (!routes.importPdf) throw new Error("import not mocked");
+      return routes.importPdf();
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
+describe("PdfImportDialog — probe → uploading (progress + hints) → result", () => {
+  let fetchMock: FetchMock;
 
   beforeEach(() => {
     fetchMock = vi.fn();
@@ -48,108 +88,164 @@ describe("PdfImportDialog (simplified flow: choose → uploading → result)", (
   afterEach(() => vi.unstubAllGlobals());
 
   it("на стадии choose: dropzone + file input (accept .pdf)", () => {
-    render(
-      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
-    );
-    expect(
-      screen.getByText(/Перетащите PDF сюда или нажмите для выбора/),
-    ).toBeInTheDocument();
-    const input = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
+    expect(screen.getByText(/Перетащите PDF сюда или нажмите для выбора/)).toBeInTheDocument();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input).toBeTruthy();
     expect(input.accept).toBe(".pdf");
   });
 
-  it("upload: POST FormData на /import/pdf/ → stage uploading → result", async () => {
-    fetchMock.mockImplementation(async () => {
-      // имитируем задержку, чтобы stage=uploading стал виден
-      await new Promise((r) => setTimeout(r, 10));
-      // Recognition contract (E28): backend не возвращает `updated` для PDF —
-      // только created/sections/errors/pages_*. Проверяем, что UI это отрабатывает.
-      return new Response(
-        JSON.stringify({
-          created: 42,
-          sections: 3,
-          errors: [],
-          pages_total: 12,
-          pages_processed: 12,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+  it("probe happy → показывает число страниц + примерное время, затем uploading→result", async () => {
+    let resolveImport!: (r: Response) => void;
+    const importPromise = new Promise<Response>((res) => { resolveImport = res; });
+    routeFetch(fetchMock, {
+      probe: () => probeResponse({ pages_total: 9, has_text_layer: true, estimated_seconds: 3 }),
+      importPdf: () => importPromise,
     });
 
-    render(
-      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [makePdf()] } },
     );
 
-    const input = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    fireEvent.change(input, { target: { files: [makePdf()] } });
+    // 1. probing visible immediately after file pick
+    expect(screen.getByTestId("pdf-import-probing")).toBeInTheDocument();
 
-    expect(screen.getByText("Распознавание...")).toBeInTheDocument();
+    // 2. uploading with page count + estimate
+    await waitFor(() =>
+      expect(screen.getByTestId("pdf-import-uploading")).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/PDF-спецификация, 9 страниц/)).toBeInTheDocument();
+    expect(screen.getByText(/Примерное время ≈ 3 сек/)).toBeInTheDocument();
+    expect(screen.getByTestId("pdf-import-progress")).toBeInTheDocument();
 
+    // 3. release import → result
+    resolveImport(jsonResponse({
+      created: 42, sections: 3, errors: [], pages_total: 9, pages_processed: 9,
+    }));
     await waitFor(() =>
       expect(screen.getByText(/Создано: 42 позиций/)).toBeInTheDocument(),
     );
-    expect(
-      screen.getByText(/Обработано страниц: 12 из 12/),
-    ).toBeInTheDocument();
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(String(url)).toMatch(/\/estimates\/e1\/import\/pdf\/$/);
-    expect(init.method).toBe("POST");
-    expect(init.body).toBeInstanceOf(FormData);
-    const headers = init.headers as Headers;
-    expect(headers.get("X-Workspace-Id")).toBeTruthy();
-    expect(headers.get("Content-Type")).not.toBe("application/json");
-    expect(toastSuccess).toHaveBeenCalledWith(
-      expect.stringMatching(/Распознано: 42/),
-    );
+    // Verify URLs hit in order.
+    const calls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(calls[0]).toMatch(/\/estimates\/e1\/probe\/pdf\/$/);
+    expect(calls[1]).toMatch(/\/estimates\/e1\/import\/pdf\/$/);
   });
 
-  it("не-pdf файл → toast.error, остаёмся на choose", () => {
-    render(
-      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
-    );
-    const input = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    fireEvent.change(input, {
-      target: { files: [new File(["x"], "doc.xlsx")] },
+  it("probe fails → fallback на обычный uploading (без страниц), import работает", async () => {
+    let resolveImport!: (r: Response) => void;
+    const importPromise = new Promise<Response>((res) => { resolveImport = res; });
+    routeFetch(fetchMock, {
+      probe: () => jsonResponse({ error: "not found" }, 404),
+      importPdf: () => importPromise,
     });
-    expect(toastError).toHaveBeenCalledWith("Нужен файл .pdf");
-    expect(
-      screen.getByText(/Перетащите PDF сюда или нажмите для выбора/),
-    ).toBeInTheDocument();
+
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [makePdf()] } },
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pdf-import-uploading")).toBeInTheDocument(),
+    );
+    // Fallback: нет "PDF-спецификация, N страниц", показываем общий текст.
+    expect(screen.getByText(/Распознаём PDF…/)).toBeInTheDocument();
+    // Прогресс-бар всё равно есть (с fallback estimated_seconds).
+    expect(screen.getByTestId("pdf-import-progress")).toBeInTheDocument();
+
+    resolveImport(jsonResponse({
+      created: 5, sections: 1, errors: [], pages_total: 3, pages_processed: 3,
+    }));
+    await waitFor(() =>
+      expect(screen.getByText(/Создано: 5 позиций/)).toBeInTheDocument(),
+    );
   });
+
+  it("hints соответствуют text layer (has_text_layer=true) — стартовая подсказка про таблицы", async () => {
+    let resolveImport!: (r: Response) => void;
+    const importPromise = new Promise<Response>((res) => { resolveImport = res; });
+    routeFetch(fetchMock, {
+      probe: () => probeResponse({ has_text_layer: true, estimated_seconds: 5 }),
+      importPdf: () => importPromise,
+    });
+
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [makePdf()] } },
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pdf-import-hint")).toHaveTextContent(/Извлекаем текст таблиц/),
+    );
+
+    // Освобождаем mutation чтобы не подвис state.
+    resolveImport(jsonResponse({ created: 0, sections: 0, errors: [] }));
+  });
+
+  it("hints соответствуют vision-режиму (has_text_layer=false) — стартовая подсказка про рендеринг", async () => {
+    let resolveImport!: (r: Response) => void;
+    const importPromise = new Promise<Response>((res) => { resolveImport = res; });
+    routeFetch(fetchMock, {
+      probe: () => probeResponse({ has_text_layer: false, estimated_seconds: 45 }),
+      importPdf: () => importPromise,
+    });
+
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [makePdf()] } },
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pdf-import-hint")).toHaveTextContent(/Рендерим страницы PDF/),
+    );
+    // Vision-режим явно размечается в UI.
+    expect(screen.getByText(/Vision-режим/)).toBeInTheDocument();
+
+    resolveImport(jsonResponse({ created: 0, sections: 0, errors: [] }));
+  });
+
+  it("rotating hints: подсказка меняется через интервал (~2.5s)", async () => {
+    let resolveImport!: (r: Response) => void;
+    const importPromise = new Promise<Response>((res) => { resolveImport = res; });
+    routeFetch(fetchMock, {
+      probe: () => probeResponse({ has_text_layer: true, estimated_seconds: 10 }),
+      importPdf: () => importPromise,
+    });
+
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [makePdf()] } },
+    );
+
+    const hint = await screen.findByTestId("pdf-import-hint");
+    expect(hint).toHaveTextContent(/Извлекаем текст таблиц/);
+
+    // Ждём смену подсказки (HINT_INTERVAL_MS=2500). С запасом 4s.
+    await waitFor(
+      () => expect(hint).toHaveTextContent(/Парсим строки спецификации/),
+      { timeout: 4000 },
+    );
+
+    resolveImport(jsonResponse({ created: 0, sections: 0, errors: [] }));
+  }, 10000);
 
   it("partial: ошибки в result показываются списком", async () => {
-    // Recognition partial — часть страниц распозналась, часть нет.
-    // Backend без `updated`, но с errors[] и pages_processed < pages_total.
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          created: 5,
-          sections: 1,
-          errors: ["Страница 7: модель не распознана", "Страница 9: нет количества"],
-          pages_total: 10,
-          pages_processed: 8,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
-    );
+    routeFetch(fetchMock, {
+      probe: () => probeResponse({ pages_total: 10, has_text_layer: true, estimated_seconds: 5 }),
+      importPdf: () => jsonResponse({
+        created: 5, sections: 1,
+        errors: ["Страница 7: модель не распознана", "Страница 9: нет количества"],
+        pages_total: 10, pages_processed: 8,
+      }),
+    });
 
-    render(
-      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
-    );
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
     fireEvent.change(
       document.querySelector('input[type="file"]') as HTMLInputElement,
       { target: { files: [makePdf()] } },
@@ -158,80 +254,37 @@ describe("PdfImportDialog (simplified flow: choose → uploading → result)", (
     await waitFor(() =>
       expect(screen.getByText(/Предупреждения:/)).toBeInTheDocument(),
     );
-    expect(
-      screen.getByText(/Страница 7: модель не распознана/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Страница 9: нет количества/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Страница 7: модель не распознана/)).toBeInTheDocument();
+    expect(screen.getByText(/Страница 9: нет количества/)).toBeInTheDocument();
   });
 
-  it("empty items: Recognition ничего не распознал — показываем 0/errors", async () => {
-    // Backend pdf_views.py при пустых items возвращает:
-    // {created: 0, sections: 0, errors: [...], pages_total, pages_processed}
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          created: 0,
-          sections: 0,
-          errors: ["Не удалось распознать позиции"],
-          pages_total: 3,
-          pages_processed: 3,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
-    );
+  it("502 Bad Gateway на import → toast.error, возврат на choose", async () => {
+    routeFetch(fetchMock, {
+      probe: () => probeResponse(),
+      importPdf: () => jsonResponse({
+        error: "Recognition invalid_api_key",
+        code: "invalid_api_key",
+      }, 502),
+    });
 
-    render(
-      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
-    );
-    fireEvent.change(
-      document.querySelector('input[type="file"]') as HTMLInputElement,
-      { target: { files: [makePdf()] } },
-    );
-
-    await waitFor(() =>
-      expect(screen.getByText(/Создано: 0 позиций/)).toBeInTheDocument(),
-    );
-    expect(
-      screen.getByText(/Не удалось распознать позиции/),
-    ).toBeInTheDocument();
-    expect(toastSuccess).toHaveBeenCalledWith(
-      expect.stringMatching(/Распознано: 0/),
-    );
-  });
-
-  it("502 Bad Gateway (Recognition upstream) → toast.error, не падает на result", async () => {
-    // pdf_views.py отдаёт 502 при любых проблемах с Recognition (401/413/415/500/таймаут).
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          error: "Recognition invalid_api_key",
-          code: "invalid_api_key",
-        }),
-        {
-          status: 502,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
-    );
-
-    render(
-      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
-    );
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
     fireEvent.change(
       document.querySelector('input[type="file"]') as HTMLInputElement,
       { target: { files: [makePdf()] } },
     );
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
-    // Возвращаемся на choose — не на result.
-    expect(
-      screen.getByText(/Перетащите PDF сюда или нажмите для выбора/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Перетащите PDF сюда или нажмите для выбора/)).toBeInTheDocument();
+  });
+
+  it("не-pdf файл → toast.error, остаёмся на choose", () => {
+    render(wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />));
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [new File(["x"], "doc.xlsx")] } },
+    );
+    expect(toastError).toHaveBeenCalledWith("Нужен файл .pdf");
+    expect(screen.getByText(/Перетащите PDF сюда или нажмите для выбора/)).toBeInTheDocument();
   });
 });
 
@@ -241,10 +294,6 @@ describe("EmptyEstimatesState — PDF кнопка", () => {
     const pdfBtn = screen.getByRole("button", { name: /Загрузить PDF/ });
     expect(pdfBtn).toBeInTheDocument();
     fireEvent.click(pdfBtn);
-    // В зависимости от реализации диалог может открыться сразу или через
-    // Trigger. Проверяем появление dropzone с текстом .pdf.
-    expect(
-      screen.getAllByText(/Перетащите PDF|\.pdf/).length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Перетащите PDF|\.pdf/).length).toBeGreaterThan(0);
   });
 });

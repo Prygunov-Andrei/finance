@@ -17,6 +17,7 @@ import type {
   MatchingSession,
   PdfImportPreview,
   PdfItem,
+  PdfProbeResponse,
   ProblemDetails,
   UUID,
   ValidationReport,
@@ -321,6 +322,19 @@ export const importApi = {
     form.append("file", file);
     return apiFetch<ImportResult>(
       `/estimates/${estimateId}/import/pdf/`,
+      {
+        method: "POST",
+        body: form,
+        workspaceId,
+      },
+    );
+  },
+
+  probePdf: (estimateId: UUID, file: File, workspaceId: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    return apiFetch<PdfProbeResponse>(
+      `/estimates/${estimateId}/probe/pdf/`,
       {
         method: "POST",
         body: form,
