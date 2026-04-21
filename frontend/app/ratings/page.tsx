@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import {
   getRatingMethodology,
   getRatingModels,
@@ -19,13 +20,15 @@ export default async function RatingHomePage() {
   return (
     <>
       <RatingHeader />
-      <div className="hidden md:block">
-        <HeroBlock stats={methodology.stats} />
-        <DesktopListing models={publishedModels} methodology={methodology} />
-      </div>
-      <div className="md:hidden">
-        <MobileListing models={publishedModels} methodology={methodology} />
-      </div>
+      <Suspense fallback={null}>
+        <div className="hidden md:block">
+          <HeroBlock stats={methodology.stats} />
+          <DesktopListing models={publishedModels} methodology={methodology} />
+        </div>
+        <div className="md:hidden">
+          <MobileListing models={publishedModels} methodology={methodology} />
+        </div>
+      </Suspense>
       <SeoBlock />
       <SectionFooter />
     </>
