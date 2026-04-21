@@ -96,9 +96,18 @@ class ACModelPhotoSerializer(serializers.ModelSerializer):
 
 
 class ACModelSupplierSerializer(serializers.ModelSerializer):
+    availability_display = serializers.CharField(
+        source="get_availability_display", read_only=True,
+    )
+
     class Meta:
         model = ACModelSupplier
-        fields = ["id", "name", "url", "order"]
+        fields = [
+            "id", "name", "url", "order",
+            # M4.3 enrichment:
+            "price", "city", "rating",
+            "availability", "availability_display", "note",
+        ]
         read_only_fields = fields
 
 
@@ -227,6 +236,12 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
             "parameter_scores", "raw_values",
             "methodology_version",
             "rank", "median_total_index",
+            # M4.1 editorial:
+            "editorial_lede", "editorial_body",
+            "editorial_quote", "editorial_quote_author",
+            # M4.2 unit dimensions + weight:
+            "inner_unit_dimensions", "inner_unit_weight_kg",
+            "outer_unit_dimensions", "outer_unit_weight_kg",
         ]
         read_only_fields = fields
 
@@ -327,6 +342,11 @@ class MethodologyCriterionSerializer(serializers.ModelSerializer):
     value_type = serializers.CharField(source="criterion.value_type", read_only=True)
     photo_url = serializers.SerializerMethodField()
 
+    group = serializers.CharField(source="criterion.group", read_only=True)
+    group_display = serializers.CharField(
+        source="criterion.get_group_display", read_only=True,
+    )
+
     class Meta:
         model = MethodologyCriterion
         fields = [
@@ -335,6 +355,8 @@ class MethodologyCriterionSerializer(serializers.ModelSerializer):
             "min_value", "median_value", "max_value",
             "region_scope", "is_public",
             "display_order", "photo_url",
+            # M4.4 группа критерия в таблице «Характеристики»:
+            "group", "group_display",
         ]
         read_only_fields = fields
 
