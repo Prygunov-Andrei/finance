@@ -66,6 +66,28 @@ class ACModelAdmin(admin.ModelAdmin):
         ("Публикация", {"fields": ("publish_status", "total_index", "price")}),
         ("Реклама", {"fields": ("is_ad", "ad_position")}),
         (
+            "Редакторский обзор",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "editorial_lede",
+                    "editorial_body",
+                    "editorial_quote",
+                    "editorial_quote_author",
+                ),
+            },
+        ),
+        (
+            "Габариты блоков",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    ("inner_unit_dimensions", "inner_unit_weight_kg"),
+                    ("outer_unit_dimensions", "outer_unit_weight_kg"),
+                ),
+            },
+        ),
+        (
             "Плюсы / Минусы (AI)",
             {"classes": ("collapse",), "fields": ("pros_text", "cons_text")},
         ),

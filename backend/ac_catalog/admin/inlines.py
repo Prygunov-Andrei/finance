@@ -39,4 +39,7 @@ class ACModelPhotoInline(admin.TabularInline):
 class ACModelSupplierInline(admin.TabularInline):
     model = ACModelSupplier
     extra = 1
-    fields = ("name", "url", "order")
+    fields = (
+        "name", "url", "order",
+        "price", "city", "rating", "availability", "note",
+    )
