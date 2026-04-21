@@ -362,3 +362,88 @@ def test_archive_list_rank_is_null(client, methodology):
     resp = client.get("/api/public/v1/rating/models/archive/")
     items = resp.json()
     assert items[0]["rank"] is None
+
+
+# ── M4: editorial / dimensions / supplier enrichment / criterion.group ─
+
+
+@pytest.mark.django_db
+def test_detail_includes_editorial_fields(client, methodology):
+    """M4.1: detail отдаёт 4 editorial-поля; пустые приходят как «»."""
+    m = PublishedACModelFactory(
+        editorial_lede="Вводный абзац обзора.",
+        editorial_body="Длинный обзор.\n\nВторой абзац.",
+        editorial_quote="Короткая цитата редактора.",
+        editorial_quote_author="А. Петров, главред",
+    )
+    resp = client.get(f"/api/public/v1/rating/models/{m.pk}/")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["editorial_lede"] == "Вводный абзац обзора."
+    assert body["editorial_body"] == "Длинный обзор.\n\nВторой абзац."
+    assert body["editorial_quote"] == "Короткая цитата редактора."
+    assert body["editorial_quote_author"] == "А. Петров, главред"
+
+
+@pytest.mark.django_db
+def test_detail_includes_unit_dimensions_and_weight(client, methodology):
+    """M4.2: detail отдаёт inner/outer dimensions + weight, weight как строка
+    (Decimal сериализуется DRF в строку)."""
+    from decimal import Decimal
+    m = PublishedACModelFactory(
+        inner_unit_dimensions="850 × 295 × 189 мм",
+        inner_unit_weight_kg=Decimal("10.0"),
+        outer_unit_dimensions="770 × 555 × 300 мм",
+        outer_unit_weight_kg=Decimal("28.5"),
+    )
+    resp = client.get(f"/api/public/v1/rating/models/{m.pk}/")
+    body = resp.json()
+    assert body["inner_unit_dimensions"] == "850 × 295 × 189 мм"
+    assert body["inner_unit_weight_kg"] == "10.0"
+    assert body["outer_unit_dimensions"] == "770 × 555 × 300 мм"
+    assert body["outer_unit_weight_kg"] == "28.5"
+
+
+@pytest.mark.django_db
+def test_supplier_serializer_includes_enrichment(client, methodology):
+    """M4.3: detail.suppliers[] выдаёт все 5 новых полей + availability_display."""
+    from decimal import Decimal
+    from ac_catalog.models import ACModelSupplier
+    from ac_catalog.tests.factories import ACModelSupplierFactory
+
+    m = PublishedACModelFactory()
+    ACModelSupplierFactory(
+        model=m, name="Магазин-1",
+        price=Decimal("100500.00"),
+        city="Москва",
+        rating=Decimal("4.7"),
+        availability=ACModelSupplier.Availability.IN_STOCK,
+        note="с монтажом · 2 дня",
+    )
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.pk}/")
+    sup = resp.json()["suppliers"][0]
+    assert sup["price"] == "100500.00"
+    assert sup["city"] == "Москва"
+    assert sup["rating"] == "4.7"
+    assert sup["availability"] == "in_stock"
+    assert sup["availability_display"] == "В наличии"
+    assert sup["note"] == "с монтажом · 2 дня"
+
+
+@pytest.mark.django_db
+def test_methodology_criteria_include_group(client, methodology_with_noise):
+    """M4.4 + M4.5: criteria[] содержит group + group_display."""
+    # methodology_with_noise создаёт критерий с code="noise". По умолчанию
+    # его group = "other"; ставим явно "acoustics" чтобы проверить пробрасывание.
+    from ac_methodology.models import Criterion as CriterionModel
+    crit = CriterionModel.objects.get(code="noise")
+    crit.group = CriterionModel.Group.ACOUSTICS
+    crit.save(update_fields=["group"])
+
+    resp = client.get("/api/public/v1/rating/methodology/")
+    assert resp.status_code == 200
+    criteria = resp.json()["criteria"]
+    by_code = {c["code"]: c for c in criteria}
+    assert by_code["noise"]["group"] == "acoustics"
+    assert by_code["noise"]["group_display"] == "Акустика"

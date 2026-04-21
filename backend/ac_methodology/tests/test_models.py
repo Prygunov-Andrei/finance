@@ -162,3 +162,31 @@ def test_methodology_criterion_proxy_properties():
     assert mc.name_en == "Capacity"
     assert mc.unit == "kW"
     assert mc.value_type == Criterion.ValueType.NUMERIC
+
+
+# ── M4.4: Criterion.group ──────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_criterion_group_default_is_other():
+    """Без явного указания группа = «other» (показывается последним блоком)."""
+    c = CriterionFactory(code="some_new_param")
+    assert c.group == Criterion.Group.OTHER
+
+
+@pytest.mark.django_db
+def test_criterion_group_choices_valid():
+    """Невалидное значение группы режется на full_clean()."""
+    c = CriterionFactory(code="x", group="not_a_real_group")
+    with pytest.raises(ValidationError) as exc:
+        c.full_clean()
+    assert "group" in exc.value.message_dict
+
+
+@pytest.mark.django_db
+def test_criterion_group_accepts_known_values():
+    """Все 6 enum-значений группы валидны."""
+    for value in [g[0] for g in Criterion.Group.choices]:
+        c = CriterionFactory(code=f"check_{value}", group=value)
+        c.full_clean()  # без исключений
+        assert c.group == value
