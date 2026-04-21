@@ -36,7 +36,7 @@ ismeta-db-reset: ## Drop + create + migrate + seed (ВНИМАНИЕ: удали
 ismeta-db-migrate: ## Применить миграции
 	cd backend && .venv/bin/python manage.py migrate
 
-ismeta-seed: ## Заполнить dev-данными: 2 workspace, 3 демо-сметы ОВиК/СС (главная 30+ позиций, brand/model/procurement разнообразие)
+ismeta-seed: ## Заполнить dev-данными: 2 workspace, 3 демо-сметы ОВиК/СС + каталог материалов ~45 позиций (E-MAT-SEED-01)
 	cd backend && .venv/bin/python manage.py seed_dev_data || echo "⚠️  Команда seed_dev_data появится в E1/E2"
 
 ismeta-openapi: ## Регенерировать OpenAPI YAML

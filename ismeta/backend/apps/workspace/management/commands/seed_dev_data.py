@@ -14,16 +14,16 @@ table). Для полного пересоздания — `make ismeta-db-reset
 import uuid
 
 from django.contrib.auth import get_user_model
-from django.db import connection, transaction
 from django.core.management.base import BaseCommand
+from django.db import connection, transaction
 
-from apps.workspace.models import MemberRole, Workspace, WorkspaceMember
-from apps.estimate.models import Estimate, EstimateSection
 from apps.estimate.matching.knowledge import ProductKnowledge
+from apps.estimate.models import Estimate, EstimateSection
 from apps.estimate.services.markup_service import (
     recalc_estimate_totals,
     recalc_item_totals,
 )
+from apps.workspace.models import MemberRole, Workspace, WorkspaceMember
 
 User = get_user_model()
 
@@ -511,5 +511,9 @@ class Command(BaseCommand):
                 pk_created += 1
         if pk_created:
             self.stdout.write(self.style.SUCCESS(f"  Создано {pk_created} правил ProductKnowledge"))
+
+        # Material catalog (E-MAT-SEED-01) — отдельная команда, тоже идемпотентна.
+        from django.core.management import call_command
+        call_command("seed_materials", stdout=self.stdout, stderr=self.stderr)
 
         self.stdout.write(self.style.SUCCESS(f"\nSeed завершён: {len(SEED_WORKSPACES)} workspace."))
