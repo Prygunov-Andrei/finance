@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.validators import MaxLengthValidator, MaxValueValidator, MinValueValidator
 from django.db import models
 
 from core.models import TimestampedModel
@@ -68,6 +69,31 @@ class ACModel(TimestampedModel):
     ad_position = models.PositiveIntegerField(
         null=True, blank=True, verbose_name="Позиция в рейтинге",
         help_text="Номер позиции в списке (1 = первая). Пусто = не рекламная.",
+    )
+
+    # M4.1: editorial-обзор для секции «Обзор» на детальной странице.
+    editorial_lede = models.TextField(
+        blank=True, default="",
+        verbose_name="Обзор: вводный абзац",
+        help_text="Вводный абзац редакторского обзора. Показывается первым "
+                  "абзацем в секции «Обзор» на детальной странице.",
+    )
+    editorial_body = models.TextField(
+        blank=True, default="",
+        verbose_name="Обзор: основной текст",
+        validators=[MaxLengthValidator(5000)],
+        help_text="Основной текст обзора. Plain text с разделителями \\n\\n. "
+                  "Markdown не поддерживается. Длина ≤5000 символов.",
+    )
+    editorial_quote = models.TextField(
+        blank=True, default="",
+        verbose_name="Обзор: цитата",
+        help_text="Цитата-выноска редактора (pull quote).",
+    )
+    editorial_quote_author = models.CharField(
+        max_length=200, blank=True, default="",
+        verbose_name="Обзор: автор цитаты",
+        help_text="Например: «А. Петров, главред».",
     )
 
     class Meta:
