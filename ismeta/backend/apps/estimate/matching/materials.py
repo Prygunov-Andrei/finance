@@ -123,7 +123,11 @@ def materials_search(
 
 
 def match_item(item: EstimateItem, workspace_id: str) -> MaterialMatch | None:
-    """Подобрать материал для одной позиции. None если score < YELLOW."""
+    """Подобрать материал для одной позиции. None если score < YELLOW.
+
+    Возвращает только топ-1. Для yellow-бакета оператор в UI должен выбирать
+    из нескольких кандидатов — см. DEV-BACKLOG #9 (match_item_candidates).
+    """
     query = _build_query_for_item(item)
     if not query:
         return None
@@ -192,6 +196,10 @@ class MaterialMatchingService:
 
         Обновляет только указанные items (green уровня — auto, yellow —
         если пользователь явно подтвердил через UI).
+
+        Реализовано через raw UPDATE в цикле — для MVP ок. На массовый apply
+        (>100 позиций за раз) переписать на bulk_update/ORM в transaction.atomic
+        с сохранением инкремента version. См. DEV-BACKLOG #8.
         """
         updated = 0
         for m in matches:
