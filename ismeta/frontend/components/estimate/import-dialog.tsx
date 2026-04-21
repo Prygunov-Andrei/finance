@@ -81,9 +81,10 @@ export function ImportDialog({ estimateId, open, onOpenChange }: Props) {
       setStage("result");
       qc.invalidateQueries({ queryKey: ["estimate-items", estimateId] });
       qc.invalidateQueries({ queryKey: ["estimate", estimateId] });
-      if (data.created + data.updated > 0) {
+      const updated = data.updated ?? 0;
+      if (data.created + updated > 0) {
         toast.success(
-          `Импорт: +${data.created} новых, ~${data.updated} обновлено`,
+          `Импорт: +${data.created} новых, ~${updated} обновлено`,
         );
       }
     },
@@ -379,7 +380,8 @@ function FormatHint() {
 }
 
 function ResultView({ result }: { result: ImportResult }) {
-  const hasChanges = result.created + result.updated > 0;
+  const updated = result.updated ?? 0;
+  const hasChanges = result.created + updated > 0;
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div className="flex items-center gap-2" data-testid="result-created">
@@ -390,7 +392,7 @@ function ResultView({ result }: { result: ImportResult }) {
       <div className="flex items-center gap-2" data-testid="result-updated">
         <RefreshCw className="h-4 w-4 text-sky-600" aria-hidden />
         <span>Обновлено:</span>
-        <span className="font-medium tabular-nums">{result.updated}</span>
+        <span className="font-medium tabular-nums">{updated}</span>
       </div>
       {result.errors.length > 0 ? (
         <div className="flex flex-col gap-2" data-testid="result-errors">

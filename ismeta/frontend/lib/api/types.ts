@@ -190,7 +190,11 @@ export interface MatchingSession {
 
 export interface ImportResult {
   created: number;
-  updated: number;
+  // updated — только Excel-импорт возвращает это поле (update-aware по row_id).
+  // PDF-импорт через Recognition всегда создаёт новые позиции и updated не
+  // присылает. Читающий код должен использовать `updated ?? 0`.
+  updated?: number;
+  // sections / pages_* — только PDF-импорт (отчёт по страницам и секциям).
   sections?: number;
   errors: string[];
   pages_total?: number;

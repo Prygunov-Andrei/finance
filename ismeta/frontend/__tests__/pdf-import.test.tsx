@@ -65,10 +65,11 @@ describe("PdfImportDialog (simplified flow: choose → uploading → result)", (
     fetchMock.mockImplementation(async () => {
       // имитируем задержку, чтобы stage=uploading стал виден
       await new Promise((r) => setTimeout(r, 10));
+      // Recognition contract (E28): backend не возвращает `updated` для PDF —
+      // только created/sections/errors/pages_*. Проверяем, что UI это отрабатывает.
       return new Response(
         JSON.stringify({
           created: 42,
-          updated: 0,
           sections: 3,
           errors: [],
           pages_total: 12,
@@ -127,15 +128,17 @@ describe("PdfImportDialog (simplified flow: choose → uploading → result)", (
     ).toBeInTheDocument();
   });
 
-  it("ошибки в result показываются списком", async () => {
+  it("partial: ошибки в result показываются списком", async () => {
+    // Recognition partial — часть страниц распозналась, часть нет.
+    // Backend без `updated`, но с errors[] и pages_processed < pages_total.
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           created: 5,
-          updated: 0,
+          sections: 1,
           errors: ["Страница 7: модель не распознана", "Страница 9: нет количества"],
           pages_total: 10,
-          pages_processed: 10,
+          pages_processed: 8,
         }),
         {
           status: 200,
@@ -160,6 +163,74 @@ describe("PdfImportDialog (simplified flow: choose → uploading → result)", (
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Страница 9: нет количества/),
+    ).toBeInTheDocument();
+  });
+
+  it("empty items: Recognition ничего не распознал — показываем 0/errors", async () => {
+    // Backend pdf_views.py при пустых items возвращает:
+    // {created: 0, sections: 0, errors: [...], pages_total, pages_processed}
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          created: 0,
+          sections: 0,
+          errors: ["Не удалось распознать позиции"],
+          pages_total: 3,
+          pages_processed: 3,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    render(
+      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
+    );
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [makePdf()] } },
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/Создано: 0 позиций/)).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByText(/Не удалось распознать позиции/),
+    ).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith(
+      expect.stringMatching(/Распознано: 0/),
+    );
+  });
+
+  it("502 Bad Gateway (Recognition upstream) → toast.error, не падает на result", async () => {
+    // pdf_views.py отдаёт 502 при любых проблемах с Recognition (401/413/415/500/таймаут).
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: "Recognition invalid_api_key",
+          code: "invalid_api_key",
+        }),
+        {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    render(
+      wrap(<PdfImportDialog estimateId="e1" open onOpenChange={vi.fn()} />),
+    );
+    fireEvent.change(
+      document.querySelector('input[type="file"]') as HTMLInputElement,
+      { target: { files: [makePdf()] } },
+    );
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    // Возвращаемся на choose — не на result.
+    expect(
+      screen.getByText(/Перетащите PDF сюда или нажмите для выбора/),
     ).toBeInTheDocument();
   });
 });
