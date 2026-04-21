@@ -1,20 +1,37 @@
-export const dynamic = "force-dynamic";
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { PublicLayout } from '@/components/public/PublicLayout';
-import { getNewsById } from '@/lib/hvac-api';
-import { formatDate, getNewsPrimaryImageUrl, stripHtml, truncate } from '@/lib/utils';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
+import { getAllNews, getNewsById } from '@/lib/hvac-api';
+import { getNewsPrimaryImageUrl, stripHtml, truncate } from '@/lib/utils';
+import NewsBreadcrumb from './_components/NewsBreadcrumb';
+import NewsArticleHero from './_components/NewsArticleHero';
+import NewsArticleBody from './_components/NewsArticleBody';
+import { getNewsCategoryLabel, getNewsLede } from '../../_components/newsHelpers';
+
+export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+export async function generateStaticParams() {
+  try {
+    const all = await getAllNews();
+    return all.slice(0, 50).map((n) => ({ id: String(n.id) }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   try {
     const news = await getNewsById(Number(id));
-    const description = truncate(stripHtml(news.body || ''), 160);
+    const description = truncate(
+      getNewsLede(news, 160) || stripHtml(news.body || ''),
+      160,
+    );
     const imageUrl = getNewsPrimaryImageUrl(news);
 
     return {
@@ -36,9 +53,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function NewsDetailPage({ params }: Props) {
   const { id } = await params;
+  const numericId = Number(id);
+
   let news;
   try {
-    news = await getNewsById(Number(id));
+    news = await getNewsById(numericId);
   } catch {
     notFound();
   }
@@ -46,8 +65,8 @@ export default async function NewsDetailPage({ params }: Props) {
   const imageUrl = getNewsPrimaryImageUrl(news);
 
   return (
-    <PublicLayout>
-      {/* JSON-LD */}
+    <>
+      <HvacInfoHeader />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -74,63 +93,67 @@ export default async function NewsDetailPage({ params }: Props) {
         }}
       />
 
-      <article className="max-w-3xl mx-auto">
-        {/* Breadcrumb */}
-        <nav className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          <Link href="/" className="hover:text-blue-600">Новости</Link>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900 dark:text-gray-100">{truncate(news.title, 50)}</span>
-        </nav>
+      <article
+        style={{
+          maxWidth: 760,
+          margin: '0 auto',
+          padding: '8px 40px 28px',
+        }}
+        className="rt-article-wrap"
+      >
+        <NewsBreadcrumb category={getNewsCategoryLabel(news)} />
+        <NewsArticleHero news={news} />
+        <NewsArticleBody body={news.body || ''} />
 
-        {/* Header */}
-        <header className="mb-8">
-          <time dateTime={news.pub_date} className="text-sm text-gray-500 dark:text-gray-400">
-            {formatDate(news.pub_date)}
-          </time>
-          {news.manufacturer && (
-            <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              {news.manufacturer.name}
-            </span>
-          )}
-          <h1 className="mt-3 text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
-            {news.title}
-          </h1>
-        </header>
-
-        {/* Image */}
-        {imageUrl && (
-          <figure className="mb-8">
-            <img
-              src={imageUrl}
-              alt={news.title}
-              className="w-full rounded-lg"
-            />
-          </figure>
-        )}
-
-        {/* Body */}
-        <section
-          className="prose prose-lg max-w-none"
-          dangerouslySetInnerHTML={{ __html: news.body }}
-        />
-
-        {/* Source */}
         {news.source_url && (
-          <footer className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Источник:{' '}
-              <a
-                href={news.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                {new URL(news.source_url).hostname}
-              </a>
-            </p>
+          <footer
+            style={{
+              marginTop: 32,
+              paddingTop: 18,
+              borderTop: '1px solid hsl(var(--rt-border-subtle))',
+              fontSize: 12,
+              color: 'hsl(var(--rt-ink-60))',
+            }}
+          >
+            Источник:{' '}
+            <a
+              href={news.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'hsl(var(--rt-accent))', textDecoration: 'none' }}
+            >
+              {(() => {
+                try {
+                  return new URL(news.source_url).hostname;
+                } catch {
+                  return news.source_url;
+                }
+              })()}
+            </a>
           </footer>
         )}
+
+        <div style={{ marginTop: 26, textAlign: 'center' }}>
+          <Link
+            href="/"
+            style={{
+              fontSize: 12,
+              color: 'hsl(var(--rt-ink-60))',
+              textDecoration: 'none',
+              fontFamily: 'var(--rt-font-mono)',
+              letterSpacing: 0.3,
+            }}
+          >
+            ← Вернуться ко всем новостям
+          </Link>
+        </div>
       </article>
-    </PublicLayout>
+
+      <style>{`
+        @media (max-width: 1023px) {
+          .rt-article-wrap { padding: 4px 16px 24px !important; }
+        }
+      `}</style>
+    </>
   );
 }

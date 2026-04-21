@@ -1,0 +1,179 @@
+import type { HvacNews as NewsItem } from '@/lib/api/types/hvac';
+import { Eyebrow, H, T } from '../../../ratings/_components/primitives';
+import {
+  formatNewsDate,
+  getNewsCategoryLabel,
+  getNewsHeroImage,
+  getNewsLede,
+} from '../../../_components/newsHelpers';
+
+export default function NewsArticleHero({ news }: { news: NewsItem }) {
+  const image = getNewsHeroImage(news);
+  const category = getNewsCategoryLabel(news);
+  const date = formatNewsDate(news.pub_date);
+  const reading = news.reading_time_minutes ? `${news.reading_time_minutes} мин чтения` : null;
+  const author = news.editorial_author;
+  const sourceHost = (() => {
+    if (!news.source_url) return null;
+    try {
+      return new URL(news.source_url).hostname;
+    } catch {
+      return null;
+    }
+  })();
+
+  return (
+    <header style={{ margin: '22px 0 24px' }}>
+      <div style={{ marginBottom: 10 }}>
+        <Eyebrow>
+          {[category, date, reading].filter(Boolean).join(' · ')}
+        </Eyebrow>
+      </div>
+
+      <H
+        as="h1"
+        size={34}
+        serif
+        style={{
+          fontSize: 40,
+          letterSpacing: -0.8,
+          lineHeight: 1.12,
+        }}
+      >
+        {news.title}
+      </H>
+
+      <p
+        style={{
+          margin: '14px 0 0',
+          fontFamily: 'var(--rt-font-serif)',
+          fontSize: 15,
+          lineHeight: 1.55,
+          color: 'hsl(var(--rt-ink-60))',
+        }}
+      >
+        {getNewsLede(news, 260)}
+      </p>
+
+      {author && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginTop: 18,
+            paddingTop: 14,
+            borderTop: '1px solid hsl(var(--rt-border-subtle))',
+          }}
+        >
+          <AuthorAvatar author={author} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <T size={11} weight={600}>{author.name}</T>
+            {author.role && (
+              <div>
+                <T size={10} color="hsl(var(--rt-ink-40))">{author.role}</T>
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <GhostPill label="Поделиться" />
+            <GhostPill label="Сохранить" />
+          </div>
+        </div>
+      )}
+
+      {image && (
+        <figure style={{ margin: '24px 0 0' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image}
+            alt={news.title}
+            style={{
+              width: '100%',
+              aspectRatio: '16 / 9',
+              maxHeight: 420,
+              objectFit: 'cover',
+              borderRadius: 4,
+              display: 'block',
+            }}
+          />
+          {sourceHost && (
+            <figcaption
+              style={{
+                marginTop: 8,
+                fontFamily: 'var(--rt-font-serif)',
+                fontStyle: 'italic',
+                fontSize: 12,
+                color: 'hsl(var(--rt-ink-40))',
+              }}
+            >
+              Фото: {sourceHost}
+            </figcaption>
+          )}
+        </figure>
+      )}
+    </header>
+  );
+}
+
+function AuthorAvatar({ author }: { author: NonNullable<NewsItem['editorial_author']> }) {
+  const size = 28;
+  if (author.avatar_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={author.avatar_url}
+        alt={author.name}
+        width={size}
+        height={size}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          objectFit: 'cover',
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  const letter = (author.name || '·').trim().charAt(0).toUpperCase();
+  return (
+    <div
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: 'hsl(var(--rt-chip))',
+        color: 'hsl(var(--rt-ink-60))',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'var(--rt-font-mono)',
+        fontSize: 11,
+        fontWeight: 500,
+        flexShrink: 0,
+      }}
+    >
+      {letter}
+    </div>
+  );
+}
+
+function GhostPill({ label }: { label: string }) {
+  return (
+    <span
+      style={{
+        padding: '4px 10px',
+        border: '1px solid hsl(var(--rt-border))',
+        borderRadius: 14,
+        fontSize: 11,
+        color: 'hsl(var(--rt-ink-60))',
+        cursor: 'default',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
