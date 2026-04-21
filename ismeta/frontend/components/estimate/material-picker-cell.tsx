@@ -189,12 +189,6 @@ export function MaterialPickerCell({
                 </div>
                 <div className="shrink-0 text-right text-xs tabular-nums">
                   <div className="font-medium">{formatCurrency(hit.price)}</div>
-                  <div
-                    className="text-muted-foreground"
-                    data-testid={`material-picker-score-${i}`}
-                  >
-                    {Math.round(Number.parseFloat(hit.score) * 100)}%
-                  </div>
                 </div>
               </button>
             );
