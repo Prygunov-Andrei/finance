@@ -13,7 +13,6 @@ from apps.workspace.models import Workspace
 
 from .schemas import MarkupConfig, TechSpecs
 
-
 # ---------------------------------------------------------------------------
 # Estimate
 # ---------------------------------------------------------------------------
@@ -266,3 +265,54 @@ class SnapshotTransmission(models.Model):
 
     def __str__(self) -> str:
         return f"Transmission {self.id} [{self.status}] → {self.estimate.name}"
+
+
+# ---------------------------------------------------------------------------
+# Material — каталог материалов workspace (E-MAT-01)
+# ---------------------------------------------------------------------------
+
+
+class Material(models.Model):
+    """Справочник материалов/оборудования workspace.
+
+    Используется matching pipeline при импорте смет: сопоставляем
+    EstimateItem → Material через fuzzy-поиск (pg_trgm) и подставляем
+    `material_price` в позицию.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="materials"
+    )
+
+    name = models.CharField(max_length=500)
+    unit = models.CharField(max_length=50, default="шт")
+    price = models.DecimalField(max_digits=19, decimal_places=2, default=0)
+
+    brand = models.CharField(max_length=200, blank=True, default="")
+    model_name = models.CharField(max_length=200, blank=True, default="")
+    tech_specs = models.JSONField(default=dict, blank=True)
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "estimate_material"
+        indexes = [
+            models.Index(fields=["workspace", "is_active"], name="material_ws_active_idx"),
+        ]
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.unit}, {self.price})"
+
+    @property
+    def search_text(self) -> str:
+        """Конкатенация полей для trigram matching (name + model_name + brand)."""
+        parts = [self.name]
+        if self.model_name:
+            parts.append(self.model_name)
+        if self.brand:
+            parts.append(self.brand)
+        return " ".join(parts)

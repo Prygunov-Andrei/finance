@@ -6,6 +6,11 @@ from rest_framework.routers import DefaultRouter
 from .bulk_views import bulk_create_items, bulk_delete_items, bulk_update_items
 from .import_views import import_excel
 from .matching_views import match_works, match_works_apply, match_works_progress
+from .material_views import (
+    match_materials,
+    match_materials_apply,
+    materials_search_view,
+)
 from .pdf_views import import_pdf
 from .views import EstimateItemViewSet, EstimateSectionViewSet, EstimateViewSet
 
@@ -45,4 +50,16 @@ urlpatterns = [
     path("estimates/<uuid:estimate_pk>/match-works/", match_works, name="match-works"),
     path("estimates/<uuid:estimate_pk>/match-works/<str:session_id>/", match_works_progress, name="match-works-progress"),
     path("estimates/<uuid:estimate_pk>/match-works/<str:session_id>/apply/", match_works_apply, name="match-works-apply"),
+    # Materials catalog + matching (E-MAT-01)
+    path("materials/search/", materials_search_view, name="materials-search"),
+    path(
+        "estimates/<uuid:estimate_pk>/match-materials/",
+        match_materials,
+        name="match-materials",
+    ),
+    path(
+        "estimates/<uuid:estimate_pk>/match-materials/apply/",
+        match_materials_apply,
+        name="match-materials-apply",
+    ),
 ]
