@@ -13,6 +13,7 @@ import DetailMedia from '../_components/DetailMedia';
 import DetailAnchorNav from '../_components/DetailAnchorNav';
 import DetailOverview from '../_components/DetailOverview';
 import DetailCriteria from '../_components/DetailCriteria';
+import DetailNewsMentions from '../_components/DetailNewsMentions';
 import DetailIndexViz from '../_components/DetailIndexViz';
 import DetailSpecs from '../_components/DetailSpecs';
 import DetailBuy from '../_components/DetailBuy';
@@ -110,6 +111,7 @@ export default async function RatingDetailPage({ params }: Props) {
       <DetailAnchorNav />
       <DetailOverview detail={detail} />
       <DetailCriteria detail={detail} />
+      <DetailNewsMentions mentions={detail.news_mentions} />
       <DetailIndexViz
         totalIndex={detail.total_index}
         median={median}

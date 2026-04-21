@@ -7,6 +7,7 @@ type Anchor = { id: string; label: string; active: boolean };
 const ANCHORS: Anchor[] = [
   { id: 'overview', label: 'Обзор', active: true },
   { id: 'criteria', label: 'Оценки по критериям', active: true },
+  { id: 'mentions', label: 'Упоминания', active: true },
   { id: 'specs', label: 'Характеристики', active: true },
   { id: 'buy', label: 'Где купить', active: true },
   { id: 'reviews', label: 'Отзывы', active: true },
