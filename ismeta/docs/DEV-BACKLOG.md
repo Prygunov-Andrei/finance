@@ -191,6 +191,59 @@
 
 ---
 
+### 13. SpecParser Vision path не применяет sticky_parent_name
+
+**Контекст:** E15.03 добавил sticky parent name в text-layer путь (`pdf_text.parse_page_items`). Vision fallback (`spec_parser._process_page` при `has_usable_text_layer=False`) создаёт `SpecItem` напрямую из LLM response — `state.sticky_parent_name` игнорируется.
+
+**Последствие:** Mixed PDF (native pages + scan pages). Native страница устанавливает sticky="Воздуховод", следующая страница — скан, уходит в Vision. LLM вернёт items без осознания parent-context → bridge рвётся.
+
+**Решение:** В Vision-пути после получения items от LLM, проверить если item.name пустое/variant-like и есть state.sticky_parent_name — применить. Либо передать sticky в prompt как подсказку.
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/app/services/spec_parser.py:_process_page` (Vision branch).
+**Приоритет:** низкий (редкий кейс mixed PDF).
+
+---
+
+### 14. _STAMP_EXACT содержит короткие токены (хрупко на не-ГОСТ форматах)
+
+**Контекст:** `recognition/app/services/pdf_text.py:_STAMP_EXACT` включает "А3", "А4", "Р", "Лист", "ГИП", "во", "ния" — exact-match после strip, но короткие токены могут конфликтовать с реальными item-именами в нестандартных PDF (например «Р — резервный» или «Лист изоляции»).
+
+**На голден ОВ2 регрессии нет**, но:
+**Решение:** Добавить в docstring модуля disclaimer про ГОСТ-ориентированный набор и риск на экзотических форматах. При первом regression — переход на pattern-based (pattern + context) вместо exact.
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/app/services/pdf_text.py` (docstring + опциональная pattern-based альтернатива).
+
+---
+
+### 15. _SECTION_RE покрывает только ОВиК-разделы
+
+**Контекст:** Regex в `pdf_text.py` ловит только:
+`Система | Клапаны | Противодымная | Общеобменн | Воздуховоды | Воздуховод приточной | Слаботочн | Отопление | Кондиционирован | Дымоудален | Приточная | Вытяжная`.
+
+**Не покрыто:** «Холодоснабжение», «Электроснабжение», «Силовое», «Автоматика», «Водоснабжение», «Канализация», «ВКТ», «ОВВК», «ТС», «ГС» и т.п.
+
+**Последствие:** На не-ОВиК спецификациях раздел не распознаётся, все items уйдут под один section_name (последний из fallback или пустая строка).
+
+**Решение:** Расширить regex при появлении реальных примеров non-ОВиК PDF. Альтернативно — LLM классификатор раздела как опциональный шаг над text-layer items (гибридный hybrid).
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/app/services/pdf_text.py:_SECTION_RE`.
+
+---
+
+### 16. spec_parser._process_page — except Exception без traceback
+
+**Контекст:** `recognition/app/services/spec_parser.py:_process_page` ловит `Exception` на уровне страницы и пишет `logger.warning(...)` со `str(e)`. Traceback теряется — регрессию в `parse_page_items` (например падение на edge-case строк) поймаем только по items, не по stack.
+
+**Решение:** Заменить на `logger.exception("spec_parse page error", extra={...})` — добавит traceback в JSON log. Либо сохранять traceback в `state.errors` для диагностики.
+
+**Исполнитель:** IS-Петя.
+**Файл:** `recognition/app/services/spec_parser.py:_process_page` (последний `except`).
+
+---
+
 ## Записано
 - 2026-04-20: #1 seed_dev_data tech_specs (UI-03, Федя)
 - 2026-04-21: #2–5 (UI-PDF-verify, Федя)
@@ -198,3 +251,4 @@
 - 2026-04-21: #8–9 (E-MAT-01 минорные, Петя — apply_matches raw SQL, match_item top-3)
 - 2026-04-21: #10 (Live PDF-прогон Claude — Recognition JSON parsing BLOCKER)
 - 2026-04-21: #11–12 (Вопрос Андрея «что будет с отдельными столбцами Модель/Наименование» — UI-редактирование и Excel round-trip gaps)
+- 2026-04-21: #13–16 (E15.03 review минорные — sticky на Vision-пути, хрупкие стампы, SECTION_RE coverage, except без traceback)

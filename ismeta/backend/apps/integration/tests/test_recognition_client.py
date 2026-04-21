@@ -95,6 +95,7 @@ class TestHappyPath:
     async def test_probe(self, client):
         probe_ok = {
             "pages_total": 9,
+            "text_layer_pages": 9,
             "has_text_layer": True,
             "text_chars_total": 12985,
             "estimated_seconds": 3,

@@ -15,13 +15,11 @@ from ..providers.base import BaseLLMProvider
 from ..schemas.spec import PagesStats, SpecItem, SpecParseResponse
 from ._common import _strip_markdown_fence
 from .pdf_render import render_page_to_b64
-from .pdf_text import has_usable_text_layer, parse_page_items
-
-# Порог символов, ниже которого считаем что у страницы нет полезного text layer.
-# 100 симв / страницу = консервативно: у нативно-экспортированных ОВиК-специфик
-# обычно 500-2000 симв, у сканов — 0-20. В зазор попадают плохо оцифрованные
-# PDF — туда безопаснее пустить Vision, чем получить некорректный text-layer парс.
-TEXT_LAYER_MIN_CHARS_PER_PAGE = 100
+from .pdf_text import (
+    TEXT_LAYER_MIN_CHARS_PER_PAGE,
+    has_usable_text_layer,
+    parse_page_items,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -32,6 +32,22 @@ def _make_scanned_like_pdf(pages: int = 2) -> bytes:
     return data
 
 
+def _make_mixed_pdf(rich_pages: int = 1, sparse_pages: int = 8) -> bytes:
+    """Mixed PDF: N rich-text страниц + M sparse (<50 симв) — имитирует
+    частично отсканированный документ (титул напечатан, остальное — сканы)."""
+    doc = fitz.open()
+    rich_text = "Equipment spec line " * 20  # ~400 симв > 50
+    for _ in range(rich_pages):
+        page = doc.new_page()
+        page.insert_text((72, 72), rich_text)
+    for _ in range(sparse_pages):
+        page = doc.new_page()
+        page.insert_text((72, 72), "WM")  # 2 симв < 50
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
 class TestProbeEndpoint:
     def test_happy_text_layer(self, client, auth_headers):
         pdf = _make_text_pdf(3)
@@ -43,6 +59,7 @@ class TestProbeEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["pages_total"] == 3
+        assert data["text_layer_pages"] == 3
         assert data["has_text_layer"] is True
         assert data["text_chars_total"] > 0
         assert data["estimated_seconds"] >= 1
@@ -58,9 +75,28 @@ class TestProbeEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["pages_total"] == 2
+        assert data["text_layer_pages"] == 0
         assert data["has_text_layer"] is False
         # vision path ~ 5s/page
         assert data["estimated_seconds"] >= 10
+
+    def test_mixed_pdf_strict_has_text_layer(self, client, auth_headers):
+        """Regression-test к QA #1: 1 rich + 8 sparse не должно считаться
+        has_text_layer=True — иначе SpecParser уйдёт в Vision на 8 страницах,
+        progress bar порвётся."""
+        pdf = _make_mixed_pdf(rich_pages=1, sparse_pages=8)
+        resp = client.post(
+            "/v1/probe",
+            files={"file": ("mixed.pdf", io.BytesIO(pdf), "application/pdf")},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pages_total"] == 9
+        assert data["text_layer_pages"] == 1
+        assert data["has_text_layer"] is False
+        # estimated_seconds = 2 + 0.1*1 + 5*8 = 42 (round)
+        assert 40 <= data["estimated_seconds"] <= 45
 
     def test_missing_api_key_401(self, client):
         pdf = _make_text_pdf(1)

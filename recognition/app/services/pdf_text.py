@@ -16,6 +16,13 @@ recall ≈98% без LLM.
 import re
 from typing import Any
 
+# Единая точка истины для порога text layer — используется SpecParser'ом при
+# выборе hybrid/vision пути И endpoint'ом /v1/probe при оценке времени.
+# 50 симв/стр — консервативно: у нативных ОВиК-специфик 500-2000 на страницу,
+# у сканов/watermark — 0-20. Значение <50 = страница не пригодна для text-layer
+# парсинга, уходит в Vision.
+TEXT_LAYER_MIN_CHARS_PER_PAGE = 50
+
 # Канонические единицы измерения (сравнение по lower()).
 UNITS: set[str] = {
     "шт",
@@ -270,7 +277,9 @@ def _split_name_model(
     return only, "", only
 
 
-def has_usable_text_layer(page: object, min_chars: int = 50) -> bool:
+def has_usable_text_layer(
+    page: object, min_chars: int = TEXT_LAYER_MIN_CHARS_PER_PAGE
+) -> bool:
     """True если у страницы есть достаточный text layer для парсинга без LLM."""
     text: str = page.get_text()  # type: ignore[attr-defined]
     return len(text.strip()) >= min_chars

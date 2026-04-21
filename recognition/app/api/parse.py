@@ -17,6 +17,7 @@ from ..schemas.probe import ProbeResponse
 from ..schemas.quote import QuoteParseResponse
 from ..schemas.spec import SpecParseResponse
 from ..services.invoice_parser import InvoiceParser
+from ..services.pdf_text import TEXT_LAYER_MIN_CHARS_PER_PAGE
 from ..services.quote_parser import QuoteParser
 from ..services.spec_parser import SpecParser
 from .errors import (
@@ -28,10 +29,6 @@ from .errors import (
 )
 
 PROBE_TIMEOUT_SECONDS = 10
-# Порог в символах на страницу — выше считаем что есть нормальный text layer.
-# 50 пришло из наблюдения: у «сканов» PDF get_text обычно возвращает 0-10 символов
-# (штампы/watermark), у нативно экспортированных — сотни-тысячи.
-TEXT_LAYER_CHARS_PER_PAGE = 50
 
 logger = logging.getLogger(__name__)
 
@@ -112,24 +109,37 @@ def _log_done(kind: str, filename: str, result: BaseModel) -> None:
     )
 
 
-def _probe_pdf_sync(content: bytes) -> tuple[int, int]:
-    """Open PDF and return (pages_total, text_chars_total)."""
+def _probe_pdf_sync(content: bytes) -> tuple[int, int, int]:
+    """Open PDF and return (pages_total, text_chars_total, text_layer_pages).
+
+    text_layer_pages — сколько страниц проходят per-page threshold
+    TEXT_LAYER_MIN_CHARS_PER_PAGE. Используется и для honest has_text_layer
+    (all-or-nothing совпадает с поведением SpecParser), и для mixed-PDF
+    оценки времени.
+    """
     doc = fitz.open(stream=content, filetype="pdf")
     try:
         pages_total = len(doc)
         chars_total = 0
+        text_layer_pages = 0
         for page in doc:
-            chars_total += len(page.get_text().strip())
-        return pages_total, chars_total
+            page_chars = len(page.get_text().strip())
+            chars_total += page_chars
+            if page_chars >= TEXT_LAYER_MIN_CHARS_PER_PAGE:
+                text_layer_pages += 1
+        return pages_total, chars_total, text_layer_pages
     finally:
         doc.close()
 
 
-def _estimate_seconds(pages: int, has_text_layer: bool) -> int:
-    """Heuristic: text-layer path ~ 2s + 0.1s/page; vision path ~ 5s/page."""
-    if has_text_layer:
-        return max(1, round(2 + 0.1 * pages))
-    return max(1, 5 * pages)
+def _estimate_seconds(pages_total: int, text_layer_pages: int) -> int:
+    """Grading heuristic для mixed PDF.
+
+    Text-layer страница ~ 0.1s, Vision страница ~ 5s, +2s фикс. overhead.
+    Для all-text PDF ≈ 2 + 0.1*N; для all-scan ≈ 2 + 5*N.
+    """
+    vision_pages = pages_total - text_layer_pages
+    return max(1, round(2 + 0.1 * text_layer_pages + 5 * vision_pages))
 
 
 @router.post("/v1/probe", response_model=ProbeResponse)
@@ -146,7 +156,7 @@ async def probe(
     content, filename = await _read_pdf(file)
 
     try:
-        pages_total, chars_total = await asyncio.wait_for(
+        pages_total, chars_total, text_layer_pages = await asyncio.wait_for(
             run_in_threadpool(_probe_pdf_sync, content),
             timeout=PROBE_TIMEOUT_SECONDS,
         )
@@ -159,8 +169,12 @@ async def probe(
         # битый PDF — отдаём 415, т.к. файл не является валидным PDF.
         raise UnsupportedMediaTypeError(detail=f"cannot open PDF: {e}") from e
 
-    has_text_layer = chars_total >= pages_total * TEXT_LAYER_CHARS_PER_PAGE
-    est = _estimate_seconds(pages_total, has_text_layer)
+    # has_text_layer=True только когда ВСЕ страницы годятся под hybrid путь —
+    # симметрично per-page решению в SpecParser. Раньше сумма символов по
+    # документу могла дать True на mixed PDF (1 титул + 8 сканов), но в
+    # SpecParser 8 из 9 страниц уходили в Vision → progress bar ломался.
+    has_text_layer = text_layer_pages == pages_total and pages_total > 0
+    est = _estimate_seconds(pages_total, text_layer_pages)
 
     logger.info(
         "probe done",
@@ -168,12 +182,14 @@ async def probe(
             "doc_filename": filename,
             "pages_total": pages_total,
             "text_chars_total": chars_total,
+            "text_layer_pages": text_layer_pages,
             "has_text_layer": has_text_layer,
             "estimated_seconds": est,
         },
     )
     return ProbeResponse(
         pages_total=pages_total,
+        text_layer_pages=text_layer_pages,
         has_text_layer=has_text_layer,
         text_chars_total=chars_total,
         estimated_seconds=est,

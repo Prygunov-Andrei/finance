@@ -88,15 +88,22 @@ curl -s -X POST http://localhost:8003/v1/probe \
 ```json
 {
   "pages_total": 9,
+  "text_layer_pages": 9,
   "has_text_layer": true,
   "text_chars_total": 12994,
   "estimated_seconds": 3
 }
 ```
 
-- `has_text_layer = true` — PDF экспортирован нативно, парсер пойдёт быстрым text-layer путём (~2s + 0.1s/page).
-- `has_text_layer = false` — сканированный PDF, потребуется Vision LLM (~5s/page).
-- `estimated_seconds` — грубая оценка времени `/v1/parse/spec` для progress UI.
+- `text_layer_pages` — сколько страниц проходят per-page порог
+  (50 символов, константа `TEXT_LAYER_MIN_CHARS_PER_PAGE` в `pdf_text.py`).
+- `has_text_layer = true` — **все** страницы пригодны для text-layer пути,
+  парсер идёт по быстрому hybrid-пути (~0.1s/page). Симметрично per-page
+  решению в `SpecParser` — исключает UX-регрессию «probe=true, но Spec уходит
+  в Vision на части страниц».
+- `has_text_layer = false` + `text_layer_pages < pages_total` — mixed PDF
+  (частично сканирован). `estimated_seconds` смешан: `2 + 0.1 × text_pages +
+  5 × vision_pages`.
 
 Таймаут `/probe` = 10с — гигантские PDF отрубаются с `422 parse_failed`.
 

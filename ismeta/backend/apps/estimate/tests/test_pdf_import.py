@@ -231,6 +231,7 @@ class TestProbePDFEndpoint:
     URL = "/api/v1/estimates/{}/probe/pdf/"
     PROBE_OK = {
         "pages_total": 9,
+        "text_layer_pages": 9,
         "has_text_layer": True,
         "text_chars_total": 12985,
         "estimated_seconds": 3,
