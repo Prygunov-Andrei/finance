@@ -10,6 +10,11 @@ class SpecItem(BaseModel):
     unit: str = "шт"
     quantity: float = 1.0
     tech_specs: str = ""
+    # E15.04: содержимое колонки «Примечание» (например «1кг на 1м2») —
+    # отдельное поле, чтобы фронт мог показать комментарий рядом с позицией
+    # без распаковки tech_specs JSON. Pydantic-default "" сохраняет обратную
+    # совместимость для старых клиентов.
+    comments: str = ""
     section_name: str = ""
     page_number: int = 0
     sort_order: int = 0

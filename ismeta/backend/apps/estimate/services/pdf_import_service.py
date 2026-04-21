@@ -128,6 +128,11 @@ def apply_parsed_items(
                 tech_specs["brand"] = item["brand"]
             if item.get("page_number"):
                 tech_specs.setdefault("source_page", item["page_number"])
+            # E15.04: колонка «Примечание» и system prefix приходят от
+            # Recognition новыми полями — складываем в tech_specs JSON
+            # (frontend UI-04 уже умеет читать tech_specs.comments / system).
+            if item.get("comments"):
+                tech_specs["comments"] = item["comments"]
 
             data = {
                 "name": name,

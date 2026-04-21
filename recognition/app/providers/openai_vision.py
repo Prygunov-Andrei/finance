@@ -1,4 +1,9 @@
-"""OpenAI Vision provider (async, with retry on 429/5xx)."""
+"""OpenAI Vision provider (async, with retry on 429/5xx).
+
+E15.04 — расширен `text_complete` для column-aware LLM-нормализации:
+text-in → JSON-out на gpt-4o-mini, без vision-payload (раз в 6× дешевле
++ 3-5× быстрее vision-роута).
+"""
 
 import asyncio
 import logging
@@ -7,7 +12,7 @@ import httpx
 
 from ..api.errors import LLMUnavailableError
 from ..config import settings
-from .base import BaseLLMProvider
+from .base import BaseLLMProvider, TextCompletion
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +27,37 @@ class OpenAIVisionProvider(BaseLLMProvider):
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def text_complete(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int | None = None,
+        temperature: float = 0.0,
+    ) -> TextCompletion:
+        """Text completion для column-aware нормализации (E15.04).
+
+        Контракт: prompt должен содержать инструкцию выдать строгий JSON.
+        Включён `response_format=json_object` (см. комментарий в
+        vision_complete про DEV-BACKLOG #10) — обязательно нужно слово
+        "json"/"JSON" в промпте, иначе OpenAI откажет.
+
+        temperature=0 — детерминизм для golden-теста.
+        """
+        payload = {
+            "model": self.model,
+            "response_format": {"type": "json_object"},
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens or settings.llm_max_tokens,
+        }
+        data = await self._post_with_retry(payload)
+        usage = data.get("usage") or {}
+        return TextCompletion(
+            content=str(data["choices"][0]["message"]["content"]),
+            prompt_tokens=int(usage.get("prompt_tokens") or 0),
+            completion_tokens=int(usage.get("completion_tokens") or 0),
+        )
 
     async def vision_complete(self, image_b64: str, prompt: str) -> str:
         # response_format=json_object — OpenAI JSON mode: гарантирует валидный
@@ -48,11 +84,16 @@ class OpenAIVisionProvider(BaseLLMProvider):
             ],
             "max_tokens": settings.llm_max_tokens,
         }
+        data = await self._post_with_retry(payload)
+        return str(data["choices"][0]["message"]["content"])
+
+    async def _post_with_retry(self, payload: dict) -> dict:
+        """POST в OpenAI с retry на 429/5xx и сетевых ошибках (общий код
+        для vision_complete и text_complete)."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
@@ -85,8 +126,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
                 )
 
             resp.raise_for_status()
-            data = resp.json()
-            return str(data["choices"][0]["message"]["content"])
+            return resp.json()  # type: ignore[no-any-return]
 
         assert last_exc is not None
         raise LLMUnavailableError(detail=str(last_exc))

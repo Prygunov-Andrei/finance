@@ -464,6 +464,11 @@ components:
           type: string
           title: Tech Specs
           default: ''
+        comments:
+          type: string
+          title: Comments
+          description: Содержимое колонки «Примечание» (E15.04).
+          default: ''
         section_name:
           type: string
           title: Section Name

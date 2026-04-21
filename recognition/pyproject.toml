@@ -23,7 +23,8 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 # По умолчанию golden-тесты пропускаем (тяжёлые, тянут фикстуру из ismeta/).
 # Запуск вручную: `pytest -m golden` (в этом случае все остальные тесты НЕ запустятся).
-addopts = "-m 'not golden'"
+addopts = "-m 'not golden and not golden_llm'"
 markers = [
     "golden: тесты на реальных PDF-фикстурах — не входят в обычный прогон",
+    "golden_llm: golden + реальный OpenAI call (E15.04) — требует OPENAI_API_KEY",
 ]

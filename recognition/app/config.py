@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     parse_timeout_seconds: int = 300
     llm_model: str = "gpt-4o-mini"
     llm_max_tokens: int = 4000
+    # E15.04: column-aware text-layer pipeline → LLM normalization. False
+    # отключает LLM-нормализацию и оставляет только legacy line-based
+    # `parse_page_items` (используется в тестах без OPENAI_API_KEY и для
+    # быстрого rollback в случае проблем).
+    llm_normalize_enabled: bool = True
+    llm_normalize_max_tokens: int = 6000  # достаточно для ~30 items/стр в JSON
     dpi: int = 200
     max_page_retries: int = 2
     port: int = 8003

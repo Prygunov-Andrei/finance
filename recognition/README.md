@@ -173,16 +173,49 @@ curl -s -X POST http://localhost:8003/v1/parse/quote \
 
 ```bash
 cd recognition
-PYTHONPATH=. .venv/bin/python -m pytest -q                          # обычный прогон, golden пропускаются
-PYTHONPATH=. .venv/bin/python -m pytest -m golden -v                # только golden-тесты на реальных PDF
+PYTHONPATH=. .venv/bin/python -m pytest -q                          # обычный прогон, golden/golden_llm пропускаются
+PYTHONPATH=. .venv/bin/python -m pytest -m golden -v                # legacy text-layer baseline (без LLM)
+PYTHONPATH=. .venv/bin/python -m pytest -m golden_llm -v            # E15.04: column-aware + gpt-4o-mini (требует OPENAI_API_KEY)
 PYTHONPATH=. .venv/bin/python -m pytest --cov=app --cov-report=term-missing
 .venv/bin/python -m mypy app/ --disallow-untyped-defs
 .venv/bin/python -m ruff check .
 ```
 
-Ожидания: pytest 73 passed, coverage ≥ 80%, mypy/ruff clean. Golden suite (2
-теста) идёт по реальной ОВ2-спецификации из `ismeta/tests/fixtures/golden/` —
-recall ≥ 85%, Vision не вызывается.
+Ожидания: pytest 100+ passed, coverage ≥ 80%, mypy/ruff clean. Golden suite
+идёт по реальной ОВ2-спецификации (`ismeta/tests/fixtures/golden/`):
+- `golden` — legacy recall ≥ 138 items, Vision не вызывается;
+- `golden_llm` — E15.04 recall ≥ 135, time ≤ 45s, 1 OpenAI call / стр.
+
+## Pipeline: text-layer extraction + LLM normalization (E15.04)
+
+SpecParser обрабатывает страницу по трёхуровневому pipeline:
+
+1. **Column-aware text-layer + LLM** (основной). `extract_structured_rows(page)`
+   в `services/pdf_text.py` — применяет `page.rotation_matrix` для derotation,
+   группирует span'ы в визуальные row'ы по Y (±5.5pt), мапит в колонки ЕСКД
+   формы 1а (`pos, name, model, brand, unit, qty, mass, comments`). Затем
+   `normalize_via_llm` (`services/spec_normalizer.py`) делает 1 gpt-4o-mini
+   call на страницу (temperature=0, response_format=json_object) для:
+   склейки multi-line имён, sticky parent наследования, детекции секций,
+   обработки артикульных вариантов и префикс-колонки «ПВ-ИТП». Все вызовы
+   параллельны через `asyncio.gather` → 9 стр A3 укладываются в ~27с.
+
+2. **Legacy line-based** (fallback). Если провайдер не поддерживает
+   `text_complete` (Noop/Inert в тестах), или LLM вернул битый JSON, или
+   `settings.llm_normalize_enabled=False` — используется старый reading-order
+   парсер `parse_page_items`. Recall ниже (~138 items из 152), но не требует
+   OpenAI-ключа.
+
+3. **Vision fallback** (для сканов). Если text layer отсутствует
+   (`has_usable_text_layer()` False) — страница рендерится в PNG и отправляется
+   в gpt-4o-mini Vision (existing path, без изменений).
+
+Архитектурное обоснование выбора Вариант B (vs pure эвристика / pure Vision)
+см. [ADR 0024](../ismeta/docs/adr/0024-column-aware-llm-normalization.md).
+
+**Kill switch:** `RECOGNITION_LLM_NORMALIZE_ENABLED=false` в env отключает
+column-aware LLM-путь и оставляет только legacy text-layer + Vision (для
+rollback без переразвёртывания кода).
 
 ## Логи
 
