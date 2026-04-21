@@ -20,8 +20,8 @@
   --rt-paper: 42 30% 98%;
   --rt-alt: 42 20% 94%;
 
-  --rt-accent: 223 67% 48%;
-  --rt-accent-bg: 223 80% 95%;
+  --rt-accent: 181 81% 29%;       /* #0e8385 teal — HVAC Info brand primary */
+  --rt-accent-bg: 174 48% 90%;    /* #dbf1ef teal-50 */
 
   --rt-warn: 31 85% 42%;
   --rt-ok: 136 47% 35%;
@@ -50,6 +50,6 @@
   --rt-paper: 0 0% 9%;
   --rt-alt: 60 3% 12%;
 
-  --rt-accent: 225 100% 71%;
-  --rt-accent-bg: 225 100% 71% / 0.20;
+  --rt-accent: 181 56% 52%;       /* #3fc7c9 teal-300 — HVAC Info brand dark */
+  --rt-accent-bg: 181 56% 52% / 0.18;
 }
