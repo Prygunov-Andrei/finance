@@ -115,6 +115,21 @@ export interface EstimateSection {
   updated_at: string;
 }
 
+/**
+ * Нормализованные поля из tech_specs: JSONField, в который бэкенд кладёт
+ * распознанные из PDF/Excel характеристики (model_name, brand, comments,
+ * system) + произвольные ТТХ (flow, power, ...). Известные ключи — опциональны;
+ * остальное попадает в index signature и доступно по ключу.
+ */
+export interface EstimateItemTechSpecs {
+  model_name?: string;
+  brand?: string;
+  comments?: string;
+  system?: string;
+  source_page?: number;
+  [key: string]: unknown;
+}
+
 export interface EstimateItem {
   id: UUID;
   section: UUID;
@@ -135,7 +150,7 @@ export interface EstimateItem {
   match_source: MatchSource;
   material_markup: MarkupConfig | null;
   work_markup: MarkupConfig | null;
-  tech_specs: Record<string, unknown>;
+  tech_specs: EstimateItemTechSpecs;
   custom_data: Record<string, unknown>;
   is_deleted: boolean;
   is_key_equipment: boolean;
