@@ -24,6 +24,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # django.contrib.postgres — для TrigramSimilarity и GIN-операций (E-MAT-01)
+    "django.contrib.postgres",
     "rest_framework",
     "django_filters",
     "corsheaders",
