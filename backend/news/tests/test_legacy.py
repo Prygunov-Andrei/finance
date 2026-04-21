@@ -12,8 +12,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
-from .models import NewsPost, NewsMedia, Comment, MediaUpload
-from .services import NewsImportService
+from news.models import NewsPost, NewsMedia, Comment, MediaUpload
+from news.services import NewsImportService
 
 User = get_user_model()
 

@@ -447,3 +447,73 @@ def test_methodology_criteria_include_group(client, methodology_with_noise):
     by_code = {c["code"]: c for c in criteria}
     assert by_code["noise"]["group"] == "acoustics"
     assert by_code["noise"]["group_display"] == "Акустика"
+
+
+# ── M5.6: news_mentions ────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_detail_includes_news_mentions(client, methodology):
+    """M5.6: detail отдаёт news_mentions с опубликованными упоминаниями модели.
+
+    shape: id/title/category/category_display/pub_date/reading_time_minutes."""
+    from news.models import NewsPost
+    from news.tests.factories import NewsPostFactory
+
+    m = PublishedACModelFactory()
+    NewsPostFactory(
+        title="Первое упоминание",
+        category=NewsPost.Category.REVIEW,
+        reading_time_minutes=4,
+        mentioned_ac_models=[m],
+    )
+    NewsPostFactory(
+        title="Второе упоминание",
+        category=NewsPost.Category.BRANDS,
+        reading_time_minutes=2,
+        mentioned_ac_models=[m],
+    )
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.pk}/")
+    assert resp.status_code == 200
+    mentions = resp.json()["news_mentions"]
+    assert isinstance(mentions, list)
+    assert len(mentions) == 2
+    first = mentions[0]
+    assert set(first.keys()) == {
+        "id", "title", "category", "category_display", "pub_date", "reading_time_minutes",
+    }
+    # Обратная сортировка по pub_date — последний созданный факт идёт первым.
+    titles = [m["title"] for m in mentions]
+    assert "Первое упоминание" in titles
+    assert "Второе упоминание" in titles
+
+
+@pytest.mark.django_db
+def test_detail_news_mentions_excludes_drafts(client, methodology):
+    """M5.6: deleted / no_news_found / draft посты не попадают в news_mentions."""
+    from news.tests.factories import NewsPostFactory
+
+    m = PublishedACModelFactory()
+    NewsPostFactory(title="Видимое", mentioned_ac_models=[m])
+    NewsPostFactory(title="Soft-deleted", is_deleted=True, mentioned_ac_models=[m])
+    NewsPostFactory(title="No-news-found", is_no_news_found=True, mentioned_ac_models=[m])
+    NewsPostFactory(title="Draft", status="draft", mentioned_ac_models=[m])
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.pk}/")
+    titles = [n["title"] for n in resp.json()["news_mentions"]]
+    assert titles == ["Видимое"]
+
+
+@pytest.mark.django_db
+def test_detail_news_mentions_limit_5(client, methodology):
+    """M5.6: если связано 7 опубликованных постов — возвращается 5 самых свежих."""
+    from news.tests.factories import NewsPostFactory
+
+    m = PublishedACModelFactory()
+    for i in range(7):
+        NewsPostFactory(title=f"Пост-{i}", mentioned_ac_models=[m])
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.pk}/")
+    mentions = resp.json()["news_mentions"]
+    assert len(mentions) == 5

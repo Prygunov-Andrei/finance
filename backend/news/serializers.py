@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.conf import settings
 from .models import (
-    NewsPost, NewsMedia, Comment, MediaUpload,
+    NewsPost, NewsMedia, NewsAuthor, Comment, MediaUpload,
     SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall,
     RatingCriterion, RatingConfiguration, RatingRun, NewsDuplicateGroup,
 )
@@ -22,9 +22,33 @@ class NewsMediaSerializer(serializers.ModelSerializer):
         model = NewsMedia
         fields = ('id', 'file', 'media_type')
 
+
+class NewsAuthorLiteSerializer(serializers.ModelSerializer):
+    """Лёгкий shape NewsAuthor для публичного HVAC news payload (Ф7A).
+    avatar_url — absolute URL через request.build_absolute_uri."""
+
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NewsAuthor
+        fields = ("id", "name", "role", "avatar_url")
+        read_only_fields = fields
+
+    def get_avatar_url(self, obj):
+        if not obj.avatar:
+            return ""
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(obj.avatar.url)
+        return obj.avatar.url
+
+
 class NewsPostSerializer(serializers.ModelSerializer):
     media = NewsMediaSerializer(many=True, read_only=True)
     author = serializers.SerializerMethodField()
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    editorial_author = NewsAuthorLiteSerializer(read_only=True)
+    mentioned_ac_models = serializers.SerializerMethodField()
     
     # Поля для многоязычности через modeltranslation (безопасная обработка)
     title_ru = serializers.SerializerMethodField()
@@ -42,6 +66,12 @@ class NewsPostSerializer(serializers.ModelSerializer):
             return UserSerializer(obj.author).data
         return None
 
+    def get_mentioned_ac_models(self, obj):
+        """M5.4/M5.5: lite-shape упомянутых AC-моделей для news-detail card."""
+        from ac_catalog.serializers import ACModelMentionLiteSerializer
+        qs = obj.mentioned_ac_models.select_related("brand").all()
+        return ACModelMentionLiteSerializer(qs, many=True, context=self.context).data
+
     class Meta:
         model = NewsPost
         fields = (
@@ -51,6 +81,9 @@ class NewsPostSerializer(serializers.ModelSerializer):
             'is_no_news_found', 'manufacturer',
             'star_rating', 'rating_explanation', 'matched_criteria', 'duplicate_group',
             'translation_status', 'translation_error',
+            # M5 — HVAC news redesign:
+            'category', 'category_display', 'lede', 'reading_time_minutes',
+            'editorial_author', 'mentioned_ac_models',
         )
         read_only_fields = (
             'id', 'created_at', 'updated_at', 'author',
@@ -59,6 +92,7 @@ class NewsPostSerializer(serializers.ModelSerializer):
             'is_no_news_found', 'manufacturer',
             'rating_explanation', 'matched_criteria', 'duplicate_group',
             'translation_status', 'translation_error',
+            'category_display', 'editorial_author', 'mentioned_ac_models',
         )
     
     def _get_translation_field(self, obj, field_name, lang_code):
@@ -106,7 +140,12 @@ class NewsPostWriteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = NewsPost
-        fields = ('title', 'body', 'pub_date', 'status', 'source_language', 'auto_translate')
+        fields = (
+            'title', 'body', 'pub_date', 'status', 'source_language', 'auto_translate',
+            # M5 — редактируемые публичные поля (admin form):
+            'category', 'lede', 'reading_time_minutes',
+            'editorial_author', 'mentioned_ac_models',
+        )
     
     def validate_title(self, value):
         """Валидация заголовка"""

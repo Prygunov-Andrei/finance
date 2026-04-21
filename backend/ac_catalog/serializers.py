@@ -111,6 +111,19 @@ class ACModelSupplierSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class ACModelMentionLiteSerializer(serializers.ModelSerializer):
+    """Лёгкий shape ACModel для секции «Упомянутая модель» в news-detail
+    (Ф7A). Не тащит photos/scores/raw_values — только идентификатор
+    и минимум полей для card."""
+
+    brand = serializers.CharField(source="brand.name", read_only=True)
+
+    class Meta:
+        model = ACModel
+        fields = ["id", "slug", "brand", "inner_unit", "total_index", "price"]
+        read_only_fields = fields
+
+
 class ACModelListSerializer(serializers.ModelSerializer):
     brand = serializers.CharField(source="brand.name", read_only=True)
     brand_logo = serializers.SerializerMethodField()
@@ -223,6 +236,7 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
     suppliers = ACModelSupplierSerializer(many=True, read_only=True)
     rank = serializers.SerializerMethodField()
     median_total_index = serializers.SerializerMethodField()
+    news_mentions = serializers.SerializerMethodField()
 
     class Meta:
         model = ACModel
@@ -242,8 +256,31 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
             # M4.2 unit dimensions + weight:
             "inner_unit_dimensions", "inner_unit_weight_kg",
             "outer_unit_dimensions", "outer_unit_weight_kg",
+            # M5.6 — секция «Упоминания в прессе» (Ф7A HVAC news):
+            "news_mentions",
         ]
         read_only_fields = fields
+
+    def get_news_mentions(self, obj: ACModel) -> list[dict]:
+        """Reverse-relation NewsPost.mentioned_ac_models (related_name='news_mentions').
+        Лёгкий shape: 6 полей, без body/media — экономия payload. Максимум 5
+        свежих опубликованных постов, DESC по pub_date."""
+        mentions = obj.news_mentions.filter(
+            is_deleted=False,
+            is_no_news_found=False,
+            status="published",
+        ).order_by("-pub_date")[:5]
+        return [
+            {
+                "id": n.id,
+                "title": n.title,
+                "category": n.category,
+                "category_display": n.get_category_display(),
+                "pub_date": n.pub_date.isoformat() if n.pub_date else None,
+                "reading_time_minutes": n.reading_time_minutes,
+            }
+            for n in mentions
+        ]
 
     def get_rank(self, obj: ACModel) -> int | None:
         from ac_catalog.stats import rank_for_model

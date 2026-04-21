@@ -10,13 +10,62 @@ def get_today_date():
     """Возвращает сегодняшнюю дату (без времени) для использования как default в DateField"""
     return timezone.now().date()
 
+class NewsAuthor(models.Model):
+    """Отображаемый автор/редактор новости на публичном HVAC-портале.
+    Отдельно от NewsPost.author=User (внутренняя ERP-оркестрация: кто в ERP
+    закоммитил запись). На публичной странице показывается avatar + name + role."""
+
+    name = models.CharField(
+        _("Name"),
+        max_length=200,
+        help_text=_("Имя для отображения: «Евгений Лаврентьев»."),
+    )
+    role = models.CharField(
+        _("Role"),
+        max_length=200,
+        blank=True,
+        default="",
+        help_text=_("Должность/роль: «Редактор отраслевой ленты»."),
+    )
+    avatar = models.ImageField(
+        _("Avatar"),
+        upload_to="news/authors/",
+        blank=True,
+        null=True,
+    )
+    is_active = models.BooleanField(_("Is Active"), default=True)
+    order = models.PositiveSmallIntegerField(
+        _("Order"),
+        default=0,
+        help_text=_("Порядок в admin-select."),
+    )
+
+    class Meta:
+        verbose_name = _("News Author")
+        verbose_name_plural = _("News Authors")
+        ordering = ("order", "name")
+
+    def __str__(self):
+        return self.name
+
+
 class NewsPost(models.Model):
     STATUS_CHOICES = [
         ('draft', _('Draft')),
         ('scheduled', _('Scheduled')),
         ('published', _('Published')),
     ]
-    
+
+    class Category(models.TextChoices):
+        BUSINESS = "business", _("Деловые")
+        INDUSTRY = "industry", _("Индустрия")
+        MARKET = "market", _("Рынок")
+        REGULATION = "regulation", _("Регулирование")
+        REVIEW = "review", _("Обзор")
+        GUIDE = "guide", _("Гайд")
+        BRANDS = "brands", _("Бренды")
+        OTHER = "other", _("Прочее")
+
     title = models.CharField(_("Title"), max_length=255)
     body = models.TextField(_("Body")) # Markdown content
     source_url = models.URLField(_("Source URL"), blank=True, null=True, help_text=_("URL оригинального источника новости"))
@@ -55,6 +104,26 @@ class NewsPost(models.Model):
         _("Deleted"),
         default=False,
         help_text=_("Soft-delete: новость скрыта и не будет пересоздана discovery")
+    )
+
+    category = models.CharField(
+        _("Category"),
+        max_length=20,
+        choices=Category.choices,
+        default=Category.OTHER,
+        help_text=_("Категория новости. Показывается как eyebrow-label и chip-filter в ленте."),
+    )
+    lede = models.TextField(
+        _("Lede"),
+        blank=True,
+        default="",
+        help_text=_("Вводный абзац (serif 15px) отдельно от body. Если пустой — фронт берёт первые 2 абзаца body."),
+    )
+    reading_time_minutes = models.PositiveSmallIntegerField(
+        _("Reading Time (minutes)"),
+        null=True,
+        blank=True,
+        help_text=_("Оценка времени чтения в минутах. Если null — вычисляется из body при save()."),
     )
 
     # AI-рейтинг (звёзды 0-5)
@@ -128,7 +197,30 @@ class NewsPost(models.Model):
         blank=True,
         verbose_name=_("Author"),
     )
-    
+    editorial_author = models.ForeignKey(
+        "NewsAuthor",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="posts",
+        verbose_name=_("Editorial Author"),
+        help_text=_(
+            "Отображаемый автор на публичном HVAC-портале. "
+            "Можно оставить пустым — тогда подпись скрывается."
+        ),
+    )
+    mentioned_ac_models = models.ManyToManyField(
+        "ac_catalog.ACModel",
+        related_name="news_mentions",
+        blank=True,
+        verbose_name=_("Mentioned AC Models"),
+        help_text=_(
+            "AC-модели, упомянутые в новости. Показываются как «Упомянутая "
+            "модель» card в детальной странице новости и в секции «Упоминания "
+            "в прессе» на детальной странице модели AC."
+        ),
+    )
+
     # Для хранения оригинального архива (опционально, для истории)
     source_file = models.FileField(upload_to='news/archives/', blank=True, null=True)
 
@@ -143,7 +235,15 @@ class NewsPost(models.Model):
 
     def __str__(self):
         return self.title
-    
+
+    def save(self, *args, **kwargs):
+        # Auto-calc reading_time_minutes из body при save если редактор не заполнил вручную.
+        # Heuristic: 200 wpm — стандарт editorial. Минимум 1 мин.
+        if self.body and self.reading_time_minutes is None:
+            word_count = len(self.body.split())
+            self.reading_time_minutes = max(1, round(word_count / 200))
+        super().save(*args, **kwargs)
+
     def is_published(self):
         """Проверяет, опубликована ли новость"""
         return (

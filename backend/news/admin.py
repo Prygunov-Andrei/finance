@@ -5,7 +5,7 @@ from django.utils.html import format_html
 from django import forms
 from modeltranslation.admin import TranslationAdmin
 from .models import (
-    NewsPost, NewsMedia, Comment, NewsDiscoveryRun, NewsDiscoveryStatus,
+    NewsPost, NewsMedia, NewsAuthor, Comment, NewsDiscoveryRun, NewsDiscoveryStatus,
     SearchConfiguration, DiscoveryAPICall
 )
 from .services import NewsImportService, publish_news_post, publish_multiple_news_posts
@@ -13,16 +13,32 @@ from .services import NewsImportService, publish_news_post, publish_multiple_new
 class ImportNewsForm(forms.Form):
     zip_file = forms.FileField()
 
+@admin.register(NewsAuthor)
+class NewsAuthorAdmin(admin.ModelAdmin):
+    list_display = ('name', 'role', 'is_active', 'order')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'role')
+    ordering = ('order', 'name')
+
+
 @admin.register(NewsPost)
 class NewsPostAdmin(TranslationAdmin):
-    list_display = ('title', 'source_url_link', 'pub_date', 'author', 'status', 'is_no_news_found', 'created_at')
+    list_display = ('title', 'category', 'editorial_author', 'source_url_link',
+                    'pub_date', 'author', 'status', 'is_no_news_found', 'created_at')
     search_fields = ('title',)
-    list_filter = ('status', 'source_language', 'is_no_news_found', 'created_at')
+    list_filter = ('status', 'category', 'editorial_author', 'source_language',
+                   'is_no_news_found', 'created_at')
     readonly_fields = ('source_url_link', 'created_at', 'updated_at', 'is_no_news_found')
+    filter_horizontal = ('mentioned_ac_models',)
     actions = ['publish_selected_news', 'mark_as_draft']
     fieldsets = (
         ('Основная информация', {
             'fields': ('title', 'body', 'source_url', 'source_url_link', 'status', 'source_language', 'author', 'pub_date')
+        }),
+        ('Публичная часть (HVAC-портал, Ф7A)', {
+            'fields': ('category', 'lede', 'editorial_author',
+                       'reading_time_minutes', 'mentioned_ac_models'),
+            'description': 'Поля, влияющие на отображение новости на публичном HVAC-портале.',
         }),
         ('Метаданные', {
             'fields': ('created_at', 'updated_at', 'is_no_news_found'),

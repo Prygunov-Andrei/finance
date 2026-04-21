@@ -90,13 +90,21 @@ class NewsPostViewSet(viewsets.ModelViewSet):
         Soft-deleted новости скрыты от всех.
         Поддерживает фильтрацию по is_no_news_found через query parameter.
         """
-        queryset = NewsPost.objects.select_related('author').prefetch_related('media').filter(is_deleted=False)
+        queryset = (
+            NewsPost.objects
+            .select_related('author', 'editorial_author')
+            .prefetch_related('media', 'mentioned_ac_models__brand')
+            .filter(is_deleted=False)
+        )
 
         # Если пользователь не админ, показываем только опубликованные новости с рейтингом 5
         if not self.request.user.is_staff:
+            # is_no_news_found — служебная пометка «новостей не найдено» из discovery;
+            # на публичном HVAC-портале эти записи не должны светиться (M5.5).
             queryset = queryset.filter(
                 status='published',
-                pub_date__lte=timezone.now()
+                pub_date__lte=timezone.now(),
+                is_no_news_found=False,
             )
             # По умолчанию показываем только 5★, если star_rating не указан явно
             star_rating_param = self.request.query_params.get('star_rating', None)
@@ -108,6 +116,13 @@ class NewsPostViewSet(viewsets.ModelViewSet):
         if is_no_news_found is not None:
             is_no_news_found_bool = is_no_news_found.lower() in ('true', '1', 'yes')
             queryset = queryset.filter(is_no_news_found=is_no_news_found_bool)
+
+        # Фильтрация по категории (M5.5 — chip-row в Ф7A HVAC news ленте)
+        category = self.request.query_params.get('category', None)
+        if category:
+            valid_categories = {c[0] for c in NewsPost.Category.choices}
+            if category in valid_categories:
+                queryset = queryset.filter(category=category)
 
         # Фильтрация по star_rating (через запятую: ?star_rating=5,4)
         star_rating = self.request.query_params.get('star_rating', None)
