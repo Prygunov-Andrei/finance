@@ -1,6 +1,8 @@
 // =========================================================================
 // AC Rating (public) — types for /api/public/v1/rating/*
-// Skeleton from F0. After M2 merge, verify shape against Petya's smoke-curl.
+// Shape aligned with backend/ac_catalog/serializers.py after M2.
+// ВАЖНО: в list-эндпоинте `brand` — string (название), в detail — объект.
+// Легаси-решение из бекэнда, мы его не переделываем.
 // =========================================================================
 
 export interface RatingBrand {
@@ -39,6 +41,27 @@ export interface RatingModelSupplier {
 export interface RatingModelListItem {
   id: number;
   slug: string;
+  brand: string;
+  brand_logo: string;
+  inner_unit: string;
+  series: string;
+  nominal_capacity: number | null;
+  total_index: number;
+  index_max: number;
+  publish_status: string;
+  region_availability: RatingRegion[];
+  price: string | null;
+  noise_score: number | null;
+  has_noise_measurement: boolean;
+  scores: Record<string, number>;
+  is_ad: boolean;
+  ad_position: number | null;
+  rank: number | null;
+}
+
+export interface RatingModelDetail {
+  id: number;
+  slug: string;
   brand: RatingBrand;
   series: string;
   inner_unit: string;
@@ -48,9 +71,6 @@ export interface RatingModelListItem {
   total_index: number;
   rank: number;
   regions: RatingRegion[];
-}
-
-export interface RatingModelDetail extends RatingModelListItem {
   pros_text: string;
   cons_text: string;
   youtube_url: string;

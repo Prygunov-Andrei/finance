@@ -4,10 +4,15 @@ import type {
   RatingMethodology,
 } from '../types/rating';
 
-const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? '';
+function resolveBase(): string {
+  if (typeof window === 'undefined') {
+    return (process.env.BACKEND_API_URL || 'http://backend:8000').replace(/\/$/, '');
+  }
+  return (process.env.NEXT_PUBLIC_BACKEND_URL ?? '').replace(/\/$/, '');
+}
 
 async function ratingFetch<T>(path: string): Promise<T> {
-  const url = `${BASE}/api/public/v1/rating${path}`;
+  const url = `${resolveBase()}/api/public/v1/rating${path}`;
   const res = await fetch(url, { next: { revalidate: 3600 } });
   if (!res.ok) {
     throw new Error(`Rating API ${res.status}: ${url}`);
