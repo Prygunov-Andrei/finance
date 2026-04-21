@@ -64,6 +64,7 @@ class _ParseState:
     pages_processed: int = 0
     pages_skipped: int = 0
     current_section: str = ""
+    sticky_parent_name: str = ""
     sort_order: int = 0
 
 
@@ -117,12 +118,15 @@ class SpecParser:
             # Live прогон на golden ОВ2 spec (9 A3 страниц, 152 позиции) показал
             # recall ≈98% при времени ≈0.1s/стр — vision-путь давал ~4% за ~10s/стр.
             if has_usable_text_layer(page, min_chars=TEXT_LAYER_MIN_CHARS_PER_PAGE):
-                items = await run_in_threadpool(
-                    parse_page_items, page, state.current_section
+                parsed_items, new_section, new_sticky = await run_in_threadpool(
+                    parse_page_items,
+                    page,
+                    state.current_section,
+                    state.sticky_parent_name,
                 )
-                parsed_items, new_section = items
                 if new_section:
                     state.current_section = new_section
+                state.sticky_parent_name = new_sticky
                 if parsed_items:
                     for item_data in parsed_items:
                         state.sort_order += 1

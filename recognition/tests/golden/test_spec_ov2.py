@@ -28,7 +28,9 @@ FIXTURE_PDF = (
 
 # Базовые ожидания.
 EXPECTED_PAGES_TOTAL = 9
-MIN_ITEMS = 130  # 85% от 152 (реальная оценка заказчика: 152 позиции)
+# 90% от 152 — после E15.03 sticky-parent fix текущий baseline 142.
+# Запас на ±1-2 позиции от незначительных правок эвристик.
+MIN_ITEMS = 138
 MIN_SECTIONS = 4
 
 

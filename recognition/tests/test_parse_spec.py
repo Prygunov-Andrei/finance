@@ -292,7 +292,7 @@ class TestHybridTextLayer:
         def fake_text_layer(_page, **_kw):
             return True
 
-        def fake_parse(_page, current_section=""):
+        def fake_parse(_page, current_section="", sticky_parent_name=""):
             return (
                 [
                     {
@@ -311,6 +311,7 @@ class TestHybridTextLayer:
                     },
                 ],
                 "Вентиляция",
+                "Воздуховод 200x200",
             )
 
         monkeypatch.setattr(sp, "has_usable_text_layer", fake_text_layer)
@@ -345,7 +346,7 @@ class TestHybridTextLayer:
         import app.services.spec_parser as sp
 
         monkeypatch.setattr(sp, "has_usable_text_layer", lambda *_a, **_kw: True)
-        monkeypatch.setattr(sp, "parse_page_items", lambda *_a, **_kw: ([], ""))
+        monkeypatch.setattr(sp, "parse_page_items", lambda *_a, **_kw: ([], "", ""))
 
         class FailingProvider(BaseLLMProvider):
             async def vision_complete(self, image_b64, prompt):  # noqa: ARG002

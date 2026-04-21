@@ -10,6 +10,7 @@ from app.services.pdf_text import (
     has_usable_text_layer,
     is_section_heading,
     is_stamp_line,
+    is_variant_only_line,
     parse_page_items,
     parse_quantity,
 )
@@ -115,7 +116,7 @@ class TestParsePageItems:
             "58",
         ]
         page = _make_page_with_lines(lines)
-        items, section = parse_page_items(page, current_section="")
+        items, section, _ = parse_page_items(page, current_section="")
         assert section == "Система общеобменной вытяжной вентиляции. Жилая часть."
         assert len(items) == 1
         assert items[0]["name"] == "Дефлектор Цаги"
@@ -137,7 +138,7 @@ class TestParsePageItems:
             "5",
         ]
         page = _make_page_with_lines(lines)
-        items, _ = parse_page_items(page, current_section="")
+        items, _, _ = parse_page_items(page, current_section="")
         assert len(items) == 2
         assert items[0]["section_name"] == "Клапаны на кровле (снаружи)"
         assert items[1]["section_name"] == "Клапаны на кровле (снаружи)"
@@ -150,14 +151,16 @@ class TestParsePageItems:
             "3",
         ]
         page = _make_page_with_lines(lines)
-        items, section = parse_page_items(page, current_section="Противодымная вентиляция")
+        items, section, _sticky = parse_page_items(
+            page, current_section="Противодымная вентиляция"
+        )
         assert section == "Противодымная вентиляция"
         assert items[0]["section_name"] == "Противодымная вентиляция"
 
     def test_decimal_quantity(self):
         lines = ["Воздуховод", "ф100", "м.п.", "1,5"]
         page = _make_page_with_lines(lines)
-        items, _ = parse_page_items(page, current_section="")
+        items, _, _ = parse_page_items(page, current_section="")
         assert items[0]["quantity"] == 1.5
 
     def test_stamp_lines_ignored(self):
@@ -172,7 +175,7 @@ class TestParsePageItems:
             "Подп.",
         ]
         page = _make_page_with_lines(lines)
-        items, _ = parse_page_items(page, current_section="")
+        items, _, _ = parse_page_items(page, current_section="")
         assert len(items) == 1
 
     def test_multiline_name(self):
@@ -184,7 +187,7 @@ class TestParsePageItems:
             "2",
         ]
         page = _make_page_with_lines(lines)
-        items, _ = parse_page_items(page, current_section="")
+        items, _, _ = parse_page_items(page, current_section="")
         assert len(items) == 1
         # name = буфер без последней, model = последняя строка
         assert "Моноблочная установка приточная" in items[0]["name"]
@@ -195,9 +198,145 @@ class TestParsePageItems:
         for unit in ["шт", "м.п.", "м.кв.", "кг", "т", "комплект"]:
             lines = ["Элемент", "Код-1", unit, "10"]
             page = _make_page_with_lines(lines)
-            items, _ = parse_page_items(page, current_section="")
+            items, _, _ = parse_page_items(page, current_section="")
             assert len(items) == 1, f"failed for unit {unit!r}"
             assert items[0]["unit"] == unit
+
+
+class TestIsVariantOnly:
+    def test_dimensions(self):
+        assert is_variant_only_line("150х100")
+        assert is_variant_only_line("200x200")
+        assert is_variant_only_line("100х100х50")
+        assert is_variant_only_line("300 х 300")
+
+    def test_diameter(self):
+        assert is_variant_only_line("ф100")
+        assert is_variant_only_line("ф355")
+        assert is_variant_only_line("Ø200")
+
+    def test_names_not_variant(self):
+        assert not is_variant_only_line("Дефлектор Цаги")
+        assert not is_variant_only_line("Вентилятор канальный WNK 100")
+        assert not is_variant_only_line("Огнезащитная клеящая смесь")
+
+    def test_too_long_not_variant(self):
+        # ограничение 25 символов — защита от случайных совпадений в длинных именах
+        assert not is_variant_only_line("ф100 " + "x" * 30)
+
+    def test_empty(self):
+        assert not is_variant_only_line("")
+
+
+class TestStickyParentName:
+    def test_sticky_applied_to_variant_row(self):
+        """Воздуховод / ф100 / м.п. / 1,5 → первый item; затем 150х100 / м.п.
+        / 3135 должен унаследовать name="Воздуховод", model="150х100"."""
+        lines = [
+            "Воздуховод",
+            "ф100",
+            "м.п.",
+            "1,5",
+            "150х100",
+            "м.п.",
+            "3135",
+            "200х200",
+            "м.п.",
+            "850",
+        ]
+        page = _make_page_with_lines(lines)
+        items, _section, sticky = parse_page_items(page, current_section="")
+        assert len(items) == 3
+        assert items[0] == {
+            "name": "Воздуховод",
+            "model_name": "ф100",
+            "unit": "м.п.",
+            "quantity": 1.5,
+            "section_name": "",
+        }
+        assert items[1]["name"] == "Воздуховод"
+        assert items[1]["model_name"] == "150х100"
+        assert items[1]["quantity"] == 3135.0
+        assert items[2]["name"] == "Воздуховод"
+        assert items[2]["model_name"] == "200х200"
+        assert sticky == "Воздуховод"
+
+    def test_sticky_persists_across_pages(self):
+        """Передаём sticky на следующую страницу — variant в начале новой
+        страницы всё ещё наследует parent."""
+        page = _make_page_with_lines(["150х100", "м.п.", "500"])
+        items, _section, sticky = parse_page_items(
+            page, current_section="Sys", sticky_parent_name="Воздуховод"
+        )
+        assert len(items) == 1
+        assert items[0]["name"] == "Воздуховод"
+        assert items[0]["model_name"] == "150х100"
+        assert sticky == "Воздуховод"
+
+    def test_new_section_resets_sticky(self):
+        """Секционный заголовок обнуляет sticky — parent из предыдущей секции
+        не должен протечь."""
+        lines = [
+            "Система общеобменной вытяжной вентиляции",
+            "Воздуховод",
+            "ф100",
+            "м.п.",
+            "1,5",
+            "Клапаны на кровле (снаружи)",
+            "150х100",
+            "м.п.",
+            "500",
+        ]
+        page = _make_page_with_lines(lines)
+        items, section, sticky = parse_page_items(page, current_section="")
+        assert len(items) == 2
+        assert items[0]["name"] == "Воздуховод"
+        # После смены секции sticky обнулился → name остаётся raw "150х100".
+        # И sticky остаётся пустым (variant сам по себе не становится parent).
+        assert items[1]["name"] == "150х100"
+        assert items[1]["model_name"] == ""
+        assert section == "Клапаны на кровле (снаружи)"
+        assert sticky == ""
+
+    def test_full_item_updates_sticky(self):
+        """Item с многострочным name обновляет sticky → следующий variant
+        прилипает к новому parent."""
+        lines = [
+            "Воздуховод",
+            "ф100",
+            "м.п.",
+            "1,5",
+            "Заглушка торцевая",
+            "ЗТ-100",
+            "шт",
+            "10",
+            "ф355",
+            "шт",
+            "5",
+        ]
+        page = _make_page_with_lines(lines)
+        items, _s, sticky = parse_page_items(page, current_section="")
+        assert len(items) == 3
+        assert items[0]["name"] == "Воздуховод"
+        assert items[1]["name"] == "Заглушка торцевая"  # новый parent
+        # Третий item — variant ф355 → прилипает к новому sticky
+        assert items[2]["name"] == "Заглушка торцевая"
+        assert items[2]["model_name"] == "ф355"
+        assert sticky == "Заглушка торцевая"
+
+    def test_no_sticky_no_inheritance(self):
+        """Без sticky variant-строка становится item.name, но sticky НЕ
+        обновляется — иначе следующая variant приклеилась бы к ней как к
+        parent, что семантически неверно."""
+        page = _make_page_with_lines(["150х100", "м.п.", "500", "200х200", "м.п.", "300"])
+        items, _s, sticky = parse_page_items(page, current_section="")
+        assert len(items) == 2
+        assert items[0]["name"] == "150х100"
+        assert items[0]["model_name"] == ""
+        # Второй variant НЕ приклеился к первому
+        assert items[1]["name"] == "200х200"
+        assert items[1]["model_name"] == ""
+        assert sticky == ""
 
 
 def test_units_set_nonempty():

@@ -103,6 +103,17 @@ _SECTION_RE = re.compile(
 # Лёгкий регексп для числа в конце строки или отдельной строкой.
 _QTY_RE = re.compile(r"^[~≈]?\s*[\d]+[\d\s]*(?:[.,]\d+)?\s*$")
 
+# Variant-only строка: размер / диаметр / код-артикул без имени.
+# Примеры: «150х100», «200х200», «ф100», «Ø355», «100х100х50».
+# Используется для sticky parent name: когда buffer содержит одну такую
+# строку, name не виден в текущей row и берётся у предыдущего full-item.
+_VARIANT_RE = re.compile(
+    r"^(?:"
+    r"[фØ]\s*\d+"  # диаметр
+    r"|\d+(?:[.,]\d+)?\s*[xхXХ×]\s*\d+(?:[.,]\d+)?"  # WxH (можно WxHxD через повтор)
+    r")"
+)
+
 
 def is_stamp_line(text: str) -> bool:
     """True если строка целиком является элементом штампа/шапки таблицы."""
@@ -154,15 +165,30 @@ def extract_lines(page: object) -> list[str]:
     return [ln.strip() for ln in text.split("\n") if ln.strip()]
 
 
+def is_variant_only_line(text: str) -> bool:
+    """True если строка выглядит как variant-spec (размер/диаметр), не имя.
+
+    Пример: «Воздуховод / ф100 / м.п. / 1,5 / 150х100 / м.п. / 3135 / ...» —
+    «150х100» идёт без собственного name: имя должно «прилипнуть» от
+    предыдущего item «Воздуховод» через sticky parent name.
+    """
+    s = text.strip()
+    if not s or len(s) > 25:
+        return False
+    return bool(_VARIANT_RE.match(s))
+
+
 def parse_page_items(
     page: object,
     current_section: str = "",
-) -> tuple[list[dict[str, Any]], str]:
+    sticky_parent_name: str = "",
+) -> tuple[list[dict[str, Any]], str, str]:
     """Извлечь позиции из одной страницы по text-layer эвристике.
 
-    Возвращает (items, new_current_section). current_section прокидывается
-    между страницами: часть страниц не содержат собственного заголовка, и
-    мы наследуем секцию с предыдущей страницы.
+    Возвращает (items, new_current_section, new_sticky_parent_name). Обе
+    строки состояния прокидываются между страницами: часть страниц не
+    содержат собственного заголовка или parent-name, и мы наследуем
+    значения с предыдущей страницы.
 
     Формат items: dict с ключами name, model_name, unit, quantity, section_name.
     Другие поля (page_number, sort_order, tech_specs, brand) заполняет вызывающий.
@@ -171,6 +197,7 @@ def parse_page_items(
     items: list[dict[str, Any]] = []
     buffer: list[str] = []
     section = current_section
+    sticky_name = sticky_parent_name
 
     i = 0
     while i < len(lines):
@@ -181,9 +208,11 @@ def parse_page_items(
             continue
 
         # Секционный заголовок: обновляем секцию, если буфер пуст (чтобы не
-        # рвать многострочный name позиции).
+        # рвать многострочный name позиции). Новая секция обнуляет sticky
+        # parent — parent из «Вентиляции» не должен протечь в «Клапаны».
         if is_section_heading(ln) and not buffer:
             section = ln
+            sticky_name = ""
             i += 1
             continue
 
@@ -191,7 +220,7 @@ def parse_page_items(
         if ln.lower() in UNITS and i + 1 < len(lines):
             qty = parse_quantity(lines[i + 1])
             if qty is not None and buffer:
-                name, model = _split_name_model(buffer)
+                name, model, sticky_name = _split_name_model(buffer, sticky_name)
                 items.append(
                     {
                         "name": name,
@@ -208,18 +237,37 @@ def parse_page_items(
         buffer.append(ln)
         i += 1
 
-    return items, section
+    return items, section, sticky_name
 
 
-def _split_name_model(buffer: list[str]) -> tuple[str, str]:
-    """Разделить буфер строк на (name, model_name).
+def _split_name_model(
+    buffer: list[str], sticky_parent_name: str
+) -> tuple[str, str, str]:
+    """Разделить буфер на (name, model_name) и вернуть обновлённый sticky name.
 
-    Эвристика: последняя строка — model/марка (короткий артикул), остальные —
-    многострочное наименование. Если строка одна — model пустой.
+    Правила (порядок важен):
+    - len>=2 — многострочный name: всё кроме последней = name, последняя
+      = model. Sticky обновляется на новый name.
+    - len==1, строка похожа на variant (размер/диаметр):
+        * если есть sticky — применяем: name=sticky, model=variant; sticky не
+          меняется (variant-строка никогда не становится parent'ом).
+        * если sticky пусто — считаем что автор опирался на подразумеваемый
+          контекст (напр. section heading «Воздуховоды ...»). Пишем item
+          name=variant, model="" — но sticky НЕ ставим в variant, чтобы
+          следующая variant-строка не зацепилась за предыдущую variant как
+          за parent.
+    - len==1, обычное имя — name=строка, model=""; sticky обновляется.
     """
-    if len(buffer) == 1:
-        return buffer[0], ""
-    return " ".join(buffer[:-1]), buffer[-1]
+    if len(buffer) >= 2:
+        name = " ".join(buffer[:-1])
+        model = buffer[-1]
+        return name, model, name
+    only = buffer[0]
+    if is_variant_only_line(only):
+        if sticky_parent_name:
+            return sticky_parent_name, only, sticky_parent_name
+        return only, "", sticky_parent_name  # не обновляем sticky variant'ом
+    return only, "", only
 
 
 def has_usable_text_layer(page: object, min_chars: int = 50) -> bool:
