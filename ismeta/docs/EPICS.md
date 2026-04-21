@@ -466,8 +466,35 @@ XL-эпики — первые кандидаты на декомпозицию 
 
 ## Статус эпиков (live)
 
+_Обновлено 2026-04-21 после прогона демо-цикла + QA-сессии._
+
 | Эпик | Статус | Дата |
 |---|---|---|
-| E1 | ✅ Закрыт | 2026-04-17 |
-| E2 | ⏳ В работе (E2.1 — модели estimate) | 2026-04-17 |
-| E3-E27 | ⬜ Не начаты | — |
+| E1 Infrastructure | ✅ Закрыт | 2026-04-17 |
+| E2 Модели БД | ✅ Закрыт (estimate/workspace/material/integration) | 2026-04-21 |
+| E4 Core API CRUD | ✅ Закрыт (+ optimistic lock, bulk, tech_specs) | 2026-04-21 |
+| E5 Matching pipeline работ | 🟡 Закрыт MVP (7 tiers, синхронно; async через Celery + Redis-session — позже) | 2026-04-21 |
+| E6 Markup + Excel export | ✅ Закрыт | 2026-04-21 |
+| E7 Excel import | ✅ Закрыт | 2026-04-21 |
+| E8 LLM agent (validate + chat) | ✅ Закрыт | 2026-04-21 |
+| E9 Frontend редактор | ✅ Закрыт | 2026-04-21 |
+| E10 Keyboard-first matching review | ✅ Закрыт | 2026-04-21 |
+| E15.01 Recognition MVP + /parse/spec | ✅ Закрыт | 2026-04-20 |
+| E15.02a /parse/invoice + /parse/quote | ✅ Закрыт | 2026-04-20 |
+| E15.02b Клиенты в ISMeta + ERP payments | ✅ Закрыт | 2026-04-20 |
+| **E15.03 Hybrid text-layer parser** | ⏳ **В работе** (IS-Петя — после QA blocker #3 2026-04-21) | 2026-04-21 |
+| E25 Два трека оборудования | ✅ Закрыт (is_key_equipment + procurement_status) | 2026-04-21 |
+| E28 (слой 1) Удаление legacy парсеров | ✅ Закрыт (SpecificationParser удалён, api_public на Recognition) | 2026-04-21 |
+| E-MAT-01 Material catalog + matching | ✅ Закрыт (rapidfuzz, 45 seed-материалов) | 2026-04-21 |
+| E-MAT-UI-01 Autocomplete + match dialog | ✅ Закрыт | 2026-04-21 |
+| E-SEED-01 Реалистичная демо-смета ОВиК | ✅ Закрыт (3 сметы, 47 позиций) | 2026-04-21 |
+| UX-PDF-PROGRESS Honest progress bar | ⏳ В работе (IS-Федя) | 2026-04-21 |
+| UI-01 Resizable sidebar | ✅ Закрыт | 2026-04-20 |
+| UI-02 Name/model разделение | ✅ Закрыт | 2026-04-20 |
+| E3, E11, E12-E14, E16-E24, E26, E27 | ⬜ Не начаты | — |
+| E28 (слой 2) Вырезание estimates из ERP | ⬜ Не начат (зависит от E15.03 + MVP Айсметы dogfood) | — |
+
+**Известные живые блокеры** (см. `QA-FINDINGS-2026-04-21.md`):
+- 🔴 `#3` Recognition игнорирует text layer → закрывается E15.03 в работе.
+- 🔴 `#2` Vision даёт ~4% recall → закрывается E15.03 (Vision становится fallback).
+- 🟠 `#1` Непрозрачный прогресс → закрывается UX-PDF-PROGRESS в работе.
