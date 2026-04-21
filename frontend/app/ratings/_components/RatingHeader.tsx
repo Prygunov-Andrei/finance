@@ -36,17 +36,32 @@ export default function RatingHeader() {
       >
         <Link
           href="/"
+          aria-label="HVAC Info — главная"
           style={{
-            fontFamily: 'var(--rt-font-serif)',
-            fontSize: 18,
-            fontWeight: 700,
-            letterSpacing: -0.3,
-            color: 'hsl(var(--rt-ink))',
-            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
             flexShrink: 0,
+            height: 36,
           }}
         >
-          АВГУСТ
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/rating-logo/hvac-info-light.svg"
+            alt="HVAC Info"
+            className="rt-logo-light"
+            width={144}
+            height={36}
+            style={{ display: 'block', height: 36, width: 'auto' }}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/rating-logo/hvac-info-dark.svg"
+            alt="HVAC Info"
+            className="rt-logo-dark"
+            width={144}
+            height={36}
+            style={{ display: 'none', height: 36, width: 'auto' }}
+          />
         </Link>
 
         <nav
@@ -162,6 +177,8 @@ export default function RatingHeader() {
           .rt-actions-desktop { display: flex !important; }
           .rt-actions-mobile { display: none !important; }
         }
+        .dark .rt-logo-light { display: none !important; }
+        .dark .rt-logo-dark { display: block !important; }
       `}</style>
     </header>
   );
