@@ -110,6 +110,45 @@ class TestApplyParsedItems:
         result = apply_parsed_items(str(estimate.id), str(ws.id), items)
         assert result["created"] == 0
 
+    def test_apply_propagates_comments_to_tech_specs(self, estimate, ws):
+        """E15.04: Recognition отдаёт item.comments — проксируем в
+        tech_specs.comments (UI-04 читает именно эту ветку JSON)."""
+        items = [
+            {
+                "name": "Огнезащитная клеящая смесь",
+                "model_name": "Kleber",
+                "unit": "кг",
+                "quantity": 4900,
+                "section_name": "Вентиляция",
+                "page_number": 1,
+                "comments": "1кг на 1м2",
+            }
+        ]
+        result = apply_parsed_items(str(estimate.id), str(ws.id), items)
+        assert result["created"] == 1
+        item = EstimateItem.objects.filter(
+            estimate=estimate, name="Огнезащитная клеящая смесь"
+        ).first()
+        assert item is not None
+        assert item.tech_specs.get("comments") == "1кг на 1м2"
+        assert item.tech_specs.get("model_name") == "Kleber"
+
+    def test_apply_no_comments_field_leaves_tech_specs_unset(self, estimate, ws):
+        """Обратная совместимость: items без comments не создают ключ в JSON
+        (чтобы не засорять tech_specs пустыми строками)."""
+        items = [
+            {
+                "name": "Воздуховод",
+                "unit": "м.п.",
+                "quantity": 100,
+                "section_name": "Вентиляция",
+            }
+        ]
+        apply_parsed_items(str(estimate.id), str(ws.id), items)
+        item = EstimateItem.objects.filter(estimate=estimate, name="Воздуховод").first()
+        assert item is not None
+        assert "comments" not in item.tech_specs
+
     def test_apply_truncates_oversized_name(self, estimate, ws, caplog):
         """E15.03-hotfix: name >500 символов обрезается до 500 + warning,
         а не падает с VARCHAR overflow на весь import."""

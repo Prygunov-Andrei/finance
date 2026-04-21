@@ -678,7 +678,65 @@ def extract_structured_rows(page: object) -> list[TableRow]:
         )
         row_idx += 1
 
-    return rows
+    return _merge_multiline_section_headings(rows)
+
+
+def _merge_multiline_section_headings(rows: list[TableRow]) -> list[TableRow]:
+    """Склеить multi-line section headings в один row.
+
+    Пример: row A — ⚑SEC «Система общеобменной вытяжной вентиляции.»
+    (name только), row B — «МОП и Коммерческие помещения» (name только,
+    model/unit/qty пусты, не section по regex). Обе относятся к одной
+    секции, но extract_structured_rows пометил только A как section. Тут
+    дотягиваем B в name секции A.
+
+    Эвристика: row B следует за section-heading row A (consecutive), у B
+    только name, нет model/unit/qty. Склеиваем name(A) + " " + name(B),
+    удаляем B.
+    """
+    merged: list[TableRow] = []
+    i = 0
+    while i < len(rows):
+        row = rows[i]
+        if (
+            row.is_section_heading
+            and i + 1 < len(rows)
+            and _is_bare_name_row(rows[i + 1])
+        ):
+            next_row = rows[i + 1]
+            combined_name = (
+                row.cells.get("name", "").rstrip(",.")
+                + " "
+                + next_row.cells.get("name", "")
+            ).strip()
+            merged_cells = dict(row.cells)
+            merged_cells["name"] = combined_name
+            merged.append(
+                TableRow(
+                    page_number=row.page_number,
+                    y_mid=row.y_mid,
+                    row_index=row.row_index,
+                    cells=merged_cells,
+                    raw_blocks=row.raw_blocks + next_row.raw_blocks,
+                    is_header=False,
+                    is_section_heading=True,
+                )
+            )
+            i += 2
+            continue
+        merged.append(row)
+        i += 1
+    return merged
+
+
+def _is_bare_name_row(row: TableRow) -> bool:
+    """Row с непустым name и пустыми model/unit/qty/brand — кандидат
+    на продолжение секции или многострочного имени."""
+    filled = {k for k, v in row.cells.items() if v}
+    if "name" not in filled:
+        return False
+    # Допускаем pos (системный префикс), но больше ничего.
+    return filled.issubset({"name", "pos"}) and not row.is_section_heading
 
 
 def _baseline_font_size(spans: list[_Span]) -> float:
@@ -697,10 +755,12 @@ def _looks_like_section(
 ) -> bool:
     """Bucket похож на section heading?
 
-    Критерии:
-    - Только колонка `name` (и опционально `pos`) непуста.
-    - Либо font size превышает baseline на 10%+, либо хотя бы один span bold,
-      либо name матчит regex `_SECTION_RE` (консервативно).
+    Консервативно: ТОЛЬКО при явном font-визуальном signal'е (bold ИЛИ size
+    > baseline * 1.08) ИЛИ совпадении `_SECTION_RE`. Без двойного-signal
+    продолжения многострочного имени («покрытие - нармированная фольга»)
+    ошибочно уйдут в секцию — LLM тогда делает пустую секцию и теряет
+    item. Лучше false-negative (LLM сам разберётся по regex в промпте),
+    чем false-positive.
     """
     filled = {k for k, v in cells.items() if v}
     if not filled:
@@ -710,11 +770,14 @@ def _looks_like_section(
         return False
     if "name" not in filled:
         return False
+    name = cells.get("name", "")
+    if is_section_heading(name):
+        return True
     max_size = max((s.size for s in bucket_spans), default=baseline_size)
     has_bold = any(s.is_bold for s in bucket_spans)
-    if max_size > baseline_size * 1.1 or has_bold:
+    if has_bold and max_size > baseline_size * 1.08:
         return True
-    return is_section_heading(cells.get("name", ""))
+    return False
 
 
 def is_header_row(row_cells: dict[str, str]) -> bool:

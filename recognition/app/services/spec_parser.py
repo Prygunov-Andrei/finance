@@ -100,14 +100,131 @@ class SpecParser:
                 extra={"doc_filename": filename, "pages_total": state.pages_total},
             )
 
-            for page_num in range(state.pages_total):
-                await self._process_page(doc, page_num)
+            # E15.04: сначала пробуем column-aware batch (параллельные LLM
+            # calls, best-effort sticky из предыдущих страниц). Для страниц
+            # без text layer / пустых rows — legacy/vision fallback
+            # последовательно (rare case).
+            if settings.llm_normalize_enabled:
+                await self._process_batch_column_aware(doc)
+                # Страницы, которые не обработались column-aware (text layer
+                # есть, но rows=0 → legacy попытается; text layer нет → Vision).
+                for page_num in range(state.pages_total):
+                    if page_num in self._processed_pages:
+                        continue
+                    await self._process_page_sequential(doc, page_num)
+            else:
+                for page_num in range(state.pages_total):
+                    await self._process_page_sequential(doc, page_num)
         finally:
             doc.close()
 
         # Дедупликация отключена с E15.03-hotfix: смета = точная копия PDF,
         # одинаковые (name, model, brand) из разных секций остаются отдельно.
         return self._finalize()
+
+    async def _process_batch_column_aware(self, doc: fitz.Document) -> None:
+        """Extract rows синхронно для всех страниц → параллельный LLM.
+
+        Best-effort carry-over sticky/section: перед LLM-call'ом страницы N
+        берём последнее ненулевое name / section_heading из rows страниц
+        1..N-1. LLM получает эти подсказки в промпте.
+
+        Результаты собираются в оригинальном порядке страниц — важно,
+        чтобы sort_order соответствовал PDF (фронт отображает по нему).
+        """
+        state = self.state
+        self._processed_pages: set[int] = getattr(self, "_processed_pages", set())
+
+        # Фаза 1 — extract rows per page (sync, быстро).
+        pages_rows: list[list[object]] = []
+        for page_num in range(state.pages_total):
+            try:
+                page = doc[page_num]
+                if not has_usable_text_layer(page, min_chars=TEXT_LAYER_MIN_CHARS_PER_PAGE):
+                    pages_rows.append([])
+                    continue
+                rows = await run_in_threadpool(extract_structured_rows, page)
+                pages_rows.append(rows)
+            except Exception as e:  # pragma: no cover - защита от fitz-exceptions
+                logger.warning(
+                    "extract_structured_rows failed",
+                    extra={"page": page_num + 1, "error": str(e)},
+                )
+                pages_rows.append([])
+
+        # Фаза 2 — best-effort sticky/section перед каждой страницей.
+        stickies: list[tuple[str, str]] = []
+        cur_section = ""
+        cur_sticky = ""
+        for rows in pages_rows:
+            stickies.append((cur_section, cur_sticky))
+            for r in rows:
+                name = r.cells.get("name", "")  # type: ignore[attr-defined]
+                if r.is_section_heading and name:  # type: ignore[attr-defined]
+                    cur_section = name
+                elif name:
+                    cur_sticky = name
+
+        # Фаза 3 — параллельные LLM calls (только для непустых rows).
+        async def run_one(page_num: int, rows: list[object], section: str, sticky: str):
+            if not rows:
+                return page_num, None
+            try:
+                norm = await normalize_via_llm(
+                    self.provider,
+                    rows,  # type: ignore[arg-type]
+                    page_number=page_num + 1,
+                    current_section=section,
+                    sticky_parent_name=sticky,
+                    max_tokens=settings.llm_normalize_max_tokens,
+                )
+                return page_num, norm
+            except NotImplementedError:
+                return page_num, "no_text_complete"
+            except LLMNormalizationError as e:
+                logger.warning(
+                    "llm normalize failed",
+                    extra={"page": page_num + 1, "error": str(e)},
+                )
+                return page_num, None
+
+        tasks = [
+            run_one(pn, rows, section, sticky)
+            for pn, (rows, (section, sticky)) in enumerate(zip(pages_rows, stickies))
+        ]
+        import asyncio as _asyncio
+        outcomes = await _asyncio.gather(*tasks)
+
+        # Фаза 4 — слияние результатов в порядке страниц + финализация
+        # sequential state (sticky/section для возможного legacy fallback).
+        for page_num, norm in outcomes:
+            if norm == "no_text_complete":
+                # Провайдер не поддерживает text_complete — все страницы пойдут
+                # в sequential fallback.
+                return
+            if norm is None:
+                continue  # rows пустые / LLM упал → sequential-fallback на этой странице
+            state.llm_calls += 1
+            state.llm_prompt_tokens += norm.prompt_tokens
+            state.llm_completion_tokens += norm.completion_tokens
+            state.llm_warnings.extend(
+                f"page {page_num + 1}: {w}" for w in norm.warnings
+            )
+            state.current_section = norm.new_section or state.current_section
+            state.sticky_parent_name = norm.new_sticky or state.sticky_parent_name
+            self._append_normalized_items(norm, page_num)
+            if norm.items:
+                state.pages_processed += 1
+            else:
+                state.pages_skipped += 1
+            self._processed_pages.add(page_num)
+
+    async def _process_page_sequential(self, doc: fitz.Document, page_num: int) -> None:
+        """Обработка страницы по старой (pre-batch) последовательной схеме —
+        используется как fallback для страниц без text layer и в случае,
+        когда batch-LLM пропустил страницу (rows пусты / провайдер без
+        text_complete)."""
+        await self._process_page(doc, page_num)
 
     def build_partial(self) -> SpecParseResponse:
         """Snapshot current state — used when the outer timeout fires."""
