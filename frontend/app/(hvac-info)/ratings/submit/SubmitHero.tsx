@@ -120,3 +120,49 @@ export default function SubmitHero() {
     </section>
   );
 }
+
+export function SubmitHeroCollapsed() {
+  return (
+    <section
+      style={{
+        background: 'hsl(var(--rt-alt))',
+        borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1280,
+          margin: '0 auto',
+          padding: '12px 40px',
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--rt-font-mono)',
+            fontSize: 10,
+            color: 'hsl(var(--rt-ink-40))',
+            textTransform: 'uppercase',
+            letterSpacing: 1.4,
+          }}
+        >
+          Заявка
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--rt-font-serif)',
+            fontSize: 16,
+            fontWeight: 600,
+            letterSpacing: -0.3,
+            color: 'hsl(var(--rt-ink))',
+          }}
+        >
+          Добавить новый кондиционер в рейтинг
+        </span>
+      </div>
+    </section>
+  );
+}
