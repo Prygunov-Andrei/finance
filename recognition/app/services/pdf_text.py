@@ -485,19 +485,27 @@ _HEADER_MARKER_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
-def _match_column_from_merged_text(merged_text: str) -> str | None:
+def _match_column_from_merged_text(
+    merged_text: str,
+    *,
+    patterns: list[tuple[str, tuple[str, ...]]] | None = None,
+) -> str | None:
     """Сопоставить склеенный текст шапки колонки с column key.
 
     Работает по подстроке (first-match wins) после lower() и удаления
     хвостовой пунктуации. Порядок patterns критичен — см. комментарий
     в `_HEADER_MARKER_PATTERNS`.
+
+    `patterns` — переопределяемый набор (спецификация vs счёт-фактура vs
+    другой тип документа). Default — `_HEADER_MARKER_PATTERNS` для
+    ЕСКД-таблиц (spec parser backward-compat).
     """
     t = merged_text.strip().lower()
     t = re.sub(r"[\s\-,.:;]+$", "", t)
     if not t:
         return None
-    for col, patterns in _HEADER_MARKER_PATTERNS:
-        for p in patterns:
+    for col, pats in patterns or _HEADER_MARKER_PATTERNS:
+        for p in pats:
             if p in t:
                 return col
     return None
@@ -747,6 +755,7 @@ def _merge_multi_row_header(
     *,
     probe_buckets: int = 14,
     x_tolerance: float = 20.0,
+    patterns: list[tuple[str, tuple[str, ...]]] | None = None,
 ) -> tuple[dict[str, tuple[float, float]], int]:
     """R23: склеить многострочную шапку → per-column x-extent.
 
@@ -762,6 +771,7 @@ def _merge_multi_row_header(
 
     Если зона шапки не найдена — `({}, -1)`.
     """
+    active_patterns = patterns or _HEADER_MARKER_PATTERNS
     first_header_idx = -1
     last_header_idx = -1
     probe_limit = min(len(buckets), probe_buckets)
@@ -772,8 +782,8 @@ def _merge_multi_row_header(
             t = span.text.strip().lower()
             if not t:
                 continue
-            for _col, patterns in _HEADER_MARKER_PATTERNS:
-                if any(p in t for p in patterns):
+            for _col, pats in active_patterns:
+                if any(p in t for p in pats):
                     has_marker = True
                     break
             if has_marker:
@@ -808,7 +818,7 @@ def _merge_multi_row_header(
     detected: dict[str, tuple[float, float]] = {}
     for cluster in clusters:
         merged = _concat_header_fragments(cluster)
-        col = _match_column_from_merged_text(merged)
+        col = _match_column_from_merged_text(merged, patterns=active_patterns)
         if not col:
             continue
         x_min = min(s.disp_x for s in cluster)
@@ -1179,3 +1189,398 @@ def is_header_row(row_cells: dict[str, str]) -> bool:
         if _match_header_column(text):
             hits += 1
     return hits >= _MIN_HEADER_MARKERS
+
+
+# ---------------------------------------------------------------------------
+# E16 it1 — Invoice column-aware extraction
+# ---------------------------------------------------------------------------
+#
+# Parser счетов от поставщиков. Колонки отличаются от ЕСКД-таблицы:
+#   pos         — «№» / «#»
+#   name        — «Товары (работы, услуги)» / «Товар / Услуга» / «Наименование»
+#   supply_type — «ЗТ*» (ЛУИС+: X = заказной; редко в других поставщиках)
+#   lead_time   — «Срок» (поставки, «7 р.д.»)
+#   unit        — «Ед.» / «Ед. изм.» (не всегда — часто сливается в qty)
+#   qty         — «Кол-во»
+#   price_unit  — «Цена» / «Цена, руб»
+#   vat_amount  — «в т.ч. НДС» (абсолютный НДС по строке, invoice-01)
+#   price_total — «Сумма» / «Сумма, руб»
+#   notes       — «Примечание»
+#
+# Шапка счетов почти всегда одно- или двухстрочная — в отличие от ЕСКД (3-6
+# строк с переносами слов через дефис), так что агрессивный single-row
+# fallback из `_detect_column_ranges` (shift-калибровка к _DEFAULT_COLUMN_BOUNDS)
+# неприменим: нет канонических границ ЕСКД для invoice-форм. Используем
+# только per-page detection через `_merge_multi_row_header` с
+# `_INVOICE_HEADER_MARKER_PATTERNS`. Если шапка не распознана или детектировано
+# < 4 колонок → возвращаем `[]` (парсер инвойса упадёт на multimodal/vision
+# fallback либо Phase 0 LLM-title-block подхватит без items).
+
+INVOICE_COLUMN_KEYS: tuple[str, ...] = (
+    "pos",
+    "name",
+    "supply_type",
+    "lead_time",
+    "unit",
+    "qty",
+    "price_unit",
+    "vat_amount",
+    "price_total",
+    "notes",
+)
+
+# Порядок patterns критичен: более специфичные (supply_type «зт*», vat_amount
+# «в т.ч. ндс», price_total «сумма», price_unit «цена») идут РАНЬШЕ общих
+# (name, qty). «Цена» матчится по substring — должна уйти в price_unit, а не в
+# price_total (который содержит «сумма»).
+_INVOICE_HEADER_MARKER_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
+    ("pos", ("№", "# ", " №", "позиция", "поз.")),
+    ("supply_type", ("зт*", "зт ", " зт", "тип товара", "зт\n")),
+    ("lead_time", ("срок постав", "срок")),
+    ("vat_amount", ("в т.ч. ндс", "в т. ч. ндс", "в том числе ндс", "ндс, руб", "в том")),
+    ("price_unit", ("цена",)),
+    ("price_total", ("сумма",)),
+    ("qty", ("кол-во", "количество", "кол.")),
+    ("unit", ("ед. изм", "ед.изм", "единица изм", "ед изм", "ед.")),
+    ("notes", ("примечан", "комментар")),
+    ("name", (
+        "наименование",
+        "товар / услуга",
+        "товар/услуга",
+        "товары (работы",
+        "товары, работы",
+        "работ, услуг",
+        "работы, услуги",
+    )),
+]
+
+
+_QTY_UNIT_COMBINED_RE = re.compile(
+    r"^(?P<qty>\d+(?:[.,]\d+)?)\s+(?P<unit>[а-яА-Яa-zA-Z]+\.?)\s*$"
+)
+
+# Разделяет «813 591,00 в наличии» → ("813 591,00", "в наличии"). Правила:
+# - число может быть с разделителями пробелами и запятой/точкой («1 714 790,31»);
+# - после числа идёт ≥1 пробел и произвольный текст (комментарий).
+_NUM_WITH_TAIL_RE = re.compile(
+    # tail ОБЯЗАН начинаться с буквы — иначе «6 687,50» может расщепиться
+    # на num="6", tail="687,50" из-за backtracking. Цифра-после-пробела
+    # это разделитель тысяч, а не отдельный текстовый хвост.
+    r"^(?P<num>\d+(?:[\s   ][\d]{3})*(?:[.,]\d+)?)"
+    r"\s+(?P<tail>[А-Яа-яA-Za-z][^\n]*)$"
+)
+
+# Парсинг lead_time «7 р.д.» / «30 дней» / «2 нед.».
+_LEAD_TIME_RE = re.compile(
+    r"^(?P<n>\d+)\s*(?P<unit>р\.?\s*д\.?|дн(?:ей|я|\.?)|нед(?:ел[ьи]|\.?))\s*$",
+    re.IGNORECASE,
+)
+
+# «Итоговые» маркеры в name-колонке — такие row не item, а footer (итого /
+# НДС / всего к оплате / прописью). Фильтруется на уровне extractor'а, чтобы
+# LLM не тратил токены на footer-rows.
+_INVOICE_FOOTER_RE = re.compile(
+    r"^(?:"
+    r"итого[,:\s]|"
+    r"в\s*т\.?\s*ч\.?\s*ндс|"
+    r"в\s*том\s*числе\s*ндс|"
+    r"всего\s*к\s*оплате|"
+    r"всего\s*наименован|"
+    r"сумма\s*прописью|"
+    r"прописью[:\s]|"
+    r"подитог|"
+    r"итого\s*по\s*документу"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def split_qty_unit(value: str) -> tuple[str, str]:
+    """«27 шт.» → ("27", "шт."). Если не split'ится — вся строка как qty,
+    unit="" (сигнал нормализатору: попробовать распарсить как число целиком).
+
+    Используется когда в bbox-header не нашлась отдельная колонка «Ед.изм.»
+    и единица измерения сидит внутри «Кол-во» (формат ЛУИС+).
+    """
+    if not value:
+        return "", ""
+    m = _QTY_UNIT_COMBINED_RE.match(value.strip())
+    if not m:
+        return value.strip(), ""
+    return m.group("qty"), m.group("unit")
+
+
+def parse_lead_time_days(value: str) -> int | None:
+    """«7 р.д.» → 7; «30 дней» → 30; «2 нед.» → 14. None если не парсится.
+
+    В счёте ЛУИС+ значение в колонке «Срок» приходит как «7 р.д.» — для
+    backlog-payments важно иметь число дней, чтобы планировать поставку.
+    """
+    if not value:
+        return None
+    m = _LEAD_TIME_RE.match(value.strip())
+    if not m:
+        return None
+    n = int(m.group("n"))
+    unit = m.group("unit").lower()
+    if unit.startswith("нед"):
+        return n * 7
+    return n
+
+
+def _split_number_with_tail(cell: str) -> tuple[str, str]:
+    """«813 591,00 в наличии» → ("813 591,00", "в наличии"). Если текст после
+    числа не найден → (cell, ""). Используется чтобы вытащить `notes` из
+    суммарной колонки price_total когда span-extraction PyMuPDF объединил оба
+    в одну ячейку (edge case ЛУИС+).
+    """
+    if not cell:
+        return "", ""
+    m = _NUM_WITH_TAIL_RE.match(cell.strip())
+    if not m:
+        return cell.strip(), ""
+    return m.group("num").strip(), m.group("tail").strip()
+
+
+def _is_invoice_footer_row(merged_cells: dict[str, str]) -> bool:
+    """Row — footer (итого, НДС, всего к оплате, прописью)?
+
+    Проверяем все ячейки, т.к. «Итого:» / «в т.ч. НДС:» могут попасть в
+    ЛЮБУЮ колонку в зависимости от column detection (invoice-01: «Итого:»
+    при x=488 падает в vat_amount; ЛУИС+: «Итого, руб:» падает в qty).
+    """
+    for v in merged_cells.values():
+        text = (v or "").strip()
+        if text and _INVOICE_FOOTER_RE.match(text):
+            return True
+    return False
+
+
+def _detect_invoice_header(
+    buckets: list[list[_Span]],
+) -> tuple[dict[str, tuple[float, float]], int]:
+    """Column-detection для счетов — single dense header row.
+
+    В отличие от ЕСКД-таблицы (multi-row со склейкой дефисов), шапка счёта
+    почти всегда одно- или двухстрочная и содержит 5-8 различных маркеров.
+    Ищем ПЕРВЫЙ y-bucket где ≥3 distinct invoice-column markers матчатся
+    одновременно — это канонический header row.
+
+    Возвращает ({col: (x_min, x_max)}, last_header_idx). Пустой dict если
+    не нашлось.
+    """
+    def _bucket_markers(
+        bucket: list[_Span],
+    ) -> dict[str, list[tuple[float, float]]]:
+        out: dict[str, list[tuple[float, float]]] = {}
+        for span in bucket:
+            t = span.text.strip().lower()
+            if not t:
+                continue
+            for col, patterns in _INVOICE_HEADER_MARKER_PATTERNS:
+                if any(p in t for p in patterns):
+                    out.setdefault(col, []).append(
+                        (span.disp_x, span.disp_x + span.width)
+                    )
+                    break
+        return out
+
+    def _bucket_y(bucket: list[_Span]) -> float:
+        return sum(s.disp_y for s in bucket) / max(len(bucket), 1)
+
+    # Max y-distance между смежными buckets, которые ещё считаются одной
+    # шапкой. 11pt — близко к высоте 10pt строки (baseline-to-baseline
+    # ~11-12pt): продолжение шапки «в том» / «числе» / «НДС» получает
+    # gap ≈ 9pt, а смежные строки параграфа «! Срок действия счёта !»
+    # ≈ 12-13pt и отрежутся.
+    _HEADER_Y_STICK_TOLERANCE = 11.0
+
+    header_idx = -1
+    header_cols: dict[str, list[tuple[float, float]]] = {}
+
+    for idx, bucket in enumerate(buckets[:40]):
+        bucket_cols = _bucket_markers(bucket)
+        # Порог 3 different columns в одном bucket — надёжный сигнал header
+        # row. Заголовок счёта всегда плотный: минимум name+qty+price_unit+
+        # price_total + что-то ещё.
+        if len(bucket_cols) >= 3:
+            header_idx = idx
+            dense_y = _bucket_y(bucket)
+            for col, xs in bucket_cols.items():
+                header_cols.setdefault(col, []).extend(xs)
+            # Look-back: многостроковая шапка (vat_amount в invoice-01:
+            # «в том» / «числе» / «НДС» на y=410-429) — эти строки бывают
+            # ВЫШЕ dense header. Но только если y-gap < _HEADER_Y_STICK —
+            # иначе мы затянем параграф «! Срок действия счёта !» из тела.
+            last_y = dense_y
+            for look_back in range(1, 4):
+                pidx = idx - look_back
+                if pidx < 0:
+                    break
+                prev_bucket = buckets[pidx]
+                prev_y = _bucket_y(prev_bucket)
+                if last_y - prev_y > _HEADER_Y_STICK_TOLERANCE:
+                    break
+                prev_cols = _bucket_markers(prev_bucket)
+                if not prev_cols:
+                    break
+                for col, xs in prev_cols.items():
+                    header_cols.setdefault(col, []).extend(xs)
+                last_y = prev_y
+            # Look-ahead: шапка продолжается ниже (invoice-01 «НДС» на
+            # y=429.4 после dense y=419.3).
+            last_y = dense_y
+            for look_ahead in range(1, 4):
+                nidx = idx + look_ahead
+                if nidx >= len(buckets):
+                    break
+                next_bucket = buckets[nidx]
+                next_y = _bucket_y(next_bucket)
+                if next_y - last_y > _HEADER_Y_STICK_TOLERANCE:
+                    break
+                next_cols = _bucket_markers(next_bucket)
+                if not next_cols:
+                    break
+                for col, xs in next_cols.items():
+                    header_cols.setdefault(col, []).extend(xs)
+                header_idx = nidx
+                last_y = next_y
+            break
+
+    if not header_cols:
+        return {}, -1
+
+    detected: dict[str, tuple[float, float]] = {}
+    for col, extents in header_cols.items():
+        x_min = min(x0 for x0, _ in extents)
+        x_max = max(x1 for _, x1 in extents)
+        detected[col] = (x_min, x_max)
+    return detected, header_idx
+
+
+def extract_invoice_rows(page: object) -> list[TableRow]:
+    """Извлечь таблицу items счёта из страницы PDF в виде bbox-структуры.
+
+    Mirror `extract_structured_rows` (spec parser) по алгоритму:
+      1. Spans → derotate → y-bucket.
+      2. Column detection через `_detect_invoice_header` — ищет dense
+         header row с ≥3 маркерами invoice-паттернов.
+      3. Per-bucket: spans → колонки по x-center + x-gap aware join.
+      4. Footer filter (итого / НДС / всего к оплате).
+      5. Post-process split:
+         - qty «27 шт.» → qty + unit (если unit-колонка пуста).
+         - price_total «813 591,00 в наличии» → price_total + notes
+           (если notes-колонка пуста).
+    """
+    page_number = int(getattr(page, "number", 0)) + 1
+    spans = _collect_spans(page)
+    if not spans:
+        return []
+
+    page_rect = getattr(page, "rect", None)
+    buckets = _bucket_by_y(spans)
+
+    detected, last_header_idx = _detect_invoice_header(buckets)
+    if len(detected) < 4:
+        # Шапка счёта не распознана (либо мусорная вёрстка, либо скан без
+        # text layer). Не рискуем — возвращаем пусто, пусть multimodal/vision
+        # fallback отработает на картинке.
+        return []
+
+    ranges = _build_ranges_from_detected(detected)
+    baseline_size = _baseline_font_size(spans)
+
+    rows: list[TableRow] = []
+    row_idx = 0
+    for bidx, bucket in enumerate(buckets):
+        if bidx <= last_header_idx:
+            continue
+        if page_rect is not None and _is_title_block_bucket(bucket, page_rect):
+            continue
+
+        kept: list[_Span] = []
+        for span in bucket:
+            if is_stamp_text(span.text):
+                continue
+            kept.append(span)
+        if not kept:
+            continue
+
+        cells: dict[str, list[_Span]] = {k: [] for k in INVOICE_COLUMN_KEYS}
+        raw_blocks: list[str] = []
+        for span in sorted(kept, key=lambda s: s.disp_x):
+            center = span.disp_x + span.width / 2
+            col = _assign_column(center, ranges)
+            raw_blocks.append(span.text)
+            if col and col in cells:
+                cells[col].append(span)
+
+        merged_cells: dict[str, str] = {}
+        for col, col_spans in cells.items():
+            if not col_spans:
+                continue
+            text = _join_column_spans_with_gap(col_spans, baseline_size).strip()
+            if text:
+                merged_cells[col] = text
+
+        # Footer filter — итого/НДС/всего не попадают в items.
+        if _is_invoice_footer_row(merged_cells):
+            continue
+
+        merged_cells = _post_process_invoice_cells(merged_cells)
+
+        if not merged_cells:
+            continue
+
+        y_mid = sum(s.disp_y for s in kept) / len(kept)
+        rows.append(
+            TableRow(
+                page_number=page_number,
+                y_mid=y_mid,
+                row_index=row_idx,
+                cells=merged_cells,
+                raw_blocks=raw_blocks,
+                is_header=False,
+                is_section_heading=False,
+            )
+        )
+        row_idx += 1
+
+    return rows
+
+
+def _post_process_invoice_cells(cells: dict[str, str]) -> dict[str, str]:
+    """Split-heuristics: qty+unit / price_total+notes.
+
+    PyMuPDF часто склеивает соседние фрагменты текста в один span, если между
+    ними нет зазора. В инвойсе ЛУИС+ колонки «Сумма» и «Примечание» идут
+    вплотную → «813 591,00 в наличии» попадает как одна ячейка. Разделяем
+    явно, чтобы нормализатор (LLM) получил чистые значения.
+    """
+    out = dict(cells)
+
+    qty = out.get("qty", "")
+    if qty and not out.get("unit"):
+        qty_num, qty_unit = split_qty_unit(qty)
+        if qty_unit:
+            out["qty"] = qty_num
+            out["unit"] = qty_unit
+
+    total = out.get("price_total", "")
+    if total and not out.get("notes"):
+        num, tail = _split_number_with_tail(total)
+        if tail:
+            out["price_total"] = num
+            out["notes"] = tail
+
+    # Если «7 р.д.» попал в qty (ЛУИС+ row 4 — нет отдельного qty на этой
+    # строке, lead_time попал в qty-колонку из-за смещения) — нужно перенести
+    # в lead_time. Детект: qty не парсится как число, но парсится как период.
+    qty_after = out.get("qty", "")
+    if qty_after and parse_quantity(qty_after) is None:
+        lt_days = parse_lead_time_days(qty_after)
+        if lt_days is not None and not out.get("lead_time"):
+            out["lead_time"] = qty_after
+            del out["qty"]
+
+    return out
