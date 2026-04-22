@@ -336,6 +336,13 @@ services:
       MAX_FILE_SIZE_MB: ${RECOGNITION_MAX_FILE_SIZE_MB:-50}
       PARSE_TIMEOUT_SECONDS: ${RECOGNITION_PARSE_TIMEOUT_SECONDS:-300}
       LLM_MODEL: ${RECOGNITION_LLM_MODEL:-gpt-4o-mini}
+      # E15.05 it2 — гибрид: extract на gpt-4o full, classify mini,
+      # conditional multimodal retry при confidence < 0.7.
+      LLM_EXTRACT_MODEL: ${RECOGNITION_LLM_EXTRACT_MODEL:-gpt-4o}
+      LLM_CLASSIFY_MODEL: ${RECOGNITION_LLM_CLASSIFY_MODEL:-gpt-4o-mini}
+      LLM_MULTIMODAL_MODEL: ${RECOGNITION_LLM_MULTIMODAL_MODEL:-gpt-4o}
+      LLM_MULTIMODAL_RETRY_ENABLED: ${RECOGNITION_LLM_MULTIMODAL_RETRY_ENABLED:-true}
+      LLM_MULTIMODAL_RETRY_THRESHOLD: ${RECOGNITION_LLM_MULTIMODAL_RETRY_THRESHOLD:-0.7}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8003/v1/healthz"]
       interval: 30s

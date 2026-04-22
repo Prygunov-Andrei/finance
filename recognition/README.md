@@ -199,36 +199,72 @@ PYTHONPATH=. .venv/bin/python -m pytest --cov=app --cov-report=term-missing
 Dual-regression обязательна: оба теста должны проходить после любого
 редактирования `spec_normalizer.py` / `pdf_text.py`.
 
-## Pipeline: text-layer extraction + LLM normalization (E15.04)
+## Pipeline: гибрид bbox + conditional multimodal (E15.05 it2)
 
-SpecParser обрабатывает страницу по трёхуровневому pipeline:
+SpecParser обрабатывает страницу в три уровня + conditional retry:
 
-1. **Column-aware text-layer + LLM** (основной). `extract_structured_rows(page)`
-   в `services/pdf_text.py` — применяет `page.rotation_matrix` для derotation,
-   группирует span'ы в визуальные row'ы по Y (±5.5pt), мапит в колонки ЕСКД
-   формы 1а (`pos, name, model, brand, unit, qty, mass, comments`). Затем
-   `normalize_via_llm` (`services/spec_normalizer.py`) делает 1 gpt-4o-mini
-   call на страницу (temperature=0, response_format=json_object) для:
-   склейки multi-line имён, sticky parent наследования, детекции секций,
-   обработки артикульных вариантов и префикс-колонки «ПВ-ИТП». Все вызовы
-   параллельны через `asyncio.gather` → 9 стр A3 укладываются в ~27с.
+1. **Column-aware text-layer + LLM (Phase 1)** — основной путь.
+   `extract_structured_rows(page)` в `services/pdf_text.py`:
+   - применяет `page.rotation_matrix` для derotation ЕСКД landscape A3;
+   - группирует span'ы в визуальные row'ы по Y (±5.5pt);
+   - **R23 (E15.05 it2)** multi-row header склейка (`_merge_multi_row_header`):
+     кластеризует спаны header zone по x, вертикально склеивает с word-dash
+     rule («оборудо-» + «вания» → «оборудования»), матчит merged text
+     против `_HEADER_MARKER_PATTERNS` → per-page column bounds. Fallback
+     на single-row + shift-калибровку для простых шапок (spec-ov2/aov).
+   - **R24** — span-join в cells через x-gap (gap < font_size × 0.3 =
+     concat без пробела; иначе через пробел). Убирает «Pc=3 0 0 Па».
+   - **R25** — `is_stamp_cell` filter на все 9 cells (pos/name/model/
+     brand/manufacturer/unit/qty/mass/comments); ячейки-штампы чистятся,
+     row дропается если все cells-штампы.
+   - **R22** — отдельная колонка `manufacturer` (завод-изготовитель /
+     производитель) помимо `brand` (торговая марка / поставщик).
 
-2. **Legacy line-based** (fallback). Если провайдер не поддерживает
-   `text_complete` (Noop/Inert в тестах), или LLM вернул битый JSON, или
-   `settings.llm_normalize_enabled=False` — используется старый reading-order
-   парсер `parse_page_items`. Recall ниже (~138 items из 152), но не требует
-   OpenAI-ключа.
+   Затем `normalize_via_llm` делает один gpt-4o full call на страницу
+   (temperature=0, response_format=json_object) для склейки multi-line имён
+   (**R18-strict** — orphan-name ВСЕГДА continuation), sticky parent
+   наследования, детекции секций, обработки артикульных вариантов,
+   префикс-колонки «ПВ-ИТП», **R26** нормализации section_name
+   (trailing `:`/`—`/`-` очищается).
 
-3. **Vision fallback** (для сканов). Если text layer отсутствует
-   (`has_usable_text_layer()` False) — страница рендерится в PNG и отправляется
-   в gpt-4o-mini Vision (existing path, без изменений).
+2. **Multimodal Vision retry (Phase 2, R27)** — conditional.
+   После Phase 1 для каждой страницы вычисляется `compute_confidence`
+   (см. `services/spec_normalizer.py`). Если score < 0.7 (порог в
+   `settings.llm_multimodal_retry_threshold`) — страница рендерится в PNG
+   и отправляется `provider.multimodal_complete` с prompt + image_b64.
+   Модель: gpt-4o full (всегда). Broker-selection принимает Phase 2
+   результат только если его confidence выше Phase 1.
 
-Архитектурное обоснование выбора Вариант B (vs pure эвристика / pure Vision)
-см. [ADR 0024](../ismeta/docs/adr/0024-column-aware-llm-normalization.md).
+3. **Legacy line-based** (fallback без LLM). Если провайдер не поддерживает
+   `text_complete` (Noop/Inert в тестах), LLM вернул битый JSON, или
+   `settings.llm_normalize_enabled=False` — используется `parse_page_items`
+   (reading-order). Recall ниже (~138/152), но не требует OpenAI-ключа.
 
-**Kill switch:** `RECOGNITION_LLM_NORMALIZE_ENABLED=false` в env отключает
-column-aware LLM-путь и оставляет только legacy text-layer + Vision (для
-rollback без переразвёртывания кода).
+4. **Vision fallback** (для сканов). Если text layer отсутствует
+   (`has_usable_text_layer()` False) — страница идёт в `_classify_page` /
+   `_extract_items` через gpt-4o-mini Vision (legacy Vision-роут).
+
+**Метрики качества (3 goldens, baseline после E15.05 it2):**
+
+| Fixture    | Pages | Items target | Sections | Time (P1+P2) | Phase 2 retries |
+|------------|-------|--------------|----------|--------------|-----------------|
+| spec-ov2   | 9     | ≥145 / 152   | ≥6       | ≤45с         | 0-1             |
+| spec-aov   | 2     | 29 / 29      | ≥4       | ≤10с         | 0               |
+| spec-tabs  | 9     | ≥120 / ~150  | ≥4       | ≤120с        | 2-4             |
+
+Архитектурные решения: [ADR-0024](../ismeta/docs/adr/0024-column-aware-llm-normalization.md)
+(bbox + text LLM) и [ADR-0025](../ismeta/docs/adr/0025-multimodal-fallback-gpt4o.md)
+(гибрид it2).
+
+**Kill switches:**
+- `RECOGNITION_LLM_NORMALIZE_ENABLED=false` — отключает column-aware LLM,
+  остаётся legacy text-layer + Vision.
+- `RECOGNITION_LLM_MULTIMODAL_RETRY_ENABLED=false` — отключает Phase 2
+  (только bbox + Phase 1).
+- `RECOGNITION_LLM_MULTIMODAL_RETRY_THRESHOLD=0.5` — понизить порог retry
+  (более агрессивный retry на пограничных страницах).
+- `RECOGNITION_LLM_EXTRACT_MODEL=gpt-4o-mini` — вернуть mini для extract
+  (cost-сохраняющий режим).
 
 ## Логи
 

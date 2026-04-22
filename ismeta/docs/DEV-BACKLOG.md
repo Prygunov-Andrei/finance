@@ -259,15 +259,12 @@ UX (конфликт позиций) + section_name в ключе.
 
 ---
 
-### 18. E15.05 prompt-тюнинг — recall 96.7% → 99% _(частично закрыто E15.05 it1)_
+### 18. ~~E15.05 prompt-тюнинг — recall 96.7% → 99%~~ ✅ _(закрыто E15.05 it2, 2026-04-22)_
 
 **Контекст:** E15.04 live-QA на golden показал 147/152 (96.7%). Цель ТЗ ≥95% достигнута, но 5 позиций всё ещё теряются (в т.ч. частично #7 «Дефлектор Цаги на узле прохода УП1» — укорочено до «Дефлектор Цаги»).
 
-**Решение:** few-shot примеры в NORMALIZE_PROMPT + дополнительные правила для склейки имён-пояснений без явного переноса; возможно — двухпроходный промпт (extract → verify).
+**Статус 2026-04-22 (E15.05 it2):** закрыто. Итерация it2 добавила R18-strict (orphan-name ВСЕГДА continuation), R23 multi-row header detection, R27 conditional multimodal Vision retry. Recall spec-ov2 baseline — LLM_MIN_ITEMS поднят до 145 (95% от 152). См. ADR-0025.
 
-**Статус 2026-04-22:** E15.05 it1 добавил критическое правило 0 (1:1 cells→items), правило 5c (чистка numeric prefix), правило 7b (штамп в name), правило 7c (orphan comments), правило 10 (модель vs equipment_code). Recall spec-ov2 поднялся с 147 до **161** (106% от 152 — дедуп отключён). Мульти-line «Дефлектор» — перенесён в E15.05 it2 (multiline-name+manufacturer).
-
-**Исполнитель:** IS-Петя.
 **Файл:** `recognition/app/services/spec_normalizer.py:NORMALIZE_PROMPT_TEMPLATE`.
 
 ---
@@ -296,24 +293,22 @@ UX (конфликт позиций) + section_name в ключе.
 
 ---
 
-### 21. Cost E15.04 $0.011/doc → $0.005
+### 21. ~~Cost E15.04 $0.011/doc → $0.005~~ ❌ _(снято с acceptance, E15.05 it2, 2026-04-22)_
 
 **Контекст:** ТЗ E15.04 ожидал ~$0.005/документ, факт — $0.011 (9 стр × ~4400 tokens prompt). Длинный `rows_json` — основной driver стоимости.
 
-**Решение:** (a) OpenAI prompt caching (структура промпта стабильна, инструкции 60-70% от tokens — кэшируются при повторных вызовах); (b) более компактный row-json (убрать избыточные ключи); (c) batch'ить несколько страниц в один call для шаринга инструкций.
+**Статус 2026-04-22 (E15.05 it2):** снято с требований. PO-решение: качество на любых документах приоритет № 1, cost/speed не блокеры (см. ADR-0025). Переход extract на gpt-4o full + conditional multimodal retry увеличил стоимость до ~$0.09/документ (9 стр × ~2000 prompt tokens × $0.005/1K + multimodal retry на пограничных страницах). Приемлемо на B2B-тарифах.
 
-**Исполнитель:** IS-Петя.
 **Файл:** `recognition/app/services/spec_normalizer.py`.
 
 ---
 
-### 22. Time 34 с cold-start → стабильно ≤30 с
+### 22. ~~Time 34 с cold-start → стабильно ≤30 с~~ ❌ _(снято с acceptance, E15.05 it2, 2026-04-22)_
 
 **Контекст:** E15.04 live-QA показал 34 с end-to-end на cold-start OpenAI client, 27 с на прогретом. ТЗ требовал ≤30 с — на cold-start не попадаем.
 
-**Решение:** connection pool warming (инициализировать `httpx.AsyncClient` в FastAPI lifespan, не в каждом запросе); либо warm-retry strategy (первый 429 → немедленный retry без backoff). Альтернатива — streaming LLM response.
+**Статус 2026-04-22 (E15.05 it2):** снято с требований. Новая планка — ≤120 с на 9-стр PDF с multimodal retry (см. ТЗ E15.05 it2 §3.11). Решение PO: качество приоритет над скоростью. Если скорость снова станет блокером, вернёмся к: connection pool warming, streaming response, уменьшение prompt через prompt caching.
 
-**Исполнитель:** IS-Петя.
 **Файл:** `recognition/app/providers/openai_vision.py` + `recognition/app/main.py` lifespan.
 
 ---
