@@ -354,11 +354,22 @@ class SpecParser:
     def _append_normalized_items(
         self, normalized: NormalizedPage, page_num: int
     ) -> None:
-        """Преобразовать NormalizedItem-ы в SpecItem и дописать в state."""
+        """Преобразовать NormalizedItem-ы в SpecItem и дописать в state.
+
+        Секция — приоритет: `item.section_name` (LLM заполнил per-item для
+        страниц с несколькими разделами) → `normalized.new_section` (секция
+        по окончании страницы, для page-level) → `state.current_section`
+        (унаследована с предыдущих страниц).
+        """
         state = self.state
         for item_data in normalized.items:
             final_name = _merge_system_prefix(item_data)
             state.sort_order += 1
+            section = (
+                item_data.section_name
+                or normalized.new_section
+                or state.current_section
+            )
             state.items.append(
                 SpecItem(
                     name=final_name[:500],
@@ -368,7 +379,7 @@ class SpecParser:
                     quantity=item_data.quantity,
                     tech_specs="",  # comments теперь отдельное поле
                     comments=item_data.comments,
-                    section_name=normalized.new_section or state.current_section,
+                    section_name=section,
                     page_number=page_num + 1,
                     sort_order=state.sort_order,
                 )

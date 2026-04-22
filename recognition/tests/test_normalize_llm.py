@@ -190,3 +190,97 @@ async def test_prompt_includes_input_context():
     assert "Текущая секция" in provider.last_prompt
     assert "Текущий sticky" in provider.last_prompt
     assert '"cells"' in provider.last_prompt
+
+
+# ---------------------------------------------------------------------------
+# E15.05 it1 — промпт-правила (R17 / R19 / R20 / R21)
+# ---------------------------------------------------------------------------
+
+
+class TestPromptRulesPresent:
+    """Структурная проверка NORMALIZE_PROMPT_TEMPLATE: все критичные правила
+    из E15.05 it1 присутствуют в тексте. Если кто-то случайно удалит правило
+    при следующем редактировании — сломается здесь, а не на golden_llm в проде."""
+
+    def test_critical_rule_0_present(self):
+        from app.services.spec_normalizer import NORMALIZE_PROMPT_TEMPLATE
+
+        assert "КРИТИЧЕСКОЕ ПРАВИЛО 0" in NORMALIZE_PROMPT_TEMPLATE
+        assert "НЕ ПЕРЕСТАВЛЯЙ КОЛОНКИ" in NORMALIZE_PROMPT_TEMPLATE
+        assert "cells.brand" in NORMALIZE_PROMPT_TEMPLATE
+
+    def test_section_numeric_prefix_strip_rule(self):
+        from app.services.spec_normalizer import NORMALIZE_PROMPT_TEMPLATE
+
+        # Пример очистки префикса присутствует в правиле 1.
+        assert "1. Оборудование автоматизации" in NORMALIZE_PROMPT_TEMPLATE
+        assert "Оборудование автоматизации" in NORMALIZE_PROMPT_TEMPLATE
+        assert "new_section" in NORMALIZE_PROMPT_TEMPLATE
+
+    def test_numeric_prefix_rule_5c(self):
+        from app.services.spec_normalizer import NORMALIZE_PROMPT_TEMPLATE
+
+        # Правило 5c: префикс вида "1.1 " в cells.name должен сниматься.
+        assert "1.1 Комплект автоматизации" in NORMALIZE_PROMPT_TEMPLATE
+
+    def test_stamp_prefix_rule_7b(self):
+        from app.services.spec_normalizer import NORMALIZE_PROMPT_TEMPLATE
+
+        assert "Взаим.инв." in NORMALIZE_PROMPT_TEMPLATE
+        assert "Вз. инв." in NORMALIZE_PROMPT_TEMPLATE
+
+    def test_orphan_comments_rule_7c(self):
+        from app.services.spec_normalizer import NORMALIZE_PROMPT_TEMPLATE
+
+        assert "Orphan comments" in NORMALIZE_PROMPT_TEMPLATE
+
+    def test_model_equipment_code_rule_10(self):
+        from app.services.spec_normalizer import NORMALIZE_PROMPT_TEMPLATE
+
+        assert "Модель" in NORMALIZE_PROMPT_TEMPLATE
+        assert "Код оборудования" in NORMALIZE_PROMPT_TEMPLATE
+
+
+@pytest.mark.asyncio
+async def test_column_shift_does_not_happen_when_llm_obeys():
+    """Sanity: если LLM корректно скопировал cells → items, brand не утекает в
+    model_name. Это gating-test для правила 0 (сам тест не гарантирует, что
+    prompt сработает на LLM, но проверяет что мок-путь отдаёт поля 1:1)."""
+    resp = json.dumps(
+        {
+            "new_section": "Оборудование автоматизации",
+            "new_sticky": "",
+            "items": [
+                {
+                    "name": "Комплект автоматизации для приточной установки П1",
+                    "model_name": "",
+                    "brand": "ООО \"КОРФ\"",
+                    "unit": "шт.",
+                    "quantity": 1.0,
+                    "comments": "-учтено разделом ИОС4",
+                    "system_prefix": "",
+                }
+            ],
+        }
+    )
+    provider = _StubProvider(resp)
+    rows = [
+        _row(
+            0,
+            {
+                "name": "1.1 Комплект автоматизации для приточной установки П1",
+                "brand": "ООО \"КОРФ\"",
+                "unit": "шт.",
+                "qty": "1,00",
+                "comments": "-учтено разделом ИОС4",
+            },
+        )
+    ]
+    page = await normalize_via_llm(provider, rows, page_number=1)
+    assert len(page.items) == 1
+    it = page.items[0]
+    assert it.unit == "шт."
+    assert it.quantity == 1.0
+    assert "КОРФ" in it.brand
+    # Главное — brand НЕ должен утечь в model_name.
+    assert "КОРФ" not in it.model_name

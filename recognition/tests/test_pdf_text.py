@@ -514,3 +514,105 @@ class TestIsStampText:
         assert not is_stamp_text("1")
         assert not is_stamp_text("58")
         assert not is_stamp_text("4900")
+
+    def test_e15_05_extended_stamp_variants(self):
+        """E15.05 it1: штамп «Взаим.инв.» / «Вз.инв.» / «Инв.№ подл.» в
+        различных раскладках пунктуации (из spec-aov)."""
+        assert is_stamp_text("Взаим.инв.№")
+        assert is_stamp_text("Взаим. инв. №")
+        assert is_stamp_text("Взаим.инв.")
+        assert is_stamp_text("Вз.инв.№")
+        assert is_stamp_text("Вз. инв. №")
+        assert is_stamp_text("Инв. № подл.")
+        assert is_stamp_text("Инв.№ подл.")
+        assert is_stamp_text("Согласовано :")
+
+    def test_stamp_regex_does_not_eat_item_name(self):
+        """«Взаим.инв. № 5.6 Шпилька М8х1000» — это штамп + имя позиции в одном
+        span'е. Span-level фильтр не должен его матчить целиком (чтобы не
+        потерять позицию). Префикс штампа удаляет prompt-правило 7b."""
+        assert not is_stamp_text("Взаим.инв. № 5.6 Шпилька М8х1000")
+        assert not is_stamp_text("Шпилька М8х1000")
+
+
+class TestIsSectionExtended:
+    """E15.05 it1: расширенный _SECTION_RE ловит ЭОМ/автоматику/кабели +
+    числовой префикс «N. », «N.N »."""
+
+    def test_e15_05_new_sections(self):
+        assert is_section_heading("Оборудование автоматизации")
+        assert is_section_heading("Щитовое оборудование")
+        assert is_section_heading("Кабели и провода")
+        assert is_section_heading("Электроустановочные изделия")
+        assert is_section_heading("Лотки")
+        assert is_section_heading("Автоматика")
+
+    def test_numeric_prefix_allowed(self):
+        assert is_section_heading("1. Оборудование автоматизации")
+        assert is_section_heading("2. Щитовое оборудование")
+        assert is_section_heading("3. Кабели и провода")
+        assert is_section_heading("3.1 Клапаны на кровле (снаружи)")
+        assert is_section_heading("5. Лотки")
+
+    def test_multiline_description_not_section(self):
+        """Регрессия: многострочное продолжение имени НЕ должно считаться
+        секцией (нет ни ключевого слова, ни префикса, совпадающего с разделом)."""
+        assert not is_section_heading(
+            "не содержащей галогенов, не выделяющей коррозионно-активных газообразных"
+        )
+        assert not is_section_heading("продуктов при горении и тлении, ГОСТ 31996-2012")
+
+
+class TestLooksLikeSectionHeading:
+    """E15.05 it1: структурная эвристика для числовых-префиксных секций."""
+
+    def test_numeric_prefix_short_name_only(self):
+        from app.services.pdf_text import _looks_like_section_heading
+
+        assert _looks_like_section_heading(
+            {"name": "1. Оборудование автоматизации"}, []
+        )
+        assert _looks_like_section_heading(
+            {"name": "5. Лотки"}, []
+        )
+        assert _looks_like_section_heading(
+            {"name": "3.2 Кабели и провода"}, []
+        )
+
+    def test_rejects_multiline_description(self):
+        """Продолжение имени («продуктов при горении...») без числового префикса
+        НЕ попадает в секции — защита от ложного склеивания."""
+        from app.services.pdf_text import _looks_like_section_heading
+
+        assert not _looks_like_section_heading(
+            {"name": "продуктов при горении и тлении, ГОСТ 31996-2012"}, []
+        )
+        assert not _looks_like_section_heading(
+            {"name": "не содержащей галогенов, не выделяющей коррозионно-активных"}, []
+        )
+
+    def test_rejects_full_item_row(self):
+        from app.services.pdf_text import _looks_like_section_heading
+
+        # Row с brand/unit/qty — это item, не секция.
+        assert not _looks_like_section_heading(
+            {
+                "name": "1.1 Комплект автоматизации",
+                "brand": "КОРФ",
+                "unit": "шт.",
+                "qty": "1,00",
+            },
+            [],
+        )
+
+    def test_rejects_too_long_name(self):
+        from app.services.pdf_text import _looks_like_section_heading
+
+        long_name = "1. " + "x" * 90
+        assert not _looks_like_section_heading({"name": long_name}, [])
+
+    def test_empty_cells_rejected(self):
+        from app.services.pdf_text import _looks_like_section_heading
+
+        assert not _looks_like_section_heading({}, [])
+        assert not _looks_like_section_heading({"name": ""}, [])
