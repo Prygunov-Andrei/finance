@@ -208,6 +208,33 @@ components:
           - type: integer
           - type: 'null'
           title: Vat Rate
+        vat_amount:
+          type: number
+          title: Vat Amount
+          default: 0.0
+          description: E16 it1 — абсолютный НДС по строке (колонка «в т.ч. НДС»).
+            0.0 если поставщик не указывает per-item (УСН / итог-only).
+        lead_time_days:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Lead Time Days
+          description: E16 it1 — срок поставки в рабочих днях («7 р.д.» → 7).
+            None если не указан / «в наличии».
+        notes:
+          type: string
+          title: Notes
+          default: ''
+          description: E16 it1 — примечание из счёта («в наличии», «заказной»).
+        supply_type:
+          type: string
+          title: Supply Type
+          default: ''
+          description: E16 it1 — тип поставки (колонка «ЗТ*»), "X" = заказной.
+        tech_specs:
+          type: string
+          title: Tech Specs
+          default: ''
         page_number:
           type: integer
           title: Page Number
@@ -242,6 +269,22 @@ components:
           type: string
           title: Currency
           default: RUB
+        vat_rate:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Vat Rate
+          description: E16 it1 — ставка НДС % (22/20/10/0). None = «Без НДС» (УСН).
+        contract_ref:
+          type: string
+          title: Contract Ref
+          default: ''
+          description: E16 it1 — ссылка на договор («№ 12/20-315 от 22.12.2020»).
+        project_ref:
+          type: string
+          title: Project Ref
+          default: ''
+          description: E16 it1 — проектная / объектная привязка из примечания.
       type: object
       title: InvoiceMeta
     InvoiceParseResponse:
@@ -256,7 +299,7 @@ components:
           type: array
           title: Items
         supplier:
-          $ref: '#/components/schemas/SupplierInfo'
+          $ref: '#/components/schemas/InvoiceSupplier'
         invoice_meta:
           $ref: '#/components/schemas/InvoiceMeta'
         errors:
@@ -505,7 +548,9 @@ components:
           $ref: '#/components/schemas/PagesStats'
       type: object
       title: SpecParseResponse
-    SupplierInfo:
+    InvoiceSupplier:
+      description: E16 it1 — реквизиты поставщика. Алиас `SupplierInfo`
+        (старое имя) остаётся доступным на Python-уровне для backward-compat.
       properties:
         name:
           type: string
@@ -531,8 +576,23 @@ components:
           type: string
           title: Correspondent Account
           default: ''
+        address:
+          type: string
+          title: Address
+          default: ''
+          description: E16 it1 — юридический адрес поставщика.
+        bank_name:
+          type: string
+          title: Bank Name
+          default: ''
+          description: E16 it1 — название банка («АО „АЛЬФА-БАНК“»).
+        phone:
+          type: string
+          title: Phone
+          default: ''
+          description: E16 it1 — телефон поставщика если виден в шапке.
       type: object
-      title: SupplierInfo
+      title: InvoiceSupplier
     ValidationError:
       properties:
         loc:
