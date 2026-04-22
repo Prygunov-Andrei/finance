@@ -22,9 +22,7 @@
 
 | Файл | Кому | Статус | Ветка |
 |---|---|---|---|
-| [E15-05-it2-multiline-manufacturer-petya.md](./E15-05-it2-multiline-manufacturer-petya.md) | Петя | 🔴 E15.05 итерация 2 (bbox + multimodal hybrid) | `recognition/08-e15.05-it2-bbox-multimodal` |
-| [UI-06-merge-rows-fedya.md](./UI-06-merge-rows-fedya.md) | Федя | 🟠 Параллельно с Петей | `ismeta/ui-06-merge-rows` |
-| [UI-07-search-fedya.md](./UI-07-search-fedya.md) | Федя | 🟠 После UI-06 (или параллельно если успевает) | `ismeta/ui-07-items-search` |
+| [E16-it1-invoice-hybrid-petya.md](./E16-it1-invoice-hybrid-petya.md) | Петя | 🔴 E16 итерация 1 — Invoice гибрид | `recognition/09-e16-it1-invoice-hybrid` |
 
 ## Выполнено
 
@@ -39,6 +37,9 @@
 | UI-04-model-comments-columns-fedya.md | `ismeta/ui-04-model-comments-columns` | 2026-04-21 (main `2e442e5`) |
 | E15-04-column-aware-llm-normalization-petya.md | `recognition/06-column-aware-llm-normalization` | 2026-04-21 (main `28a5550`) |
 | E15-05-it1-prompt-sections-petya.md | `recognition/07-e15.05-it1-prompt-sections` | 2026-04-22 (main `f471d5f`) |
+| UI-06-merge-rows-fedya.md | `ismeta/ui-06-merge-rows` | 2026-04-22 (main `39f4377`) |
+| UI-07-search-fedya.md | `ismeta/ui-07-items-search` | 2026-04-22 (main `539ea7b`) |
+| E15-05-it2-multiline-manufacturer-petya.md | `recognition/08-e15.05-it2-bbox-multimodal` | 2026-04-22 (main `dbb0a9b`) |
 
 ## История
 
@@ -47,3 +48,4 @@
 - **2026-04-22 утро** — QA-сессия 3 на новом golden `spec-aov.pdf` (29 позиций, Автоматика/Кабели/Лотки). Выявлено 9 находок (#26–#34) → 5 новых root causes (R17 ext, R18, R19, R20, R21, R22). Главный блокер — LLM **сдвиг колонок** (model/brand/unit/qty перемешаны для items 1-15). Bbox-парсер работает корректно — баг только в промпте. План: E15.05 две итерации — сначала prompt+sections+stamp+numeric prefix, потом multi-line+manufacturer.
 - **2026-04-22 день** — E15.05 it1 замержен (R17 ext/R19/R20/R21 закрыты). Live-QA dual golden: spec-ov2 149/152=98%, spec-aov 29/29=100%.
 - **2026-04-22 день** — QA-сессия 4 на третьем golden `spec-tabs-116-ov.pdf` (9 стр, ~150 позиций, Вентиляция/Кондиционирование/БТП). 185 items распарсено, но все с `model_name=""` (R23 — multi-row header ЕСКД не детектируется). Плюс штампы в pos (R25), лишние пробелы в числах (R24), дубли секций `"X :"` (R26), multi-line split на 3 items (R18 слабо). Решение Андрея — гибрид bbox-hardening + multimodal Vision fallback. Цель: ≥95% качество на любых документах, cost/speed не блокер. E15.05 it2 расширен: R18/R22/R23/R24/R25/R26/R27 + переход на gpt-4o full. Параллельно UI-06 (Merge Rows) + UI-07 (Search) для Феди.
+- **2026-04-22 вечер** — E15.05 it2 + UI-06 + UI-07 замержены. Live-QA: spec-ov2 98%, spec-aov 100% с manufacturer, spec-tabs 87% model на 195 items. Гибрид для Spec документов закрыт. Андрей: «Запускаем работу над полным гибридом» — перенос архитектуры на Invoice (Счета) и Quote (КП). **E16 стартует**. Фаза 1 (it1) — Invoice hybrid, 2 golden'а (ГалВент 4 items, ЛУИС+ 15 items), схема расширяется (vat_rate, contract_ref, project_ref, lead_time_days, notes). Фаза 2 (it2) — Quote hybrid после мержа it1.
