@@ -9,7 +9,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     max_file_size_mb: int = 50
     parse_timeout_seconds: int = 300
-    llm_model: str = "gpt-4o-mini"
+    # E15.05 it2: выделяем модели по задачам. По решению PO (QA-сессия 4)
+    # extract гонит gpt-4o full — качество на ЕСКД-таблицах критичнее
+    # цены/скорости. classify остаётся mini (задача простая, вызывается
+    # только на Vision-роуте).
+    llm_model: str = "gpt-4o-mini"  # backward-compat, deprecated в favor llm_*_model
+    llm_extract_model: str = "gpt-4o"
+    llm_classify_model: str = "gpt-4o-mini"
+    llm_multimodal_model: str = "gpt-4o"
     llm_max_tokens: int = 4000
     # E15.04: column-aware text-layer pipeline → LLM normalization. False
     # отключает LLM-нормализацию и оставляет только legacy line-based
@@ -17,6 +24,9 @@ class Settings(BaseSettings):
     # быстрого rollback в случае проблем).
     llm_normalize_enabled: bool = True
     llm_normalize_max_tokens: int = 6000  # достаточно для ~30 items/стр в JSON
+    # E15.05 it2 (R27) — conditional multimodal Vision retry.
+    llm_multimodal_retry_enabled: bool = True
+    llm_multimodal_retry_threshold: float = 0.7
     dpi: int = 200
     max_page_retries: int = 2
     port: int = 8003

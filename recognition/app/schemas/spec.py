@@ -6,14 +6,15 @@ from pydantic import BaseModel, Field
 class SpecItem(BaseModel):
     name: str
     model_name: str = ""
+    # E15.05 it2: brand — торговая марка оборудования (Корф, IEK, Fujitsu).
+    # manufacturer — конкретный завод-поставщик (ООО «КОРФ», АО «ДКС»).
+    # В ЕСКД-таблицах это две разные колонки (brand = «Поставщик» / «Код
+    # продукции», manufacturer = «Завод-изготовитель» / «Производитель»).
     brand: str = ""
+    manufacturer: str = ""
     unit: str = "шт"
     quantity: float = 1.0
     tech_specs: str = ""
-    # E15.04: содержимое колонки «Примечание» (например «1кг на 1м2») —
-    # отдельное поле, чтобы фронт мог показать комментарий рядом с позицией
-    # без распаковки tech_specs JSON. Pydantic-default "" сохраняет обратную
-    # совместимость для старых клиентов.
     comments: str = ""
     section_name: str = ""
     page_number: int = 0

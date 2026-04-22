@@ -215,6 +215,44 @@ _STAMP_REGEX = re.compile(
 )
 
 
+# E15.05 it2 (R25): расширенный штамп-фильтр для ЯЧЕЕК column-aware парсера.
+# В отличие от `_STAMP_REGEX` — матч по **startswith** (без `$`), поскольку
+# эти фразы в title-block ЕСКД «Дата и подпись», «Код уч № док Подпись»
+# приходят одной ячейкой и не содержат полезного item-имени после себя.
+# Включает «Расчет фасонных деталей» (artefact часто попадает в cells.name
+# из правой подписи штампа), «Спецификация оборудования…» и «Инв. № подп.»
+# как отдельную фразу (в отличие от «Инв. № подл.» — эта считается одним
+# и тем же, но в спецификации ТАБС пишут через «п»).
+_STAMP_CELL_REGEX = re.compile(
+    r"^(?:Код\s+уч\s+№\s+док"
+    r"|Дата\s+и\s+подпись"
+    r"|Расчет\s+фасонных\s+деталей"
+    r"|Н\.?\s*контр\.?"
+    r"|Инв\.?\s*№\s*подп\.?"
+    r"|Спецификация\s+оборудования)",
+    re.IGNORECASE,
+)
+
+
+def is_stamp_cell(text: str) -> bool:
+    """Ячейка целиком является штампом/подписью из title-block.
+
+    Используется column-mapping'ом для дропа cells, в которые попали подписи
+    штампа («Дата и подпись», «Код уч № док»). Шире чем `is_stamp_text`: кроме
+    строгих маркеров Изм./Подп./шифра матчит полные фразы title-block по
+    startswith (см. `_STAMP_CELL_REGEX`). На span-level остаётся `is_stamp_text`
+    — не дропать лишнего (qty=1, qty=58 должны уцелеть).
+    """
+    s = text.strip()
+    if not s:
+        return True
+    if is_stamp_text(s):
+        return True
+    if _STAMP_CELL_REGEX.match(s):
+        return True
+    return False
+
+
 def is_section_heading(text: str) -> bool:
     """True для заголовка раздела спецификации."""
     return bool(_SECTION_RE.match(text.strip()))
@@ -364,6 +402,7 @@ COLUMN_KEYS: tuple[str, ...] = (
     "name",
     "model",
     "brand",
+    "manufacturer",
     "unit",
     "qty",
     "mass",
@@ -376,6 +415,15 @@ COLUMN_KEYS: tuple[str, ...] = (
 # токены вроде «во», «ре-», «кг» включены отдельно. Exact-match защищает от
 # ложных совпадений с именами оборудования (startswith «во» цеплял
 # «Воздуховод» как qty-header).
+#
+# E15.05 it2 (R22): split brand / manufacturer.
+#   brand        = «Код продукции» / «Поставщик» (торговая марка)
+#   manufacturer = «Завод-изготовитель» / «Производитель» / «Изготовитель»
+#
+# В реальных PDF названия колонок перекрываются: в некоторых проектах
+# «Поставщик» фактически играет роль производителя (ООО «КОРФ»). LLM
+# разбирается уже на prompt-уровне; тут — грубое column-mapping только
+# чтобы значение не потерялось.
 _HEADER_MARKERS: dict[str, str] = {
     "поз.": "pos",
     "наименование и техническая": "name",
@@ -389,6 +437,10 @@ _HEADER_MARKERS: dict[str, str] = {
     "код": "brand",
     "продукции": "brand",
     "поставщик": "brand",
+    "завод-изготовитель": "manufacturer",
+    "завод- изготовитель": "manufacturer",
+    "изготовитель": "manufacturer",
+    "производитель": "manufacturer",
     "ед.": "unit",
     "изме-": "unit",
     "ре-": "unit",
@@ -404,6 +456,80 @@ _HEADER_MARKERS: dict[str, str] = {
     "чание": "comments",
     "примечание": "comments",
 }
+
+
+# E15.05 it2 (R23): паттерн-матчинг по «склеенному» тексту шапки (многострочная
+# шапка с переносами слов через дефис). Проверяется после
+# `_merge_multi_row_header` — когда склеенный текст в x-кластере содержит
+# подстроку из patterns → колонка определена.
+#
+# Порядок важен: более специфичные (manufacturer, brand) идут раньше общих
+# (name, model). `"изготовитель"` в pattern может схватить «Завод-изготовитель»
+# — именно поэтому manufacturer проверяется первым.
+_HEADER_MARKER_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
+    ("pos", ("поз.", "позиция", "поз ")),
+    ("manufacturer", (
+        "завод-изготовитель", "завод- изготовитель", "завод изготовитель",
+        "производитель", "изготовитель",
+    )),
+    ("brand", ("код продукции", "код оборудования", "поставщик")),
+    ("name", ("наименование", "характеристика")),
+    ("model", (
+        "тип, марка", "тип марка", "обозначение документа",
+        "обозначение", "опросного листа",
+    )),
+    ("mass", ("масса",)),
+    ("unit", ("ед. изм", "ед.изм", "единица изм", "единицы изм", "ед изм", "единица")),
+    ("qty", ("количество", "кол-во", "кол. ")),
+    ("comments", ("примечание",)),
+]
+
+
+def _match_column_from_merged_text(merged_text: str) -> str | None:
+    """Сопоставить склеенный текст шапки колонки с column key.
+
+    Работает по подстроке (first-match wins) после lower() и удаления
+    хвостовой пунктуации. Порядок patterns критичен — см. комментарий
+    в `_HEADER_MARKER_PATTERNS`.
+    """
+    t = merged_text.strip().lower()
+    t = re.sub(r"[\s\-,.:;]+$", "", t)
+    if not t:
+        return None
+    for col, patterns in _HEADER_MARKER_PATTERNS:
+        for p in patterns:
+            if p in t:
+                return col
+    return None
+
+
+def _concat_header_fragments(spans: list["_Span"]) -> str:
+    """Склеить фрагменты шапки одного x-кластера в единый текст.
+
+    Sort by y (top→down), concat с word-dash rule:
+      - если предыдущий фрагмент заканчивается на `-` → concat без пробела,
+        дефис отрезается («оборудо-» + «вания» → «оборудования»);
+      - иначе — через пробел («Тип, марка,» + «обозначение документа»).
+
+    Длинное тире `—` не trigger'ит dash-concat — только обычный `-`.
+    """
+    if not spans:
+        return ""
+    spans_sorted = sorted(spans, key=lambda s: s.disp_y)
+    parts: list[str] = []
+    for s in spans_sorted:
+        txt = s.text.strip()
+        if not txt:
+            continue
+        if parts:
+            last = parts[-1]
+            if last.endswith("-") and not last.endswith(" -") and not last.endswith("—"):
+                parts[-1] = last[:-1] + txt
+                continue
+            parts.append(" " + txt)
+        else:
+            parts.append(txt)
+    return "".join(parts).strip()
 
 # Канонические границы колонок ЕСКД спецификации в display-space (landscape
 # A3, 1191×842 после rotation_matrix). Промерены на golden PDF + соответствуют
@@ -556,14 +682,29 @@ def _detect_column_ranges(
 ) -> tuple[dict[str, tuple[float, float]], int]:
     """Определить диапазоны display_x каждой колонки + last_header_bucket_idx.
 
-    ЕСКД спецификация всегда имеет одну и ту же ширину колонок (форма 1а
-    ГОСТ 21.110), поэтому используем фиксированные `_DEFAULT_COLUMN_BOUNDS`,
-    а шапку детектируем только чтобы знать, где заканчивается header zone.
+    Сначала пытаемся detect per-page boundaries через multi-row header склейку
+    (R23, E15.05 it2): шапка в ЕСКД часто занимает 3-6 строк с word-dash
+    переносами, `_merge_multi_row_header` кластеризует span'ы header zone по x
+    и матчит склеенный текст против patterns.
 
-    Если детектированные центры шапки сильно смещены от `_DEFAULT_COLUMN_CENTERS`
-    (среднее отклонение > 15pt) — сдвигаем все границы на это смещение
-    (компенсация полей разных макетов).
+    Если удалось поймать ≥3 колонок — возвращаем per-page ranges (mid-point
+    boundaries между соседними detected columns).
+
+    Fallback (меньше 3 detected) — старый single-row mode с shift-калибровкой
+    `_DEFAULT_COLUMN_BOUNDS`. Гарантия backward-совместимости для spec-ov2 и
+    spec-aov, где шапка одно-/двустрочная и хорошо ложится на канон ГОСТ 21.110.
     """
+    # R23 — multi-row header detection. Триггерится когда шапка multi-row
+    # И detector поймал ≥ 4 колонок — иначе остаёмся на проверенной
+    # shift-калибровке `_DEFAULT_COLUMN_BOUNDS` (spec-ov2/aov single-row
+    # шапка). Порог 4 (а не 3) — защита от single-row PDF'ов с частично
+    # совпадающими маркерами, где per-page detection даёт narrow bounds
+    # и теряет spans за пределами header extent.
+    detected, last_header_idx_multi = _merge_multi_row_header(buckets)
+    if _is_multi_row_header(buckets, last_header_idx_multi) and len(detected) >= 4:
+        return _build_ranges_from_detected(detected), last_header_idx_multi
+
+    # Fallback — single-row с shift-калибровкой (pre-it2 поведение).
     col_centers: dict[str, list[float]] = {k: [] for k in COLUMN_KEYS}
     last_header_idx = -1
     first_header_idx = -1
@@ -583,13 +724,9 @@ def _detect_column_ranges(
                 first_header_idx = idx
             last_header_idx = idx
         elif first_header_idx != -1 and last_header_idx != -1 and idx == last_header_idx + 1:
-            # Хвостовые подстроки шапки («во», «ния», «кг») часто остаются в
-            # отдельных y-bucket'ах с <3 матчей — пропускаем их вместе с шапкой,
-            # пока bucket'ы идут подряд.
             if matches >= 1:
                 last_header_idx = idx
 
-    # Среднее смещение по обнаруженным колонкам vs канонические центры.
     deltas: list[float] = []
     for col, xs in col_centers.items():
         if xs and col in _DEFAULT_COLUMN_CENTERS:
@@ -603,6 +740,132 @@ def _detect_column_ranges(
         new_hi = hi if hi == float("inf") else hi + shift
         ranges[col] = (new_lo, new_hi)
     return ranges, last_header_idx
+
+
+def _merge_multi_row_header(
+    buckets: list[list[_Span]],
+    *,
+    probe_buckets: int = 14,
+    x_tolerance: float = 20.0,
+) -> tuple[dict[str, tuple[float, float]], int]:
+    """R23: склеить многострочную шапку → per-column x-extent.
+
+    Алгоритм:
+    1. Ищем «header zone» — непрерывный диапазон первых buckets
+       (в верхней части страницы), где хотя бы один span совпадает с
+       `_HEADER_MARKER_PATTERNS`.
+    2. Collect все span'ы header zone → кластеризуем по x-центру
+       (±x_tolerance ≈ половина символа при 10pt шрифте).
+    3. Для каждого кластера: `_concat_header_fragments` склеивает фрагменты
+       top→down с word-dash rule → match против patterns.
+    4. Возвращаем (per-column (x_min, x_max), last_header_idx).
+
+    Если зона шапки не найдена — `({}, -1)`.
+    """
+    first_header_idx = -1
+    last_header_idx = -1
+    probe_limit = min(len(buckets), probe_buckets)
+    for idx in range(probe_limit):
+        bucket = buckets[idx]
+        has_marker = False
+        for span in bucket:
+            t = span.text.strip().lower()
+            if not t:
+                continue
+            for _col, patterns in _HEADER_MARKER_PATTERNS:
+                if any(p in t for p in patterns):
+                    has_marker = True
+                    break
+            if has_marker:
+                break
+        if has_marker:
+            if first_header_idx == -1:
+                first_header_idx = idx
+            last_header_idx = idx
+
+    if first_header_idx == -1:
+        return {}, -1
+
+    header_spans: list[_Span] = []
+    for idx in range(first_header_idx, last_header_idx + 1):
+        header_spans.extend(buckets[idx])
+
+    # Кластеризация по x-center с жадным greedy grouping.
+    header_spans.sort(key=lambda s: s.disp_x + s.width / 2)
+    clusters: list[list[_Span]] = []
+    for span in header_spans:
+        c_new = span.disp_x + span.width / 2
+        if clusters:
+            prev = clusters[-1]
+            prev_center = sum(
+                (s.disp_x + s.width / 2) for s in prev
+            ) / len(prev)
+            if abs(c_new - prev_center) <= x_tolerance:
+                prev.append(span)
+                continue
+        clusters.append([span])
+
+    detected: dict[str, tuple[float, float]] = {}
+    for cluster in clusters:
+        merged = _concat_header_fragments(cluster)
+        col = _match_column_from_merged_text(merged)
+        if not col:
+            continue
+        x_min = min(s.disp_x for s in cluster)
+        x_max = max(s.disp_x + s.width for s in cluster)
+        if col in detected:
+            lo, hi = detected[col]
+            detected[col] = (min(lo, x_min), max(hi, x_max))
+        else:
+            detected[col] = (x_min, x_max)
+
+    return detected, last_header_idx
+
+
+def _is_multi_row_header(buckets: list[list[_Span]], last_header_idx: int) -> bool:
+    """Признак multi-row header: header zone занимает ≥ 2 y-bucket'а.
+
+    Single-row header (spec-ov2/aov) — ровно 1 bucket. Multi-row (spec-tabs) —
+    3-6 buckets. Используется как gate для per-page column detection: чтобы
+    не ломать проверенный shift-path для простых шапок.
+    """
+    if last_header_idx < 1:
+        return False
+    # Считаем сколько buckets содержат хотя бы один header-marker.
+    header_buckets = 0
+    for idx in range(min(last_header_idx + 1, len(buckets))):
+        bucket = buckets[idx]
+        for span in bucket:
+            t = span.text.strip().lower()
+            if not t:
+                continue
+            matched = False
+            for _col, patterns in _HEADER_MARKER_PATTERNS:
+                if any(p in t for p in patterns):
+                    matched = True
+                    break
+            if matched:
+                header_buckets += 1
+                break
+    return header_buckets >= 2
+
+
+def _build_ranges_from_detected(
+    detected: dict[str, tuple[float, float]],
+) -> dict[str, tuple[float, float]]:
+    """Преобразовать detected x-extents → непересекающиеся column ranges.
+
+    Границы между соседними columns = midpoint между правым краем левого
+    column и левым краем правого. Для крайних columns — ±∞ (чтобы spans
+    за пределами детектированных центров всё равно попали в ближайшую).
+    """
+    order = sorted(detected.items(), key=lambda kv: (kv[1][0] + kv[1][1]) / 2)
+    ranges: dict[str, tuple[float, float]] = {}
+    for i, (col, (x0, x1)) in enumerate(order):
+        left = float("-inf") if i == 0 else (order[i - 1][1][1] + x0) / 2
+        right = float("inf") if i == len(order) - 1 else (x1 + order[i + 1][1][0]) / 2
+        ranges[col] = (left, right)
+    return ranges
 
 
 def _assign_column(disp_x_center: float, ranges: dict[str, tuple[float, float]]) -> str:
@@ -698,11 +961,26 @@ def extract_structured_rows(page: object) -> list[TableRow]:
         for col, col_spans in cells.items():
             if not col_spans:
                 continue
-            text = " ".join(s.text for s in sorted(col_spans, key=lambda s: s.disp_x)).strip()
+            # R24 — x-gap aware join (E15.05 it2): не склеиваем «Pc=3 0 0 Па»
+            # с лишними пробелами. Spans с маленьким x-gap (<font_size*0.3)
+            # идут вплотную, с большим — через пробел.
+            text = _join_column_spans_with_gap(col_spans, baseline_size).strip()
             if text:
                 merged_cells[col] = text
 
+        # R25 — stamp filter по всем cells (E15.05 it2, был только cells.name).
+        # Если ячейка целиком штамп («Дата и подпись», «Код уч № док») —
+        # чистим её. Если после очистки в row не осталось полезных cells →
+        # дропаем row полностью (title-block fragment).
+        merged_cells = {
+            col: val for col, val in merged_cells.items() if not is_stamp_cell(val)
+        }
+
         if not merged_cells and not raw_blocks:
+            continue
+        if not merged_cells:
+            # Все cells-штампы отфильтрованы, ни одна не попала в колонки —
+            # это artefact title-block. Не emit'им TableRow.
             continue
 
         y_mid = sum(s.disp_y for s in kept) / len(kept)
@@ -787,6 +1065,37 @@ def _is_bare_name_row(row: TableRow) -> bool:
         return False
     # Допускаем pos (системный префикс), но больше ничего.
     return filled.issubset({"name", "pos"}) and not row.is_section_heading
+
+
+def _join_column_spans_with_gap(spans: list[_Span], baseline_size: float) -> str:
+    """R24 (E15.05 it2): склейка span'ов одной колонки с учётом x-gap.
+
+    PDF часто выводит «Pc=300 Па» как 4-5 отдельных span'ов из-за kerning
+    (`Pc=` + `3` + `0` + `0` + `Па`). Старая склейка через `" ".join()` давала
+    «Pc=3 0 0 Па». Здесь смотрим на физический x-gap между соседними spans:
+
+      gap < font_size * 0.3  → внутри слова/числа, concat без пробела
+      gap ≥ font_size * 0.3  → между словами, concat через пробел
+
+    Threshold 30% от font_size — типовая ширина пробела в моноширинном 10pt
+    шрифте. Baseline font size используется если в спане size=0 (missing
+    metadata — редкий edge case у синтетических pdf).
+    """
+    if not spans:
+        return ""
+    spans_sorted = sorted(spans, key=lambda s: s.disp_x)
+    parts: list[str] = [spans_sorted[0].text]
+    for i in range(1, len(spans_sorted)):
+        prev = spans_sorted[i - 1]
+        cur = spans_sorted[i]
+        gap = cur.disp_x - (prev.disp_x + prev.width)
+        font_size = max(cur.size, prev.size, baseline_size)
+        threshold = font_size * 0.3
+        if gap < threshold:
+            parts.append(cur.text)
+        else:
+            parts.append(" " + cur.text)
+    return "".join(parts)
 
 
 def _baseline_font_size(spans: list[_Span]) -> float:

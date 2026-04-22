@@ -126,6 +126,11 @@ def apply_parsed_items(
                 tech_specs["model_name"] = item["model_name"]
             if item.get("brand"):
                 tech_specs["brand"] = item["brand"]
+            # E15.05 it2 (R22): отдельное поле manufacturer («Завод-изготовитель»
+            # / «Производитель»). В отличие от brand (торговая марка) —
+            # указывает конкретного поставщика (ООО «КОРФ», АО «ДКС»).
+            if item.get("manufacturer"):
+                tech_specs["manufacturer"] = item["manufacturer"]
             if item.get("page_number"):
                 tech_specs.setdefault("source_page", item["page_number"])
             # E15.04: колонка «Примечание» и system prefix приходят от
