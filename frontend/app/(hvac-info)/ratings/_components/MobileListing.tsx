@@ -37,8 +37,6 @@ export default function MobileListing({
 
   const activeCount =
     filters.brands.length +
-    filters.regions.length +
-    (filters.capacity === 'any' ? 0 : 1) +
     (filters.priceMin != null ? 1 : 0) +
     (filters.priceMax != null ? 1 : 0);
 
@@ -496,34 +494,6 @@ function MobileFilterDrawer({
               />
             </div>
           </DrawerSection>
-          <DrawerSection title="Мощность">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {CAPACITY_OPTIONS.map((opt) => {
-                const on = filters.capacity === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setCapacity(opt.id)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 14,
-                      border: on
-                        ? '1px solid hsl(var(--rt-accent))'
-                        : '1px solid hsl(var(--rt-border))',
-                      background: on ? 'hsl(var(--rt-accent-bg))' : 'hsl(var(--rt-paper))',
-                      fontSize: 11,
-                      fontWeight: on ? 600 : 500,
-                      color: on ? 'hsl(var(--rt-accent))' : 'hsl(var(--rt-ink-60))',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </DrawerSection>
           <DrawerSection title="Бренд">
             <ChipCheckList
               items={facets.brands.map((b) => ({ id: b, label: b }))}
@@ -531,13 +501,7 @@ function MobileFilterDrawer({
               onChange={setBrands}
             />
           </DrawerSection>
-          <DrawerSection title="Регион">
-            <ChipCheckList
-              items={facets.regions.map((r) => ({ id: r.code, label: r.label }))}
-              selected={filters.regions}
-              onChange={setRegions}
-            />
-          </DrawerSection>
+          {/* Region + Capacity фильтры убраны по решению 2026-04-22 */}
         </div>
       </div>
     </div>

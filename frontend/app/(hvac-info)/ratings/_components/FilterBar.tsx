@@ -36,8 +36,6 @@ export default function FilterBar(props: FilterBarProps) {
   } = props;
   const hasActive =
     filters.brands.length > 0 ||
-    filters.regions.length > 0 ||
-    filters.capacity !== 'any' ||
     filters.priceMin != null ||
     filters.priceMax != null;
 
@@ -61,12 +59,7 @@ export default function FilterBar(props: FilterBarProps) {
         onMin={setPriceMin}
         onMax={setPriceMax}
       />
-      <RegionDropdown
-        regions={facets.regions}
-        selected={filters.regions}
-        onChange={setRegions}
-      />
-      <CapacityDropdown value={filters.capacity} onChange={setCapacity} />
+      {/* Region + Capacity фильтры убраны по решению 2026-04-22 — дизайн предусматривает только brand + price. */}
       {hasActive && (
         <button
           type="button"
