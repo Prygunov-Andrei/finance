@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 type Props = {
   full: ReactNode;
@@ -9,26 +9,25 @@ type Props = {
   /** На mobile hero может занимать слишком много места при свернутом виде —
    *  по умолчанию свернутое состояние отключено на <768px (sticky только для children). */
   disableCollapseOnMobile?: boolean;
-  /** Порог в пикселях, после которого hero сворачивается. */
-  threshold?: number;
 };
 
 /**
  * Sticky-wrapper для верхней части страницы рейтинга.
  *
- * При scrollY > threshold full-hero скрывается (display:none — без ремоунта),
- * sticky-блок с collapsed-версией + children прилипает под HvacInfoHeader.
- * При scroll обратно — full-hero восстанавливается, sticky теряет тень.
+ * Full-hero всегда присутствует в потоке (без display:none), чтобы избежать
+ * layout-shift при переключении. Sentinel сразу после full-hero отслеживается
+ * IntersectionObserver: когда sentinel уходит за верх viewport (= full-hero
+ * полностью прокручен), sticky-rail показывает collapsed-версию + children.
  */
 export default function StickyCollapseHero({
   full,
   collapsed,
   children,
   disableCollapseOnMobile = true,
-  threshold = 120,
 }: Props) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showCollapsed, setShowCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -42,25 +41,32 @@ export default function StickyCollapseHero({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (disableCollapseOnMobile && isMobile) {
-      setIsCollapsed(false);
+      setShowCollapsed(false);
       return;
     }
-    const onScroll = () => setIsCollapsed(window.scrollY > threshold);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [disableCollapseOnMobile, isMobile, threshold]);
-
-  const showCollapsed = isCollapsed && !(disableCollapseOnMobile && isMobile);
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        // sentinel ушёл выше верха viewport → full-hero полностью прокручен
+        const above = entry.boundingClientRect.top < 0;
+        setShowCollapsed(!entry.isIntersecting && above);
+      },
+      { threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [disableCollapseOnMobile, isMobile]);
 
   return (
     <>
+      <div data-testid="sticky-hero-full">{full}</div>
       <div
-        data-testid="sticky-hero-full"
-        style={{ display: showCollapsed ? 'none' : 'block' }}
-      >
-        {full}
-      </div>
+        ref={sentinelRef}
+        aria-hidden
+        data-testid="sticky-hero-sentinel"
+        style={{ height: 1, marginTop: -1 }}
+      />
       <div
         data-testid="sticky-hero-rail"
         data-collapsed={showCollapsed ? 'true' : 'false'}
