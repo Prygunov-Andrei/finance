@@ -318,6 +318,18 @@ UX (конфликт позиций) + section_name в ключе.
 
 ---
 
+### 24. UI-06 merge rows — atomic backend endpoint
+
+**Контекст:** UI-06 (2026-04-22) объединяет строки с клиента через 1 PATCH + N-1 DELETE последовательно. При падении одного из DELETE пользователь увидит смешанное состояние (name/model уже слиты, но лишняя строка осталась); это решается повторным запуском. Для MVP приемлемо.
+
+**Решение:** backend endpoint `POST /api/v1/estimates/{id}/items/bulk-merge/` — принимает `{ first_id, other_ids[], merged: { name, tech_specs } }`, выполняет PATCH + DELETE в рамках одной транзакции. На клиенте заменяет цикл в `items-table.tsx` на одиночный вызов.
+
+**Исполнитель:** IS-Петя (backend) + IS-Федя (клиент). Делать по прямому запросу пользователя (сейчас MVP-вариант устраивает).
+
+**Файл:** `ismeta/backend/apps/estimate/` (новый ViewSet action) + `ismeta/frontend/components/estimate/items-table.tsx` (замена mergeRows mutation).
+
+---
+
 ### 23. CI валидация golden_llm через GitHub Actions secrets
 
 **Контекст:** `pytest -m golden_llm` пропускается без `OPENAI_API_KEY` в env (skipif). Значит в CI регрессии recall после mergе промпта/парсера не ловятся — видны только при локальном прогоне.
@@ -339,3 +351,4 @@ UX (конфликт позиций) + section_name в ключе.
 - 2026-04-21: #13–16 (E15.03 review минорные — sticky на Vision-пути, хрупкие стампы, SECTION_RE coverage, except без traceback)
 - 2026-04-21: #17 (E15.03-hotfix — dedup убран, varchar truncate)
 - 2026-04-21: #18–23 (E15.05 — prompt recall 99%, section МОП split, LLM_MIN_ITEMS 142, cost, time, CI golden_llm)
+- 2026-04-22: #24 (UI-06 merge rows — atomic bulk-merge endpoint, follow-up к client-side merge)

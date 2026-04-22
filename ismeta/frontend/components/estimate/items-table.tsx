@@ -13,6 +13,14 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -27,6 +35,7 @@ import { MaterialPickerCell } from "./material-picker-cell";
 import { ProcurementStatusSelect } from "./procurement-status-select";
 import type { EquipmentTrack } from "./track-tabs";
 import { techSpecsTitle } from "./tech-specs";
+import { computeMerged, isSameSection } from "./merge-rows";
 import { ApiError, itemApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
 import { cn, formatCurrency, formatDecimal } from "@/lib/utils";
@@ -172,8 +181,151 @@ export function ItemsTable({
     [update],
   );
 
+  const [selectedIds, setSelectedIds] = React.useState<Set<UUID>>(
+    () => new Set(),
+  );
+  const [lastClickedId, setLastClickedId] = React.useState<UUID | null>(null);
+  const [mergeDialogOpen, setMergeDialogOpen] = React.useState(false);
+
+  // Чистим выделение если строка выделения исчезла из items (после merge/delete/
+  // смены track/section). Оставляем только валидные id.
+  React.useEffect(() => {
+    const valid = new Set(items.map((it) => it.id));
+    setSelectedIds((prev) => {
+      let changed = false;
+      const next = new Set<UUID>();
+      for (const id of prev) {
+        if (valid.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [items]);
+
+  const selectedItems = React.useMemo(
+    () => items.filter((it) => selectedIds.has(it.id)),
+    [items, selectedIds],
+  );
+
+  const allSelected =
+    items.length > 0 && items.every((it) => selectedIds.has(it.id));
+  const someSelected =
+    selectedIds.size > 0 && selectedIds.size < items.length;
+
+  const sameSection = React.useMemo(
+    () => isSameSection(items, selectedIds),
+    [items, selectedIds],
+  );
+
+  const toggleSelect = React.useCallback(
+    (itemId: UUID, shift: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (shift && lastClickedId && lastClickedId !== itemId) {
+          const lastIdx = items.findIndex((it) => it.id === lastClickedId);
+          const curIdx = items.findIndex((it) => it.id === itemId);
+          if (lastIdx !== -1 && curIdx !== -1) {
+            const [from, to] =
+              lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+            for (let i = from; i <= to; i++) next.add(items[i].id);
+            return next;
+          }
+        }
+        if (next.has(itemId)) next.delete(itemId);
+        else next.add(itemId);
+        return next;
+      });
+      setLastClickedId(itemId);
+    },
+    [items, lastClickedId],
+  );
+
+  const toggleSelectAll = React.useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size > 0) return new Set();
+      return new Set(items.map((it) => it.id));
+    });
+    setLastClickedId(null);
+  }, [items]);
+
+  const clearSelection = React.useCallback(() => {
+    setSelectedIds(new Set());
+    setLastClickedId(null);
+  }, []);
+
+  const mergeRows = useMutation({
+    mutationFn: async ({
+      first,
+      others,
+    }: {
+      first: EstimateItem;
+      others: EstimateItem[];
+    }) => {
+      const patch = computeMerged([first, ...others]);
+      await itemApi.update(first.id, patch, first.version, workspaceId);
+      for (const other of others) {
+        await itemApi.softDelete(other.id, other.version, workspaceId);
+      }
+      return { count: others.length + 1 };
+    },
+    onSuccess: (data) => {
+      invalidate();
+      toast.success(`Объединено ${data.count} строк в одну`);
+      setSelectedIds(new Set());
+      setLastClickedId(null);
+      setMergeDialogOpen(false);
+    },
+    onError: (e: unknown) => {
+      const detail =
+        e instanceof ApiError
+          ? (e.problem?.detail ?? "Ошибка сервера")
+          : e instanceof Error
+            ? e.message
+            : "Неизвестная ошибка";
+      toast.error(`Не удалось объединить: ${detail}`);
+      invalidate();
+      setMergeDialogOpen(false);
+    },
+  });
+
   const columns = React.useMemo<ColumnDef<EstimateItem>[]>(
     () => [
+      {
+        id: "select",
+        header: () => (
+          <input
+            type="checkbox"
+            aria-label="Выделить все строки"
+            className="h-4 w-4 cursor-pointer rounded border-muted-foreground/40 accent-primary"
+            checked={allSelected}
+            ref={(el) => {
+              if (el) el.indeterminate = someSelected;
+            }}
+            onChange={toggleSelectAll}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ),
+        cell: ({ row }) => {
+          const id = row.original.id;
+          const checked = selectedIds.has(id);
+          return (
+            <input
+              type="checkbox"
+              aria-label={`Выделить строку ${row.index + 1}`}
+              className="h-4 w-4 cursor-pointer rounded border-muted-foreground/40 accent-primary"
+              checked={checked}
+              onChange={() => {
+                /* управляется onClick */
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSelect(id, e.shiftKey);
+              }}
+            />
+          );
+        },
+        size: 36,
+      },
       {
         id: "row",
         header: "№",
@@ -416,7 +568,21 @@ export function ItemsTable({
         size: 48,
       },
     ],
-    [commitField, commitTechSpec, remove, toggleKeyEquipment, setProcurementStatus, track, update.isPending, workspaceId],
+    [
+      commitField,
+      commitTechSpec,
+      remove,
+      toggleKeyEquipment,
+      setProcurementStatus,
+      track,
+      update.isPending,
+      workspaceId,
+      selectedIds,
+      allSelected,
+      someSelected,
+      toggleSelect,
+      toggleSelectAll,
+    ],
   );
 
   const table = useReactTable({
@@ -442,8 +608,67 @@ export function ItemsTable({
   const sectionIdForNew = activeSectionId ?? fallbackSectionId;
   const canAdd = Boolean(sectionIdForNew);
 
+  const showBulkToolbar = selectedIds.size >= 2;
+  const mergeDisabled = !sameSection;
+  const mergeDisabledTooltip = mergeDisabled
+    ? "Строки должны быть в одной секции"
+    : undefined;
+  const mergePreview = React.useMemo(() => {
+    if (selectedItems.length < 2) return null;
+    // Порядок превью — по sort_order в пределах текущей подборки items.
+    const sorted = [...selectedItems].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    );
+    return {
+      first: sorted[0],
+      others: sorted.slice(1),
+      merged: computeMerged(sorted),
+      all: sorted,
+    };
+  }, [selectedItems]);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {showBulkToolbar && (
+        <div
+          className="sticky top-0 z-20 flex items-center gap-3 border-b bg-primary/5 px-4 py-2 text-sm"
+          data-testid="merge-toolbar"
+          role="toolbar"
+          aria-label="Действия с выделенными строками"
+        >
+          <span className="font-medium">
+            Выделено: {selectedIds.size}{" "}
+            {selectedIds.size === 1
+              ? "строка"
+              : selectedIds.size < 5
+                ? "строки"
+                : "строк"}
+          </span>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => setMergeDialogOpen(true)}
+            disabled={mergeDisabled || mergeRows.isPending}
+            title={mergeDisabledTooltip}
+            data-testid="merge-button"
+          >
+            Объединить
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={clearSelection}
+            disabled={mergeRows.isPending}
+          >
+            Отмена
+          </Button>
+          {mergeDisabled && (
+            <span className="text-xs text-muted-foreground">
+              Строки должны быть в одной секции
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex-1 overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
@@ -484,16 +709,21 @@ export function ItemsTable({
                 const isHighlighted =
                   highlightItemId !== null &&
                   row.original.id === highlightItemId;
+                const isSelected = selectedIds.has(row.original.id);
                 const specsTitle = techSpecsTitle(row.original.tech_specs);
                 return (
                   <TableRow
                     key={row.id}
                     id={`item-row-${row.original.id}`}
                     data-highlighted={isHighlighted || undefined}
+                    data-selected={isSelected || undefined}
                     title={specsTitle}
                     className={cn(
                       isHighlighted &&
                         "animate-pulse bg-amber-100/60 dark:bg-amber-900/30",
+                      isSelected &&
+                        !isHighlighted &&
+                        "bg-primary/10 dark:bg-primary/20",
                     )}
                   >
                     {row.getVisibleCells().map((cell) => (
@@ -541,6 +771,123 @@ export function ItemsTable({
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              Объединить {selectedItems.length} строк{" "}
+              {selectedItems.length === 1
+                ? "у"
+                : selectedItems.length < 5
+                  ? "и"
+                  : ""}
+              ?
+            </DialogTitle>
+            <DialogDescription>
+              Значения «Наименование», «Модель» и «Примечание» будут склеены
+              через пробел. Остальные поля берутся из первой строки. Остальные
+              строки будут удалены.
+            </DialogDescription>
+          </DialogHeader>
+
+          {mergePreview && (
+            <div
+              className="space-y-3 text-sm"
+              data-testid="merge-preview"
+            >
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Наименование
+                </div>
+                <div
+                  className="whitespace-pre-wrap break-words rounded border bg-muted/30 px-3 py-2"
+                  data-testid="merge-preview-name"
+                >
+                  {mergePreview.merged.name || (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Модель
+                </div>
+                <div
+                  className="whitespace-pre-wrap break-words rounded border bg-muted/30 px-3 py-2"
+                  data-testid="merge-preview-model"
+                >
+                  {(mergePreview.merged.tech_specs.model_name as string) || (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Примечание
+                </div>
+                <div
+                  className="whitespace-pre-wrap break-words rounded border bg-muted/30 px-3 py-2"
+                  data-testid="merge-preview-comments"
+                >
+                  {(mergePreview.merged.tech_specs.comments as string) || (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                <span>
+                  Ед.изм.:{" "}
+                  <span className="font-medium text-foreground">
+                    {mergePreview.first.unit || "—"}
+                  </span>
+                </span>
+                <span>
+                  Кол-во:{" "}
+                  <span className="font-medium text-foreground">
+                    {formatDecimal(mergePreview.first.quantity)}
+                  </span>
+                </span>
+                <span className="italic">(взято из первой строки)</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Удаляются строки:{" "}
+                {mergePreview.others
+                  .map((it) => {
+                    const idx = items.findIndex((x) => x.id === it.id);
+                    return idx >= 0 ? `${idx + 1}-я` : "";
+                  })
+                  .filter(Boolean)
+                  .join(", ")}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMergeDialogOpen(false)}
+              disabled={mergeRows.isPending}
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                if (!mergePreview) return;
+                mergeRows.mutate({
+                  first: mergePreview.first,
+                  others: mergePreview.others,
+                });
+              }}
+              disabled={mergeRows.isPending || !mergePreview}
+              data-testid="merge-confirm"
+            >
+              {mergeRows.isPending ? "Объединяем…" : "Объединить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-end gap-6 border-t bg-muted/30 px-6 py-3 text-sm tabular-nums">
         <span className="text-muted-foreground">
