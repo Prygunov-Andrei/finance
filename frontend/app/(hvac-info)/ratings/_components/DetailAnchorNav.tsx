@@ -54,8 +54,10 @@ export default function DetailAnchorNav() {
       aria-label="Разделы страницы"
       style={{
         position: 'sticky',
-        top: 0,
-        zIndex: 5,
+        // Под collapsed-hero rail (высота ~49px: 12px padding + ~25px content + 12px + 1px border).
+        // На mobile collapsed отключён — anchor-nav прилипает к top:0.
+        top: 'var(--rt-anchor-top, 49px)',
+        zIndex: 15,
         background: 'hsl(var(--rt-paper))',
         borderBottom: '1px solid hsl(var(--rt-border-subtle))',
       }}
@@ -120,6 +122,9 @@ export default function DetailAnchorNav() {
       <style>{`
         @media (max-width: 899px) {
           .rt-anchor-scroller { padding: 0 14px !important; gap: 18px !important; }
+        }
+        @media (max-width: 767px) {
+          .rt-anchor-nav { --rt-anchor-top: 0px; }
         }
       `}</style>
     </nav>

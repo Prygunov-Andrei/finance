@@ -3,8 +3,10 @@ import type { Metadata } from 'next';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingMethodology } from '@/lib/api/services/rating';
 import BackToRating from '../_components/BackToRating';
+import SectionFooter from '../_components/SectionFooter';
+import StickyCollapseHero from '../_components/StickyCollapseHero';
 
-import MethodologyHero from './MethodologyHero';
+import MethodologyHero, { MethodologyHeroCollapsed } from './MethodologyHero';
 import MethodologyTable from './MethodologyTable';
 
 export const metadata: Metadata = {
@@ -37,14 +39,29 @@ export default async function RatingMethodologyPage() {
       <HvacInfoHeader />
       <main className="hvac-content">
         <BackToRating />
-        <MethodologyHero
-          stats={methodology.stats}
-          criteriaCount={methodology.criteria.length}
-          version={methodology.version}
-          weightSum={weightSum}
-        />
+      </main>
+      <StickyCollapseHero
+        full={
+          <MethodologyHero
+            stats={methodology.stats}
+            criteriaCount={methodology.criteria.length}
+            version={methodology.version}
+            weightSum={weightSum}
+          />
+        }
+        collapsed={
+          <MethodologyHeroCollapsed
+            stats={methodology.stats}
+            criteriaCount={methodology.criteria.length}
+            version={methodology.version}
+            weightSum={weightSum}
+          />
+        }
+      />
+      <main className="hvac-content">
         <MethodologyTable criteria={methodology.criteria} />
       </main>
+      <SectionFooter />
     </>
   );
 }

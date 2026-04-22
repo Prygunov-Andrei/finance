@@ -8,9 +8,10 @@ import {
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import DetailBreadcrumb from '../_components/DetailBreadcrumb';
-import DetailHero from '../_components/DetailHero';
+import DetailHero, { DetailHeroCollapsed } from '../_components/DetailHero';
 import DetailMedia from '../_components/DetailMedia';
 import DetailAnchorNav from '../_components/DetailAnchorNav';
+import StickyCollapseHero from '../_components/StickyCollapseHero';
 import DetailOverview from '../_components/DetailOverview';
 import DetailCriteria from '../_components/DetailCriteria';
 import DetailNewsMentions from '../_components/DetailNewsMentions';
@@ -19,6 +20,7 @@ import DetailSpecs from '../_components/DetailSpecs';
 import DetailBuy from '../_components/DetailBuy';
 import DetailReviews from '../_components/DetailReviews';
 import DetailRelated from '../_components/DetailRelated';
+import SectionFooter from '../_components/SectionFooter';
 import { fallbackLede } from '../_components/detailHelpers';
 
 export const revalidate = 3600;
@@ -98,16 +100,33 @@ export default async function RatingDetailPage({ params }: Props) {
       <HvacInfoHeader />
       <main className="hvac-content">
         <DetailBreadcrumb />
-        <DetailHero
-          detail={detail}
-          stats={{
-            total_models: totalModels,
-            active_criteria_count:
-              methodology?.stats.active_criteria_count ?? detail.parameter_scores.length,
-            median_total_index: median,
-          }}
-          median={median}
-        />
+      </main>
+      <StickyCollapseHero
+        full={
+          <DetailHero
+            detail={detail}
+            stats={{
+              total_models: totalModels,
+              active_criteria_count:
+                methodology?.stats.active_criteria_count ?? detail.parameter_scores.length,
+              median_total_index: median,
+            }}
+            median={median}
+          />
+        }
+        collapsed={
+          <DetailHeroCollapsed
+            detail={detail}
+            stats={{
+              total_models: totalModels,
+              active_criteria_count:
+                methodology?.stats.active_criteria_count ?? detail.parameter_scores.length,
+              median_total_index: median,
+            }}
+          />
+        }
+      />
+      <main className="hvac-content">
         <DetailMedia detail={detail} />
         <DetailAnchorNav />
         <DetailOverview detail={detail} />
@@ -125,6 +144,7 @@ export default async function RatingDetailPage({ params }: Props) {
         <DetailReviews detail={detail} />
         <DetailRelated detail={detail} models={list} />
       </main>
+      <SectionFooter />
     </>
   );
 }

@@ -4,7 +4,7 @@ import {
   getRatingModels,
 } from '@/lib/api/services/rating';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
-import HeroBlock from './_components/HeroBlock';
+import HeroBlock, { HeroBlockCollapsed } from './_components/HeroBlock';
 import DesktopListing from './_components/DesktopListing';
 import MobileListing from './_components/MobileListing';
 import SeoBlock from './_components/SeoBlock';
@@ -35,19 +35,23 @@ export default async function RatingHomePage() {
   return (
     <>
       <HvacInfoHeader />
+      <Suspense fallback={null}>
+        <div className="hidden md:block">
+          <DesktopListing
+            models={publishedModels}
+            methodology={methodology}
+            hero={<HeroBlock stats={methodology.stats} />}
+            heroCollapsed={<HeroBlockCollapsed stats={methodology.stats} />}
+          />
+        </div>
+        <div className="md:hidden">
+          <MobileListing models={publishedModels} methodology={methodology} />
+        </div>
+      </Suspense>
       <main className="hvac-content">
-        <Suspense fallback={null}>
-          <div className="hidden md:block">
-            <HeroBlock stats={methodology.stats} />
-            <DesktopListing models={publishedModels} methodology={methodology} />
-          </div>
-          <div className="md:hidden">
-            <MobileListing models={publishedModels} methodology={methodology} />
-          </div>
-        </Suspense>
         <SeoBlock />
-        <SectionFooter />
       </main>
+      <SectionFooter />
     </>
   );
 }

@@ -11,6 +11,7 @@ import RatingTabs, { useCurrentTab } from './RatingTabs';
 import FilterBar from './FilterBar';
 import { useRatingFilters } from './useRatingFilters';
 import CustomRatingTab from './CustomRatingTab';
+import StickyCollapseHero from './StickyCollapseHero';
 
 const PAGE_SIZE = 20;
 const GRID = '56px 180px 60px 160px 1fr 140px 160px';
@@ -18,9 +19,13 @@ const GRID = '56px 180px 60px 160px 1fr 140px 160px';
 export default function DesktopListing({
   models,
   methodology,
+  hero,
+  heroCollapsed,
 }: {
   models: RatingModelListItem[];
   methodology: RatingMethodology;
+  hero: ReactNode;
+  heroCollapsed: ReactNode;
 }) {
   const tab = useCurrentTab();
   const {
@@ -37,24 +42,30 @@ export default function DesktopListing({
 
   return (
     <>
-      <div style={{ padding: '20px 40px 0' }}>
-        <RatingTabs />
+      <StickyCollapseHero full={hero} collapsed={heroCollapsed}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+          <div style={{ padding: '20px 40px 0' }}>
+            <RatingTabs />
+          </div>
+          <FilterBar
+            filters={filters}
+            facets={facets}
+            setBrands={setBrands}
+            setRegions={setRegions}
+            setCapacity={setCapacity}
+            setPriceMin={setPriceMin}
+            setPriceMax={setPriceMax}
+            resetAll={resetAll}
+          />
+        </div>
+      </StickyCollapseHero>
+      <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+        {tab === 'custom' ? (
+          <CustomRatingTab models={filtered} methodology={methodology} variant="desktop" />
+        ) : (
+          <RankedTable models={filtered} mode={tab} />
+        )}
       </div>
-      <FilterBar
-        filters={filters}
-        facets={facets}
-        setBrands={setBrands}
-        setRegions={setRegions}
-        setCapacity={setCapacity}
-        setPriceMin={setPriceMin}
-        setPriceMax={setPriceMax}
-        resetAll={resetAll}
-      />
-      {tab === 'custom' ? (
-        <CustomRatingTab models={filtered} methodology={methodology} variant="desktop" />
-      ) : (
-        <RankedTable models={filtered} mode={tab} />
-      )}
     </>
   );
 }

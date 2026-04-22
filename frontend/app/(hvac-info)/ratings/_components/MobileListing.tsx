@@ -45,17 +45,26 @@ export default function MobileListing({
       <MobileHero stats={methodology.stats} />
       <div
         style={{
-          padding: '10px 18px 0',
-          borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          background: 'hsl(var(--rt-paper))',
         }}
       >
-        <RatingTabs compact />
+        <div
+          style={{
+            padding: '10px 18px 0',
+            borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+          }}
+        >
+          <RatingTabs compact />
+        </div>
+        <FilterButtons
+          activeCount={activeCount}
+          totalCount={filtered.length}
+          onOpen={() => setDrawer(true)}
+        />
       </div>
-      <FilterButtons
-        activeCount={activeCount}
-        totalCount={filtered.length}
-        onOpen={() => setDrawer(true)}
-      />
       {tab === 'custom' ? (
         <CustomRatingTab models={filtered} methodology={methodology} variant="mobile" />
       ) : (

@@ -3,8 +3,10 @@ import type { Metadata } from 'next';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingBrands } from '@/lib/api/services/rating';
 import BackToRating from '../_components/BackToRating';
+import SectionFooter from '../_components/SectionFooter';
 
 import SubmitForm from './SubmitForm';
+import SubmitHero from './SubmitHero';
 
 export const metadata: Metadata = {
   title: 'Добавить модель в рейтинг',
@@ -26,8 +28,12 @@ export default async function RatingSubmitPage() {
       <HvacInfoHeader />
       <main className="hvac-content">
         <BackToRating />
+      </main>
+      <SubmitHero />
+      <main className="hvac-content">
         <SubmitForm brands={brands} />
       </main>
+      <SectionFooter />
     </>
   );
 }

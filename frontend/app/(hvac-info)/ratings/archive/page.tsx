@@ -3,8 +3,10 @@ import type { Metadata } from 'next';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingArchiveModels } from '@/lib/api/services/rating';
 import BackToRating from '../_components/BackToRating';
+import SectionFooter from '../_components/SectionFooter';
+import StickyCollapseHero from '../_components/StickyCollapseHero';
 
-import ArchiveHero from './ArchiveHero';
+import ArchiveHero, { ArchiveHeroCollapsed } from './ArchiveHero';
 import ArchiveTable from './ArchiveTable';
 
 export const metadata: Metadata = {
@@ -27,9 +29,15 @@ export default async function RatingArchivePage() {
       <HvacInfoHeader />
       <main className="hvac-content">
         <BackToRating />
-        <ArchiveHero count={models.length} />
+      </main>
+      <StickyCollapseHero
+        full={<ArchiveHero count={models.length} />}
+        collapsed={<ArchiveHeroCollapsed count={models.length} />}
+      />
+      <main className="hvac-content">
         <ArchiveTable models={models} />
       </main>
+      <SectionFooter />
     </>
   );
 }
