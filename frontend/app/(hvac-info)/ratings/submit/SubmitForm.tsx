@@ -327,7 +327,7 @@ export default function SubmitForm({ brands }: Props) {
   return (
     <main
       className="rt-submit-root"
-      style={{ padding: '40px 40px 60px', maxWidth: 960, margin: '0 auto' }}
+      style={{ padding: '28px 40px 60px', maxWidth: 960, margin: '0 auto' }}
     >
       {successEmail != null && (
         <div
@@ -351,103 +351,9 @@ export default function SubmitForm({ brands }: Props) {
         </div>
       )}
 
-      <p
-        style={{
-          fontFamily: 'var(--rt-font-mono)',
-          fontSize: 10,
-          color: 'hsl(var(--rt-ink-40))',
-          textTransform: 'uppercase',
-          letterSpacing: 1.4,
-          margin: 0,
-        }}
-      >
-        Заявка
-      </p>
-      <h1
-        style={{
-          fontFamily: 'var(--rt-font-serif)',
-          fontSize: 30,
-          fontWeight: 600,
-          letterSpacing: -0.5,
-          margin: '8px 0 0',
-        }}
-      >
-        Добавить новый кондиционер в рейтинг
-      </h1>
-      <p
-        style={{
-          fontFamily: 'var(--rt-font-serif)',
-          fontSize: 13,
-          lineHeight: 1.65,
-          color: 'hsl(var(--rt-ink-60))',
-          margin: '12px 0 0',
-          maxWidth: 720,
-        }}
-      >
-        Хотите, чтобы ваш кондиционер попал в независимый рейтинг
-        «Август-климат»? Выполните объективные замеры комплектующих и функционала
-        и пришлите их нам.
-      </p>
-
       <div
         style={{
-          marginTop: 22,
-          padding: '18px 20px',
-          background: 'hsl(var(--rt-alt))',
-          borderRadius: 4,
-        }}
-      >
-        <p
-          style={{
-            fontFamily: 'var(--rt-font-mono)',
-            fontSize: 11,
-            color: 'hsl(var(--rt-ink-40))',
-            textTransform: 'uppercase',
-            letterSpacing: 1.2,
-            margin: 0,
-            marginBottom: 10,
-          }}
-        >
-          Как это работает
-        </p>
-        {[
-          'Заполните форму ниже — укажите бренд, модель и контактные данные.',
-          'Подтвердите результаты измерений фото- или видеоматериалами.',
-          'При необходимости мы свяжемся с вами для уточнения деталей.',
-          'После проверки результаты появятся в рейтинге — с измерениями и итоговым индексом.',
-        ].map((t, i) => (
-          <div
-            key={i}
-            style={{ display: 'flex', gap: 10, padding: '6px 0' }}
-          >
-            <span
-              style={{
-                fontFamily: 'var(--rt-font-mono)',
-                fontSize: 11,
-                color: 'hsl(var(--rt-accent))',
-                fontWeight: 600,
-                width: 18,
-                flexShrink: 0,
-              }}
-            >
-              {i + 1}.
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                lineHeight: 1.55,
-                color: 'hsl(var(--rt-ink-80))',
-              }}
-            >
-              {t}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div
-        style={{
-          marginTop: 14,
+          marginTop: 0,
           padding: '14px 16px',
           borderLeft: '3px solid hsl(var(--rt-accent))',
           background: 'hsl(var(--rt-accent-bg))',

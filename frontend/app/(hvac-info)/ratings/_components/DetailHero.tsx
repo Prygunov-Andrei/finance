@@ -25,52 +25,179 @@ export default function DetailHero({ detail, stats, median }: Props) {
   return (
     <section
       style={{
-        padding: '44px 40px 40px',
         background: 'hsl(var(--rt-alt))',
         borderBottom: '1px solid hsl(var(--rt-border-subtle))',
       }}
       className="rt-detail-hero"
     >
-      {/* Desktop 2-col */}
       <div
-        className="rt-hero-desktop"
+        className="rt-detail-hero-inner"
         style={{
-          display: 'none',
-          gridTemplateColumns: '1.45fr 1fr',
-          gap: 56,
-          alignItems: 'start',
+          maxWidth: 1280,
+          margin: '0 auto',
+          padding: '44px 40px 40px',
         }}
       >
-        <HeroLeft detail={detail} lede={lede} />
-        <HeroRight
-          detail={detail}
-          stats={stats}
-          median={median}
-          minPrice={minPrice}
-          suppliersCount={suppliersCount}
-          rankText={rankText}
-        />
-      </div>
+        {/* Desktop 2-col */}
+        <div
+          className="rt-hero-desktop"
+          style={{
+            display: 'none',
+            gridTemplateColumns: '1.45fr 1fr',
+            gap: 56,
+            alignItems: 'start',
+          }}
+        >
+          <HeroLeft detail={detail} lede={lede} />
+          <HeroRight
+            detail={detail}
+            stats={stats}
+            median={median}
+            minPrice={minPrice}
+            suppliersCount={suppliersCount}
+            rankText={rankText}
+          />
+        </div>
 
-      {/* Mobile stacked */}
-      <div className="rt-hero-mobile" style={{ display: 'block' }}>
-        <HeroMobile
-          detail={detail}
-          lede={lede}
-          median={median}
-          minPrice={minPrice}
-          suppliersCount={suppliersCount}
-        />
+        {/* Mobile stacked */}
+        <div className="rt-hero-mobile" style={{ display: 'block' }}>
+          <HeroMobile
+            detail={detail}
+            lede={lede}
+            median={median}
+            minPrice={minPrice}
+            suppliersCount={suppliersCount}
+          />
+        </div>
       </div>
 
       <style>{`
         @media (min-width: 900px) {
           .rt-hero-desktop { display: grid !important; }
           .rt-hero-mobile { display: none !important; }
-          .rt-detail-hero { padding: 44px 40px 40px; }
         }
         @media (max-width: 899px) {
-          .rt-detail-hero { padding: 20px 18px 22px !important; }
+          .rt-detail-hero-inner { padding: 20px 18px 22px !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+export function DetailHeroCollapsed({ detail, stats }: { detail: RatingModelDetail; stats: RatingMethodologyStats }) {
+  const rankText = detail.rank != null ? `№ ${detail.rank}` : '—';
+  return (
+    <section
+      style={{
+        background: 'hsl(var(--rt-alt))',
+        borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1280,
+          margin: '0 auto',
+          padding: '10px 40px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'nowrap',
+          overflow: 'hidden',
+        }}
+        className="rt-detail-hero-collapsed-inner"
+      >
+        <BrandLogo src={detail.brand.logo} name={detail.brand.name} size={28} />
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'hsl(var(--rt-ink))',
+            letterSpacing: -0.1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {detail.brand.name}
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            color: 'hsl(var(--rt-ink-60))',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {detail.inner_unit || detail.series}
+        </span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 6,
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--rt-font-serif)',
+              fontSize: 18,
+              fontWeight: 600,
+              color: 'hsl(var(--rt-accent))',
+              letterSpacing: -0.3,
+            }}
+          >
+            {rankText}
+          </span>
+          <span
+            style={{
+              fontSize: 10,
+              color: 'hsl(var(--rt-ink-60))',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            из {stats.total_models}
+          </span>
+        </div>
+        <span
+          aria-hidden
+          style={{
+            width: 1,
+            height: 16,
+            background: 'hsl(var(--rt-border))',
+            flexShrink: 0,
+          }}
+          className="rt-detail-collapsed-sep"
+        />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 5,
+            flexShrink: 0,
+          }}
+          className="rt-detail-collapsed-index"
+        >
+          <span
+            style={{
+              fontFamily: 'var(--rt-font-serif)',
+              fontSize: 16,
+              fontWeight: 600,
+              letterSpacing: -0.2,
+              color: 'hsl(var(--rt-ink))',
+            }}
+          >
+            {detail.total_index.toFixed(1)}
+          </span>
+          <span style={{ fontSize: 10, color: 'hsl(var(--rt-ink-60))' }}>индекс</span>
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 600px) {
+          .rt-detail-collapsed-sep,
+          .rt-detail-collapsed-index { display: none !important; }
+          .rt-detail-hero-collapsed-inner { padding: 10px 18px !important; }
         }
       `}</style>
     </section>
