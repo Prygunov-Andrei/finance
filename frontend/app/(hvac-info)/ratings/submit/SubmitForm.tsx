@@ -13,6 +13,11 @@ import {
 
 import type { RatingBrandOption } from '@/lib/api/types/rating';
 
+import StickyCollapseHero from '../_components/StickyCollapseHero';
+import SubmitHero, { SubmitHeroCollapsed } from './SubmitHero';
+import SubmitSectionNav, { SUBMIT_SECTIONS } from './SubmitSectionNav';
+import type { SubmitSectionId } from './SubmitSectionNav';
+
 const IONIZER_CHOICES = ['Нет', 'ПДС', 'Серебро', 'Биоклимат'];
 const RUSSIAN_REMOTE_CHOICES = ['Нет', 'Только пульт', 'Экран и пульт'];
 const UV_LAMP_CHOICES = ['Нет', 'Есть'];
@@ -130,6 +135,66 @@ export function isFormReady(
   if (state.fan_speed_outdoor === null) return false;
   if (state.remote_backlight === null) return false;
   return true;
+}
+
+export function isSectionComplete(
+  id: SubmitSectionId,
+  state: FormState,
+  photos: File[],
+): boolean {
+  if (id === '01') {
+    if (!state.brand && !state.custom_brand_name.trim()) return false;
+    return (
+      [
+        'inner_unit',
+        'outer_unit',
+        'compressor_model',
+        'nominal_capacity_watt',
+      ] as const
+    ).every((f) => state[f].trim() !== '');
+  }
+  if (id === '02') {
+    if (state.erv === null) return false;
+    if (state.fan_speed_outdoor === null) return false;
+    if (state.remote_backlight === null) return false;
+    return (
+      [
+        'drain_pan_heater',
+        'fan_speeds_indoor',
+        'fine_filters',
+        'ionizer_type',
+        'russian_remote',
+        'uv_lamp',
+      ] as const
+    ).every((f) => state[f].trim() !== '');
+  }
+  if (id === '03') {
+    return (
+      [
+        'inner_he_length_mm',
+        'inner_he_tube_count',
+        'inner_he_tube_diameter_mm',
+      ] as const
+    ).every((f) => state[f].trim() !== '');
+  }
+  if (id === '04') {
+    return (
+      [
+        'outer_he_length_mm',
+        'outer_he_tube_count',
+        'outer_he_tube_diameter_mm',
+        'outer_he_thickness_mm',
+      ] as const
+    ).every((f) => state[f].trim() !== '');
+  }
+  if (id === '05') {
+    return (
+      photos.length >= 1 &&
+      state.submitter_email.trim() !== '' &&
+      state.consent
+    );
+  }
+  return false;
 }
 
 export function validatePhotos(files: File[]): string | null {
@@ -324,76 +389,53 @@ export default function SubmitForm({ brands }: Props) {
 
   const ready = useMemo(() => isFormReady(state, photos), [state, photos]);
 
-  return (
-    <main
-      className="rt-submit-root"
-      style={{ padding: '28px 40px 60px', maxWidth: 960, margin: '0 auto' }}
-    >
-      {successEmail != null && (
-        <div
-          role="status"
-          data-testid="submit-success"
-          style={{
-            padding: '14px 18px',
-            marginBottom: 18,
-            background: 'hsl(var(--rt-accent-bg))',
-            border: '1px solid hsl(var(--rt-accent))',
-            borderRadius: 4,
-            color: 'hsl(var(--rt-accent))',
-            fontWeight: 500,
-          }}
-        >
-          Заявка отправлена на модерацию. Проверьте почту{' '}
-          <span style={{ fontFamily: 'var(--rt-font-mono)' }}>
-            {successEmail}
-          </span>{' '}
-          — результат рассмотрения придёт туда.
-        </div>
-      )}
+  const completeness = useMemo(
+    () =>
+      SUBMIT_SECTIONS.reduce(
+        (acc, s) => {
+          acc[s.id] = isSectionComplete(s.id, state, photos);
+          return acc;
+        },
+        {} as Record<SubmitSectionId, boolean>,
+      ),
+    [state, photos],
+  );
 
-      <div
-        style={{
-          marginTop: 0,
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-        }}
+  return (
+    <>
+      <StickyCollapseHero
+        full={<SubmitHero />}
+        collapsed={<SubmitHeroCollapsed />}
       >
-        {[
-          ['01', 'Модель'],
-          ['02', 'Характеристики'],
-          ['03', 'Теплообменник внутр.'],
-          ['04', 'Теплообменник наруж.'],
-          ['05', 'Подтверждение'],
-        ].map(([n, t]) => (
-          <span
-            key={n}
+        <SubmitSectionNav completeness={completeness} />
+      </StickyCollapseHero>
+      <main
+        className="hvac-content rt-submit-root"
+        style={{ padding: '28px 40px 60px', maxWidth: 960, margin: '0 auto' }}
+      >
+        {successEmail != null && (
+          <div
+            role="status"
+            data-testid="submit-success"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '5px 10px',
-              border: '1px solid hsl(var(--rt-border-subtle))',
-              borderRadius: 3,
-              background: 'transparent',
-              color: 'hsl(var(--rt-ink-60))',
+              padding: '14px 18px',
+              marginBottom: 18,
+              background: 'hsl(var(--rt-accent-bg))',
+              border: '1px solid hsl(var(--rt-accent))',
+              borderRadius: 4,
+              color: 'hsl(var(--rt-accent))',
+              fontWeight: 500,
             }}
           >
-            <span
-              style={{
-                fontFamily: 'var(--rt-font-mono)',
-                fontSize: 10,
-                letterSpacing: 1,
-              }}
-            >
-              {n}
-            </span>
-            <span style={{ fontSize: 11 }}>{t}</span>
-          </span>
-        ))}
-      </div>
+            Заявка отправлена на модерацию. Проверьте почту{' '}
+            <span style={{ fontFamily: 'var(--rt-font-mono)' }}>
+              {successEmail}
+            </span>{' '}
+            — результат рассмотрения придёт туда.
+          </div>
+        )}
 
-      <form onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit} noValidate>
         <HoneypotInput
           value={state.website}
           onChange={(v) => setField('website', v)}
@@ -1017,13 +1059,14 @@ export default function SubmitForm({ brands }: Props) {
         </div>
       </form>
 
-      <style>{`
-        @media (max-width: 899px) {
-          .rt-submit-root { padding: 24px 20px 48px !important; }
-          .rt-submit-row { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
-    </main>
+        <style>{`
+          @media (max-width: 899px) {
+            .rt-submit-root { padding: 24px 20px 48px !important; }
+            .rt-submit-row { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
+      </main>
+    </>
   );
 }
 
@@ -1066,10 +1109,13 @@ function Section({
 }) {
   return (
     <div
+      id={`submit-section-${num}`}
       style={{
         marginTop: 28,
         paddingTop: 22,
         borderTop: '1px solid hsl(var(--rt-border-subtle))',
+        // Чтобы при smooth-scroll заголовок секции не прятался под sticky-nav
+        scrollMarginTop: 'var(--rt-submit-scroll-offset, 110px)',
       }}
     >
       <div

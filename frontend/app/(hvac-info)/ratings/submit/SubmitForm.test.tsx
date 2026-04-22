@@ -1,9 +1,42 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 import type { RatingBrandOption } from '@/lib/api/types/rating';
 
-import SubmitForm, { isFormReady, validatePhotos } from './SubmitForm';
+import SubmitForm, {
+  isFormReady,
+  isSectionComplete,
+  validatePhotos,
+} from './SubmitForm';
+
+class NoopIO {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [] as IntersectionObserverEntry[];
+  }
+}
+
+beforeEach(() => {
+  (
+    globalThis as unknown as { IntersectionObserver: typeof IntersectionObserver }
+  ).IntersectionObserver = NoopIO as unknown as typeof IntersectionObserver;
+  if (typeof window !== 'undefined') {
+    window.matchMedia =
+      window.matchMedia ||
+      (vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })) as unknown as typeof window.matchMedia);
+  }
+});
 
 const BRANDS: RatingBrandOption[] = [
   { id: 1, name: 'Midea' },
@@ -34,42 +67,221 @@ describe('validatePhotos', () => {
   });
 });
 
+const FULL_STATE = {
+  brand: '1',
+  custom_brand_name: '',
+  series: '',
+  inner_unit: 'x',
+  outer_unit: 'y',
+  compressor_model: 'z',
+  nominal_capacity_watt: '2000',
+  price: '',
+  drain_pan_heater: 'Нет',
+  erv: true,
+  fan_speed_outdoor: false,
+  remote_backlight: true,
+  fan_speeds_indoor: '3',
+  fine_filters: '0',
+  ionizer_type: 'Нет',
+  russian_remote: 'Нет',
+  uv_lamp: 'Нет',
+  inner_he_length_mm: '700',
+  inner_he_tube_count: '10',
+  inner_he_tube_diameter_mm: '7',
+  outer_he_length_mm: '800',
+  outer_he_tube_count: '20',
+  outer_he_tube_diameter_mm: '7',
+  outer_he_thickness_mm: '25',
+  video_url: '',
+  buy_url: '',
+  supplier_url: '',
+  submitter_email: 'a@b.ru',
+  consent: true,
+  website: '',
+};
+
+const EMPTY_STATE = {
+  brand: '',
+  custom_brand_name: '',
+  series: '',
+  inner_unit: '',
+  outer_unit: '',
+  compressor_model: '',
+  nominal_capacity_watt: '',
+  price: '',
+  drain_pan_heater: '',
+  erv: null,
+  fan_speed_outdoor: null,
+  remote_backlight: null,
+  fan_speeds_indoor: '',
+  fine_filters: '',
+  ionizer_type: '',
+  russian_remote: '',
+  uv_lamp: '',
+  inner_he_length_mm: '',
+  inner_he_tube_count: '',
+  inner_he_tube_diameter_mm: '',
+  outer_he_length_mm: '',
+  outer_he_tube_count: '',
+  outer_he_tube_diameter_mm: '',
+  outer_he_thickness_mm: '',
+  video_url: '',
+  buy_url: '',
+  supplier_url: '',
+  submitter_email: '',
+  consent: false,
+  website: '',
+};
+
 describe('isFormReady', () => {
   it('без consent → не готова', () => {
-    const state = {
-      brand: '1',
-      custom_brand_name: '',
-      series: '',
-      inner_unit: 'x',
-      outer_unit: 'y',
-      compressor_model: 'z',
-      nominal_capacity_watt: '2000',
-      price: '',
-      drain_pan_heater: 'Нет',
-      erv: true,
-      fan_speed_outdoor: false,
-      remote_backlight: true,
-      fan_speeds_indoor: '3',
-      fine_filters: '0',
-      ionizer_type: 'Нет',
-      russian_remote: 'Нет',
-      uv_lamp: 'Нет',
-      inner_he_length_mm: '700',
-      inner_he_tube_count: '10',
-      inner_he_tube_diameter_mm: '7',
-      outer_he_length_mm: '800',
-      outer_he_tube_count: '20',
-      outer_he_tube_diameter_mm: '7',
-      outer_he_thickness_mm: '25',
-      video_url: '',
-      buy_url: '',
-      supplier_url: '',
-      submitter_email: 'a@b.ru',
-      consent: false,
-      website: '',
-    };
-    expect(isFormReady(state, [mkFile('p.jpg')])).toBe(false);
-    expect(isFormReady({ ...state, consent: true }, [mkFile('p.jpg')])).toBe(true);
+    expect(
+      isFormReady({ ...FULL_STATE, consent: false }, [mkFile('p.jpg')]),
+    ).toBe(false);
+    expect(isFormReady(FULL_STATE, [mkFile('p.jpg')])).toBe(true);
+  });
+});
+
+describe('isSectionComplete', () => {
+  describe('секция 01 Модель', () => {
+    it('пустая → false', () => {
+      expect(isSectionComplete('01', EMPTY_STATE, [])).toBe(false);
+    });
+    it('только brand, без inner_unit → false', () => {
+      expect(
+        isSectionComplete('01', { ...EMPTY_STATE, brand: '1' }, []),
+      ).toBe(false);
+    });
+    it('brand + все 4 обязательных поля → true', () => {
+      expect(
+        isSectionComplete(
+          '01',
+          {
+            ...EMPTY_STATE,
+            brand: '1',
+            inner_unit: 'x',
+            outer_unit: 'y',
+            compressor_model: 'z',
+            nominal_capacity_watt: '2000',
+          },
+          [],
+        ),
+      ).toBe(true);
+    });
+    it('custom_brand_name вместо brand → true', () => {
+      expect(
+        isSectionComplete(
+          '01',
+          {
+            ...EMPTY_STATE,
+            brand: '',
+            custom_brand_name: 'MyBrand',
+            inner_unit: 'x',
+            outer_unit: 'y',
+            compressor_model: 'z',
+            nominal_capacity_watt: '2000',
+          },
+          [],
+        ),
+      ).toBe(true);
+    });
+    it('custom_brand_name только пробелы → false', () => {
+      expect(
+        isSectionComplete(
+          '01',
+          {
+            ...EMPTY_STATE,
+            brand: '',
+            custom_brand_name: '   ',
+            inner_unit: 'x',
+            outer_unit: 'y',
+            compressor_model: 'z',
+            nominal_capacity_watt: '2000',
+          },
+          [],
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('секция 02 Характеристики', () => {
+    it('все поля пустые → false', () => {
+      expect(isSectionComplete('02', EMPTY_STATE, [])).toBe(false);
+    });
+    it('erv=null → false', () => {
+      expect(
+        isSectionComplete(
+          '02',
+          {
+            ...FULL_STATE,
+            erv: null,
+          },
+          [],
+        ),
+      ).toBe(false);
+    });
+    it('все booleans + все строки → true', () => {
+      expect(isSectionComplete('02', FULL_STATE, [])).toBe(true);
+    });
+  });
+
+  describe('секция 03 Теплообменник внутр.', () => {
+    it('partial → false', () => {
+      expect(
+        isSectionComplete(
+          '03',
+          { ...EMPTY_STATE, inner_he_length_mm: '700' },
+          [],
+        ),
+      ).toBe(false);
+    });
+    it('все 3 поля заполнены → true', () => {
+      expect(isSectionComplete('03', FULL_STATE, [])).toBe(true);
+    });
+  });
+
+  describe('секция 04 Теплообменник наруж.', () => {
+    it('partial → false', () => {
+      expect(
+        isSectionComplete(
+          '04',
+          { ...EMPTY_STATE, outer_he_length_mm: '800' },
+          [],
+        ),
+      ).toBe(false);
+    });
+    it('все 4 поля заполнены → true', () => {
+      expect(isSectionComplete('04', FULL_STATE, [])).toBe(true);
+    });
+  });
+
+  describe('секция 05 Подтверждение', () => {
+    it('без фото → false', () => {
+      expect(isSectionComplete('05', FULL_STATE, [])).toBe(false);
+    });
+    it('без email → false', () => {
+      expect(
+        isSectionComplete(
+          '05',
+          { ...FULL_STATE, submitter_email: '' },
+          [mkFile('p.jpg')],
+        ),
+      ).toBe(false);
+    });
+    it('без consent → false', () => {
+      expect(
+        isSectionComplete(
+          '05',
+          { ...FULL_STATE, consent: false },
+          [mkFile('p.jpg')],
+        ),
+      ).toBe(false);
+    });
+    it('фото + email + consent → true', () => {
+      expect(isSectionComplete('05', FULL_STATE, [mkFile('p.jpg')])).toBe(
+        true,
+      );
+    });
   });
 });
 
