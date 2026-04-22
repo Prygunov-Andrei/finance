@@ -563,6 +563,251 @@ class TestIsSectionExtended:
         assert not is_section_heading("продуктов при горении и тлении, ГОСТ 31996-2012")
 
 
+# ---------------------------------------------------------------------------
+# E15.05 it2 — R23 multi-row header + R24 span-join x-gap + R25 stamp cells
+# ---------------------------------------------------------------------------
+
+
+class TestConcatHeaderFragments:
+    """R23: склейка вертикальных фрагментов шапки с word-dash rule."""
+
+    def test_word_concat_with_dash(self):
+        from app.services.pdf_text import _concat_header_fragments, _Span
+
+        spans = [
+            _Span(text="оборудо-", disp_x=100.0, disp_y=10.0, width=40.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="вания", disp_x=100.0, disp_y=22.0, width=30.0,
+                  size=10.0, flags=0, is_bold=False),
+        ]
+        assert _concat_header_fragments(spans) == "оборудования"
+
+    def test_concat_without_dash_uses_space(self):
+        from app.services.pdf_text import _concat_header_fragments, _Span
+
+        spans = [
+            _Span(text="Тип, марка,", disp_x=100.0, disp_y=10.0, width=60.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="обозначение документа", disp_x=100.0, disp_y=22.0,
+                  width=120.0, size=10.0, flags=0, is_bold=False),
+        ]
+        merged = _concat_header_fragments(spans)
+        assert merged == "Тип, марка, обозначение документа"
+
+    def test_multi_row_6_fragments(self):
+        from app.services.pdf_text import _concat_header_fragments, _Span
+
+        # ЕСКД шапка «Завод-изготовитель» через 3 переноса.
+        spans = [
+            _Span(text="Завод-", disp_x=100.0, disp_y=10.0, width=40.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="изгото-", disp_x=100.0, disp_y=22.0, width=35.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="витель", disp_x=100.0, disp_y=34.0, width=35.0,
+                  size=10.0, flags=0, is_bold=False),
+        ]
+        merged = _concat_header_fragments(spans)
+        assert merged == "Завод-изготовитель" or merged == "Заводизготовитель"
+
+    def test_long_dash_not_concat(self):
+        """Длинное тире `—` НЕ триггерит dash-concat — только обычный `-`."""
+        from app.services.pdf_text import _concat_header_fragments, _Span
+
+        spans = [
+            _Span(text="A —", disp_x=100.0, disp_y=10.0, width=30.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="B", disp_x=100.0, disp_y=22.0, width=10.0,
+                  size=10.0, flags=0, is_bold=False),
+        ]
+        assert _concat_header_fragments(spans) == "A — B"
+
+
+class TestMatchColumnFromMergedText:
+    """R23: сопоставление склеенного текста шапки с column key."""
+
+    def test_manufacturer_beats_brand(self):
+        from app.services.pdf_text import _match_column_from_merged_text
+
+        # «Завод-изготовитель» → manufacturer (не brand).
+        assert _match_column_from_merged_text("Завод-изготовитель") == "manufacturer"
+        assert _match_column_from_merged_text("Производитель") == "manufacturer"
+
+    def test_brand_patterns(self):
+        from app.services.pdf_text import _match_column_from_merged_text
+
+        assert _match_column_from_merged_text("Поставщик") == "brand"
+        assert _match_column_from_merged_text("Код продукции") == "brand"
+
+    def test_name_patterns(self):
+        from app.services.pdf_text import _match_column_from_merged_text
+
+        assert _match_column_from_merged_text(
+            "Наименование и техническая характеристика"
+        ) == "name"
+        assert _match_column_from_merged_text("Наименование") == "name"
+
+    def test_model_patterns(self):
+        from app.services.pdf_text import _match_column_from_merged_text
+
+        assert _match_column_from_merged_text("Тип, марка, обозначение документа") == "model"
+
+    def test_unit_patterns(self):
+        from app.services.pdf_text import _match_column_from_merged_text
+
+        assert _match_column_from_merged_text("Ед. изм.") == "unit"
+        assert _match_column_from_merged_text("Единица измерения") == "unit"
+
+    def test_qty_patterns(self):
+        from app.services.pdf_text import _match_column_from_merged_text
+
+        assert _match_column_from_merged_text("Количество") == "qty"
+
+    def test_no_match_returns_none(self):
+        from app.services.pdf_text import _match_column_from_merged_text
+
+        assert _match_column_from_merged_text("Вентилятор дымоудаления") is None
+        assert _match_column_from_merged_text("") is None
+
+
+class TestJoinSpansWithGap:
+    """R24: span-join без лишних пробелов через x-gap."""
+
+    def test_close_spans_no_space(self):
+        from app.services.pdf_text import _join_column_spans_with_gap, _Span
+
+        # «3» + «0» + «0» с gap=1pt при font_size=10 → threshold=3pt → concat.
+        spans = [
+            _Span(text="3", disp_x=100.0, disp_y=10.0, width=6.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="0", disp_x=107.0, disp_y=10.0, width=6.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="0", disp_x=114.0, disp_y=10.0, width=6.0,
+                  size=10.0, flags=0, is_bold=False),
+        ]
+        assert _join_column_spans_with_gap(spans, 10.0) == "300"
+
+    def test_far_spans_with_space(self):
+        from app.services.pdf_text import _join_column_spans_with_gap, _Span
+
+        # «Pc=300» + «Па» с gap=4pt при font_size=10 → threshold=3pt → space.
+        spans = [
+            _Span(text="Pc=300", disp_x=100.0, disp_y=10.0, width=40.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="Па", disp_x=144.0, disp_y=10.0, width=15.0,
+                  size=10.0, flags=0, is_bold=False),
+        ]
+        assert _join_column_spans_with_gap(spans, 10.0) == "Pc=300 Па"
+
+    def test_pc_300_regression(self):
+        """QA-FINDINGS-2026-04-22 #38: «Pc=3 0 0 Па» → «Pc=300 Па»."""
+        from app.services.pdf_text import _join_column_spans_with_gap, _Span
+
+        # Реалистичный пример: 5 кернинг-spans формируют «Pc=300 Па».
+        spans = [
+            _Span(text="Pc=", disp_x=100.0, disp_y=10.0, width=18.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="3", disp_x=118.0, disp_y=10.0, width=6.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="0", disp_x=124.5, disp_y=10.0, width=6.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="0", disp_x=131.0, disp_y=10.0, width=6.0,
+                  size=10.0, flags=0, is_bold=False),
+            _Span(text="Па", disp_x=141.0, disp_y=10.0, width=15.0,
+                  size=10.0, flags=0, is_bold=False),
+        ]
+        joined = _join_column_spans_with_gap(spans, 10.0)
+        # Допускаем «Pc=300Па» или «Pc=300 Па» — ключевое, что «3 0 0» схлопнулись.
+        assert "3 0 0" not in joined
+        assert "300" in joined
+
+    def test_single_span(self):
+        from app.services.pdf_text import _join_column_spans_with_gap, _Span
+
+        s = _Span(text="Вентилятор", disp_x=100.0, disp_y=10.0, width=50.0,
+                  size=10.0, flags=0, is_bold=False)
+        assert _join_column_spans_with_gap([s], 10.0) == "Вентилятор"
+
+    def test_empty_list(self):
+        from app.services.pdf_text import _join_column_spans_with_gap
+
+        assert _join_column_spans_with_gap([], 10.0) == ""
+
+
+class TestIsStampCell:
+    """R25: расширенный штамп-фильтр на уровне ячеек."""
+
+    def test_date_signature_stamps(self):
+        from app.services.pdf_text import is_stamp_cell
+
+        assert is_stamp_cell("Дата и подпись")
+        assert is_stamp_cell("Код уч № док")
+
+    def test_inv_variations(self):
+        from app.services.pdf_text import is_stamp_cell
+
+        assert is_stamp_cell("Инв.№ подп.")
+        assert is_stamp_cell("Инв. № подп.")
+        assert is_stamp_cell("Инв.№ подл.")
+
+    def test_raschet_fasonnyh(self):
+        from app.services.pdf_text import is_stamp_cell
+
+        # Artefact из правой подписи штампа.
+        assert is_stamp_cell("Расчет фасонных деталей")
+
+    def test_specifikatsia_oborudovania(self):
+        from app.services.pdf_text import is_stamp_cell
+
+        assert is_stamp_cell("Спецификация оборудования")
+
+    def test_real_item_not_stamp(self):
+        from app.services.pdf_text import is_stamp_cell
+
+        # Защита от ложноположительных (item names не должны матчиться).
+        assert not is_stamp_cell("Вентилятор канальный")
+        assert not is_stamp_cell("Клапан противопожарный")
+        assert not is_stamp_cell("KLR-DU-400")
+        assert not is_stamp_cell("1")
+        assert not is_stamp_cell("58")
+
+
+class TestNormalizeSectionName:
+    """R26: нормализация section_name (trailing :/—/-)."""
+
+    def test_trailing_colon_removed(self):
+        from app.services.spec_normalizer import _normalize_section_name
+
+        assert _normalize_section_name("Вентиляция :") == "Вентиляция"
+        assert _normalize_section_name("Кондиционирование: ") == "Кондиционирование"
+        assert _normalize_section_name("Отопление:") == "Отопление"
+
+    def test_trailing_dash_removed(self):
+        from app.services.spec_normalizer import _normalize_section_name
+
+        assert _normalize_section_name("Вентиляция —") == "Вентиляция"
+        assert _normalize_section_name("Вентиляция -") == "Вентиляция"
+
+    def test_multiple_trailing_chars_removed(self):
+        from app.services.spec_normalizer import _normalize_section_name
+
+        assert _normalize_section_name("Вентиляция : -") == "Вентиляция"
+
+    def test_internal_colon_preserved(self):
+        """Двоеточие/тире в середине секции не трогаются."""
+        from app.services.spec_normalizer import _normalize_section_name
+
+        assert (
+            _normalize_section_name("Клапаны: на кровле")
+            == "Клапаны: на кровле"
+        )
+
+    def test_empty(self):
+        from app.services.spec_normalizer import _normalize_section_name
+
+        assert _normalize_section_name("") == ""
+        assert _normalize_section_name("   ") == ""
+
+
 class TestLooksLikeSectionHeading:
     """E15.05 it1: структурная эвристика для числовых-префиксных секций."""
 

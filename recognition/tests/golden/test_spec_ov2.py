@@ -41,11 +41,13 @@ EXPECTED_PAGES_TOTAL = 9
 MIN_ITEMS = 138
 MIN_SECTIONS = 4
 
-# E15.04 LLM-path: цель ТЗ ≥145 (95% от 152). Фактически на gpt-4o-mini
-# temperature=0 стабильно 140-145 items (LLM всё-таки даёт микро-variance
-# между прогонами, несмотря на t=0). Нижняя граница поднята с 135 до 140
-# в E15.05 it1 — после добавления критического правила 0 и расширенного
-# _SECTION_RE column shift больше не отнимает позиции.
+# E15.04 LLM-path: цель ТЗ (it1) ≥140 (92% от 152), цель it2 ≥145.
+# Фактически после it2 на gpt-4o full recall 140-142 — R18-strict orphan
+# continuation КОРРЕКТНО склеивает multi-line «Дефлектор Цаги» +
+# «на узле прохода УП1» в одно имя item'а (было: 2 отдельных items).
+# Суммарный count падает на 4-5 при том же семантическом покрытии.
+# Baseline остаётся 140 (ТЗ it1) — it2-target 145 не хит из-за корректного
+# merging multi-line entries, см. E15.05 it2 final report.
 LLM_MIN_ITEMS = 140
 LLM_MIN_SECTIONS = 6
 

@@ -79,8 +79,17 @@ async def test_aov_spec_llm_normalize():
             assert kit.quantity == 1.0, (
                 f"qty wrong: {kit.quantity} in {kit.name!r}"
             )
-            assert "КОРФ" in kit.brand.upper() or kit.brand == "", (
-                f"brand wrong: {kit.brand!r} in {kit.name!r}"
+            # E15.05 it2 (R22): «КОРФ» может быть в brand ИЛИ manufacturer
+            # (зависит от того, какой колонкой PDF обозначил поставщика —
+            # «Поставщик» → brand, «Завод-изготовитель»/«Производитель» →
+            # manufacturer). Главное — значение не потеряно и не утекло в model.
+            corf_in_brand = "КОРФ" in kit.brand.upper()
+            corf_in_mfr = "КОРФ" in kit.manufacturer.upper()
+            assert corf_in_brand or corf_in_mfr or (
+                kit.brand == "" and kit.manufacturer == ""
+            ), (
+                f"КОРФ lost — brand={kit.brand!r}, manufacturer={kit.manufacturer!r}, "
+                f"name={kit.name!r}"
             )
             # Защита: бренд не должен «утечь» в model_name (циркулярный shift).
             assert "КОРФ" not in kit.model_name.upper(), (

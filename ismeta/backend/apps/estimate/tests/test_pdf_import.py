@@ -133,6 +133,31 @@ class TestApplyParsedItems:
         assert item.tech_specs.get("comments") == "1кг на 1м2"
         assert item.tech_specs.get("model_name") == "Kleber"
 
+    def test_apply_propagates_manufacturer_to_tech_specs(self, estimate, ws):
+        """E15.05 it2 (R22): Recognition отдаёт item.manufacturer — проксируем
+        в tech_specs.manufacturer отдельно от brand (это разные колонки ЕСКД:
+        brand = торговая марка, manufacturer = завод-изготовитель)."""
+        items = [
+            {
+                "name": "Комплект автоматизации П1",
+                "brand": "",
+                "manufacturer": 'ООО "КОРФ"',
+                "unit": "шт.",
+                "quantity": 1,
+                "section_name": "Оборудование автоматизации",
+                "page_number": 1,
+            }
+        ]
+        result = apply_parsed_items(str(estimate.id), str(ws.id), items)
+        assert result["created"] == 1
+        item = EstimateItem.objects.filter(
+            estimate=estimate, name="Комплект автоматизации П1"
+        ).first()
+        assert item is not None
+        assert item.tech_specs.get("manufacturer") == 'ООО "КОРФ"'
+        # brand пуст — в tech_specs его быть не должно.
+        assert "brand" not in item.tech_specs
+
     def test_apply_no_comments_field_leaves_tech_specs_unset(self, estimate, ws):
         """Обратная совместимость: items без comments не создают ключ в JSON
         (чтобы не засорять tech_specs пустыми строками)."""
