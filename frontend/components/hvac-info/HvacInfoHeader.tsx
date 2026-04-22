@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 type NavItem =
   | { label: string; href: string; match: (path: string) => boolean }
@@ -152,22 +153,7 @@ export default function HvacInfoHeader() {
           }}
           className="rt-actions-desktop"
         >
-          <SearchIcon />
-          <span style={{ width: 1, height: 14, background: 'hsl(var(--rt-border))' }} />
-          <span style={{ fontSize: 11, color: 'hsl(var(--rt-ink-60))' }}>RU</span>
-          <MoonIcon />
-          <span
-            style={{
-              padding: '6px 12px',
-              borderRadius: 4,
-              border: '1px solid hsl(var(--rt-border))',
-              fontSize: 11,
-              fontWeight: 500,
-              color: 'hsl(var(--rt-ink-80))',
-            }}
-          >
-            Вход
-          </span>
+          <ThemeToggle />
         </div>
 
         <div
@@ -179,8 +165,7 @@ export default function HvacInfoHeader() {
           }}
           className="rt-actions-mobile"
         >
-          <MenuIcon />
-          <SearchIcon />
+          <ThemeToggle />
         </div>
       </div>
 
@@ -197,27 +182,63 @@ export default function HvacInfoHeader() {
   );
 }
 
-function SearchIcon() {
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const saved =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('hvac-theme') : null;
+    const prefersDark =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    const isDark = saved === 'dark' || (!saved && !!prefersDark);
+    setDark(isDark);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', isDark);
+    }
+    setMounted(true);
+  }, []);
+  const onClick = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    try {
+      localStorage.setItem('hvac-theme', next ? 'dark' : 'light');
+    } catch {
+      /* storage unavailable — ok, persist на следующий tick не важен */
+    }
+  };
+  // До mount рендерим dimmed-иконку чтобы не было flash на SSR
   return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--rt-ink-60))" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 21l-4.3-4.3" />
-      <circle cx={11} cy={11} r={8} />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--rt-ink-60))" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-    </svg>
-  );
-}
-
-function MenuIcon() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="hsl(var(--rt-ink))" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M3 6h18 M3 12h18 M3 18h18" />
-    </svg>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={dark ? 'Включить светлую тему' : 'Включить тёмную тему'}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 32,
+        height: 32,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        color: 'hsl(var(--rt-ink-60))',
+        opacity: mounted ? 1 : 0,
+        transition: 'opacity 120ms ease',
+      }}
+    >
+      {dark ? (
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <circle cx={12} cy={12} r={4} />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+      ) : (
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+        </svg>
+      )}
+    </button>
   );
 }
