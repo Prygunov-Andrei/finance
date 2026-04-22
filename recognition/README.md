@@ -25,13 +25,15 @@ recognition/
       openai_vision.py   gpt-4o-mini Vision с retry 429/5xx
     schemas/
       spec.py            SpecItem / PagesStats / SpecParseResponse (§1)
-      invoice.py         InvoiceItem / SupplierInfo / InvoiceMeta / InvoiceParseResponse (§2)
+      invoice.py         InvoiceItem / InvoiceSupplier / InvoiceMeta / InvoiceParseResponse (§2, E16 it1)
       quote.py           QuoteItem / QuoteSupplier / QuoteMeta / QuoteParseResponse (§3)
     services/
       _common.py         vision_json (retry+JSON), determine_status, dedupe_by_key
-      spec_parser.py     async spec parser: classify → extract (без dedup, E15.03-hotfix)
-      invoice_parser.py  async invoice parser: classify → header + items → dedup
-      quote_parser.py    async quote parser (КП): + lead_time, warranty, valid_until
+      spec_parser.py         async spec parser: hybrid bbox + gpt-4o text + multimodal retry (E15.04-05)
+      invoice_parser.py      async invoice parser: Phase 0 title block + hybrid items + Vision fallback (E16 it1)
+      invoice_title_block.py Phase 0: text LLM call (весь документ) → supplier + meta, multimodal retry на page 1
+      invoice_normalizer.py  Phase 2a/b: invoice-specific normalizer + compute_invoice_confidence (E16 it1)
+      quote_parser.py        async quote parser (КП): + lead_time, warranty, valid_until [will be E16 it2]
       pdf_render.py      PyMuPDF page → base64 PNG
   tests/                 pytest (35 tests, ≥85% coverage на app/)
   Dockerfile
@@ -138,9 +140,19 @@ curl -s -X POST http://localhost:8003/v1/parse/invoice \
 ```
 
 Ответ: `{status, items[], supplier, invoice_meta, errors[], pages_stats}`.
-- `supplier`: `{name, inn, kpp, bank_account, bik, correspondent_account}`.
-- `invoice_meta`: `{number, date, total_amount, vat_amount, currency}`.
-- `items[]` дополнительно содержит `price_unit, price_total, currency, vat_rate`.
+- `supplier` (E16 it1): `{name, inn, kpp, bank_account, bik, correspondent_account,
+   address, bank_name, phone}` — шапка счёта извлекается через Phase 0
+   LLM-call (весь документ, не только page 1).
+- `invoice_meta` (E16 it1): `{number, date, total_amount, vat_amount, currency,
+   vat_rate, contract_ref, project_ref}`. `contract_ref` — ссылка на договор-
+   основание («ЛП2024/0416-2 от 16.04.2024»), `project_ref` — проектная
+   привязка («Озеры 123 ДПУ»).
+- `items[]` (E16 it1) дополнительно содержит `price_unit, price_total, currency,
+   vat_rate, vat_amount, lead_time_days, notes, supply_type, tech_specs`.
+   `vat_amount` — абсолютный НДС по строке (если поставщик указывает
+   per-item, как invoice-01 ГалВент). `lead_time_days` — срок поставки в
+   рабочих днях из колонки «Срок» («7 р.д.» → 7). `supply_type` — тип
+   товара из колонки «ЗТ*» («X» = заказной).
 
 ### Парсинг КП — §3
 
@@ -255,6 +267,68 @@ SpecParser обрабатывает страницу в три уровня + co
 Архитектурные решения: [ADR-0024](../ismeta/docs/adr/0024-column-aware-llm-normalization.md)
 (bbox + text LLM) и [ADR-0025](../ismeta/docs/adr/0025-multimodal-fallback-gpt4o.md)
 (гибрид it2).
+
+## Pipeline: гибрид Invoice (E16 it1)
+
+InvoiceParser переиспользует инфраструктуру SpecParser с одним ключевым
+отличием — **Phase 0 title block extraction**. Supplier и invoice_meta
+живут в шапке / бухгалтерском блоке, не в таблице, поэтому сначала идёт
+отдельный text-LLM call на весь text layer документа, потом уже обычный
+bbox + text-normalize + multimodal retry для items-таблицы.
+
+1. **Phase 0 — Title block** (`invoice_title_block.py`):
+   - Собирает text layer ВСЕХ страниц (до 50k символов) с разделителями
+     `--- page N ---`. Это важно для invoice-02 (ЛУИС+) где итоговая
+     сумма и НДС указаны на page 2 после items-таблицы.
+   - ОДИН gpt-4o full text call (temperature=0, response_format json) с
+     промптом `TITLE_BLOCK_PROMPT_TEMPLATE`. Возвращает полный
+     `InvoiceSupplier` + `InvoiceMeta` (включая E16-расширенные поля).
+   - **Multimodal retry**: если `supplier.inn` или `total_amount=0` (low
+     confidence signal) — рендерим page 1 в PNG и повторяем через
+     `multimodal_complete`. Field-wise merge (primary text-only имеет
+     приоритет над fallback multimodal).
+   - **Guard против buyer-leak**: если LLM случайно вернул наш ИНН
+     5032322673 — supplier чистится.
+
+2. **Phase 1 — bbox extraction** (`pdf_text.extract_invoice_rows`):
+   - Mirror `extract_structured_rows` (переиспользует `_collect_spans`,
+     `_bucket_by_y`, `_join_column_spans_with_gap`, `is_stamp_cell`,
+     `_is_title_block_bucket`).
+   - `_INVOICE_HEADER_MARKER_PATTERNS` — свои колонки (pos / name /
+     supply_type / lead_time / unit / qty / price_unit / vat_amount /
+     price_total / notes).
+   - `_detect_invoice_header` — строгий детектор (≥3 column markers в
+     одном y-bucket + y-gap 11pt look-back/ahead для многостроковых шапок
+     типа «в том» / «числе» / «НДС»).
+   - Footer filter (`_INVOICE_FOOTER_RE`) дропает rows с «Итого:», «в
+     т.ч. НДС:», «Всего к оплате:», «прописью».
+   - Post-process cells: split «27 шт.» → qty+unit (ЛУИС+ случай);
+     split «813 591,00 в наличии» → price_total+notes (PyMuPDF склеивает
+     оба в один span); перенос «7 р.д.» из qty в lead_time.
+
+3. **Phase 2a/b — text normalize + multimodal retry**
+   (`invoice_normalizer.py`):
+   - `normalize_invoice_items_via_llm` — параллельный gpt-4o full call
+     на страницу с промптом `NORMALIZE_INVOICE_PROMPT_TEMPLATE` (10
+     правил: маппинг cells→output 1:1, multi-line name merge,
+     lead_time parse, float parsing цен, footer filter).
+   - `compute_invoice_confidence` — 4 сигнала (price_unit_ratio 0.30 +
+     price_total_ratio 0.30 + qty_ratio 0.20 + count_score 0.20).
+   - Retry threshold 0.7 (общий со SpecParser), broker-selection
+     принимает Phase 2 только если confidence вырос.
+
+4. **Vision fallback** — для страниц без text layer (сканы) используется
+   старый pipeline `CLASSIFY_PROMPT` + `EXTRACT_ITEMS_PROMPT` +
+   `EXTRACT_HEADER_PROMPT` через gpt-4o-mini Vision (legacy, не ломали).
+
+**Метрики (2 invoice goldens, after E16 it1):**
+
+| Fixture     | Pages | Items target | Supplier/Meta      | Time  | MM retry |
+|-------------|-------|--------------|--------------------|-------|----------|
+| invoice-01  | 2     | 4 / 4        | supplier + meta full | ≤30с  | 0        |
+| invoice-02  | 2     | 15 / 15      | supplier + meta full | ≤50с  | 0        |
+
+Архитектурное решение: [ADR-0026](../ismeta/docs/adr/0026-invoice-hybrid-parser.md).
 
 **Kill switches:**
 - `RECOGNITION_LLM_NORMALIZE_ENABLED=false` — отключает column-aware LLM,

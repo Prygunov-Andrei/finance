@@ -190,11 +190,27 @@ class InvoiceParser:
     # ------------------------------------------------------------------
 
     async def _phase0_title_block(self, doc: fitz.Document) -> None:
+        """Phase 0 — supplier + invoice_meta через text-only LLM call.
+
+        Читаем text layer ВСЕХ страниц (до ~50k символов) — итоговые
+        значения («Итого, руб:», «в т.ч. НДС, руб:») нередко на ПОСЛЕДНЕЙ
+        странице таблицы, как в invoice-02 (ЛУИС+).
+        """
         state = self.state
-        page = doc[0]
-        text = await run_in_threadpool(page.get_text)  # type: ignore[attr-defined]
+        text_parts: list[str] = []
+        budget = 50_000
+        for page_num in range(state.pages_total):
+            page_text = await run_in_threadpool(
+                doc[page_num].get_text  # type: ignore[attr-defined]
+            )
+            if not page_text:
+                continue
+            text_parts.append(f"--- page {page_num + 1} ---\n{page_text}")
+            budget -= len(page_text)
+            if budget <= 0:
+                break
+        text = "\n".join(text_parts)
         if not text.strip():
-            # Нет text layer — Phase 0 откладываем до Vision fallback.
             return
 
         # Pre-render page 1 PNG для возможного multimodal retry.

@@ -347,3 +347,11 @@ UX (конфликт позиций) + section_name в ключе.
 - 2026-04-21: #17 (E15.03-hotfix — dedup убран, varchar truncate)
 - 2026-04-21: #18–23 (E15.05 — prompt recall 99%, section МОП split, LLM_MIN_ITEMS 142, cost, time, CI golden_llm)
 - 2026-04-22: #24 (UI-06 merge rows — atomic bulk-merge endpoint, follow-up к client-side merge)
+- 2026-04-22: E16 it1 — **Invoice hybrid parser** (ADR-0026). InvoiceParser
+  переписан на SpecParser-паттерн: Phase 0 title block + bbox + multimodal
+  retry. Schema расширена (InvoiceItem.lead_time_days/notes/supply_type/
+  vat_amount; InvoiceSupplier.address/bank_name/phone; InvoiceMeta.vat_rate/
+  contract_ref/project_ref). 2 invoice goldens (ГалВент 4 items, ЛУИС+
+  15 items) оба green; dual-regression 3/3 spec goldens не задеты. ТЗ
+  «распознавание практически 100% для любых документов» — invoice закрыт,
+  следующая итерация E16 it2 (QuoteParser).
