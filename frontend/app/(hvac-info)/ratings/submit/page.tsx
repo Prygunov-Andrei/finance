@@ -4,10 +4,8 @@ import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingBrands } from '@/lib/api/services/rating';
 import BackToRating from '../_components/BackToRating';
 import SectionFooter from '../_components/SectionFooter';
-import StickyCollapseHero from '../_components/StickyCollapseHero';
 
 import SubmitForm from './SubmitForm';
-import SubmitHero, { SubmitHeroCollapsed } from './SubmitHero';
 
 export const metadata: Metadata = {
   title: 'Добавить модель в рейтинг',
@@ -30,13 +28,7 @@ export default async function RatingSubmitPage() {
       <main className="hvac-content">
         <BackToRating />
       </main>
-      <StickyCollapseHero
-        full={<SubmitHero />}
-        collapsed={<SubmitHeroCollapsed />}
-      />
-      <main className="hvac-content">
-        <SubmitForm brands={brands} />
-      </main>
+      <SubmitForm brands={brands} />
       <SectionFooter />
     </>
   );
