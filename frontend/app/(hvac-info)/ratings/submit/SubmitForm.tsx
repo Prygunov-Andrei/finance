@@ -354,45 +354,6 @@ export default function SubmitForm({ brands }: Props) {
       <div
         style={{
           marginTop: 0,
-          padding: '14px 16px',
-          borderLeft: '3px solid hsl(var(--rt-accent))',
-          background: 'hsl(var(--rt-accent-bg))',
-        }}
-      >
-        <p
-          style={{
-            fontFamily: 'var(--rt-font-mono)',
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'hsl(var(--rt-accent))',
-            textTransform: 'uppercase',
-            letterSpacing: 1.2,
-            margin: 0,
-          }}
-        >
-          Раздел «Самые тихие» — отдельно
-        </p>
-        <p
-          style={{
-            fontSize: 12,
-            lineHeight: 1.6,
-            color: 'hsl(var(--rt-ink-80))',
-            margin: '6px 0 0',
-          }}
-        >
-          Чтобы кондиционер попал в рейтинг «Самые тихие», необходимо привезти
-          его в лабораторию «Август-климат» для замера уровня шума. Оставьте
-          заявку по e-mail:{' '}
-          <span style={{ fontFamily: 'var(--rt-font-mono)' }}>
-            7883903@gmail.com
-          </span>
-          .
-        </p>
-      </div>
-
-      <div
-        style={{
-          marginTop: 28,
           display: 'flex',
           gap: 8,
           flexWrap: 'wrap',

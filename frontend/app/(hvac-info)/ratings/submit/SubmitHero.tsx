@@ -22,99 +22,163 @@ export default function SubmitHero() {
           padding: '40px 40px 36px',
         }}
       >
-        <p
-          style={{
-            fontFamily: 'var(--rt-font-mono)',
-            fontSize: 10,
-            color: 'hsl(var(--rt-ink-40))',
-            textTransform: 'uppercase',
-            letterSpacing: 1.4,
-            margin: 0,
-          }}
-        >
-          Заявка
-        </p>
-        <h1
-          style={{
-            fontFamily: 'var(--rt-font-serif)',
-            fontSize: 30,
-            fontWeight: 600,
-            letterSpacing: -0.5,
-            margin: '8px 0 0',
-            maxWidth: 820,
-          }}
-        >
-          Добавить новый кондиционер в рейтинг
-        </h1>
-        <p
-          style={{
-            fontFamily: 'var(--rt-font-serif)',
-            fontSize: 13,
-            lineHeight: 1.65,
-            color: 'hsl(var(--rt-ink-60))',
-            margin: '12px 0 0',
-            maxWidth: 720,
-          }}
-        >
-          Хотите, чтобы ваш кондиционер попал в независимый рейтинг
-          «Август-климат»? Выполните объективные замеры комплектующих и функционала
-          и пришлите их нам.
-        </p>
-
         <div
+          className="rt-submit-hero-grid"
           style={{
-            marginTop: 22,
-            padding: '18px 20px',
-            background: 'hsl(var(--rt-paper))',
-            borderRadius: 4,
-            border: '1px solid hsl(var(--rt-border-subtle))',
-            maxWidth: 720,
+            display: 'grid',
+            gridTemplateColumns: '1fr 340px',
+            gap: 40,
+            alignItems: 'start',
           }}
         >
-          <p
-            style={{
-              fontFamily: 'var(--rt-font-mono)',
-              fontSize: 11,
-              color: 'hsl(var(--rt-ink-40))',
-              textTransform: 'uppercase',
-              letterSpacing: 1.2,
-              margin: 0,
-              marginBottom: 10,
-            }}
-          >
-            Как это работает
-          </p>
-          {STEPS.map((t, i) => (
-            <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0' }}>
-              <span
+          <div>
+            <p
+              style={{
+                fontFamily: 'var(--rt-font-mono)',
+                fontSize: 10,
+                color: 'hsl(var(--rt-ink-40))',
+                textTransform: 'uppercase',
+                letterSpacing: 1.4,
+                margin: 0,
+              }}
+            >
+              Заявка
+            </p>
+            <h1
+              style={{
+                fontFamily: 'var(--rt-font-serif)',
+                fontSize: 30,
+                fontWeight: 600,
+                letterSpacing: -0.5,
+                margin: '8px 0 0',
+                maxWidth: 820,
+              }}
+            >
+              Добавить новый кондиционер в рейтинг
+            </h1>
+            <p
+              style={{
+                fontFamily: 'var(--rt-font-serif)',
+                fontSize: 13,
+                lineHeight: 1.65,
+                color: 'hsl(var(--rt-ink-60))',
+                margin: '12px 0 0',
+                maxWidth: 720,
+              }}
+            >
+              Хотите, чтобы ваш кондиционер попал в независимый рейтинг
+              «Август-климат»? Выполните объективные замеры комплектующих и
+              функционала и пришлите их нам.
+            </p>
+
+            <div
+              style={{
+                marginTop: 22,
+                padding: '18px 20px',
+                background: 'hsl(var(--rt-paper))',
+                borderRadius: 4,
+                border: '1px solid hsl(var(--rt-border-subtle))',
+                maxWidth: 720,
+              }}
+            >
+              <p
                 style={{
                   fontFamily: 'var(--rt-font-mono)',
                   fontSize: 11,
-                  color: 'hsl(var(--rt-accent))',
-                  fontWeight: 600,
-                  width: 18,
-                  flexShrink: 0,
+                  color: 'hsl(var(--rt-ink-40))',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1.2,
+                  margin: 0,
+                  marginBottom: 10,
                 }}
               >
-                {i + 1}.
-              </span>
-              <span
-                style={{
-                  fontSize: 12,
-                  lineHeight: 1.55,
-                  color: 'hsl(var(--rt-ink-80))',
-                }}
-              >
-                {t}
-              </span>
+                Как это работает
+              </p>
+              {STEPS.map((t, i) => (
+                <div
+                  key={i}
+                  style={{ display: 'flex', gap: 10, padding: '6px 0' }}
+                >
+                  <span
+                    style={{
+                      fontFamily: 'var(--rt-font-mono)',
+                      fontSize: 11,
+                      color: 'hsl(var(--rt-accent))',
+                      fontWeight: 600,
+                      width: 18,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {i + 1}.
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      lineHeight: 1.55,
+                      color: 'hsl(var(--rt-ink-80))',
+                    }}
+                  >
+                    {t}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <aside
+            style={{
+              padding: '16px 18px',
+              borderLeft: '3px solid hsl(var(--rt-accent))',
+              background: 'hsl(var(--rt-accent-bg))',
+            }}
+          >
+            <p
+              style={{
+                fontFamily: 'var(--rt-font-mono)',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'hsl(var(--rt-accent))',
+                textTransform: 'uppercase',
+                letterSpacing: 1.2,
+                margin: 0,
+              }}
+            >
+              Раздел «Самые тихие» — отдельно
+            </p>
+            <p
+              style={{
+                fontSize: 12,
+                lineHeight: 1.6,
+                color: 'hsl(var(--rt-ink-80))',
+                margin: '8px 0 0',
+              }}
+            >
+              Чтобы кондиционер попал в рейтинг «Самые тихие», необходимо
+              привезти его в лабораторию «Август-климат» для замера уровня шума.
+              Оставьте заявку по e-mail:{' '}
+              <a
+                href="mailto:7883903@gmail.com"
+                style={{
+                  fontFamily: 'var(--rt-font-mono)',
+                  color: 'hsl(var(--rt-accent))',
+                  textDecoration: 'none',
+                }}
+              >
+                7883903@gmail.com
+              </a>
+              .
+            </p>
+          </aside>
         </div>
       </div>
       <style>{`
         @media (max-width: 899px) {
           .rt-submit-hero-inner { padding: 28px 20px 24px !important; }
           .rt-submit-hero-inner h1 { font-size: 24px !important; }
+          .rt-submit-hero-grid {
+            grid-template-columns: 1fr !important;
+            gap: 20px !important;
+          }
         }
       `}</style>
     </section>
