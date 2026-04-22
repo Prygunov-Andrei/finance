@@ -29,14 +29,18 @@ def _url_with_mtime(file_field) -> str:
 
 class BrandSerializer(serializers.ModelSerializer):
     logo = serializers.SerializerMethodField()
+    logo_dark = serializers.SerializerMethodField()
 
     class Meta:
         model = Brand
-        fields = ["id", "name", "logo"]
+        fields = ["id", "name", "logo", "logo_dark"]
         read_only_fields = ["id", "name"]
 
     def get_logo(self, obj: Brand) -> str:
         return _url_with_mtime(obj.logo)
+
+    def get_logo_dark(self, obj: Brand) -> str:
+        return _url_with_mtime(obj.logo_dark)
 
 
 class RegionSerializer(serializers.ModelSerializer):
@@ -133,6 +137,7 @@ class ACModelMentionLiteSerializer(serializers.ModelSerializer):
 class ACModelListSerializer(serializers.ModelSerializer):
     brand = serializers.CharField(source="brand.name", read_only=True)
     brand_logo = serializers.SerializerMethodField()
+    brand_logo_dark = serializers.SerializerMethodField()
     region_availability = RegionSerializer(source="regions", many=True, read_only=True)
     index_max = serializers.SerializerMethodField()
     noise_score = serializers.SerializerMethodField()
@@ -143,7 +148,8 @@ class ACModelListSerializer(serializers.ModelSerializer):
     class Meta:
         model = ACModel
         fields = [
-            "id", "slug", "brand", "brand_logo", "inner_unit", "series",
+            "id", "slug", "brand", "brand_logo", "brand_logo_dark",
+            "inner_unit", "series",
             "nominal_capacity", "total_index", "index_max",
             "publish_status", "region_availability",
             "price", "noise_score", "has_noise_measurement", "scores",
@@ -159,6 +165,9 @@ class ACModelListSerializer(serializers.ModelSerializer):
 
     def get_brand_logo(self, obj: ACModel) -> str:
         return _url_with_mtime(obj.brand.logo)
+
+    def get_brand_logo_dark(self, obj: ACModel) -> str:
+        return _url_with_mtime(obj.brand.logo_dark)
 
     def get_index_max(self, _obj: ACModel) -> float:
         return float(self.context.get("index_max", 100.0))
