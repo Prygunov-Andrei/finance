@@ -97,7 +97,7 @@ export default function FilterBar(props: FilterBarProps) {
           gap: 8,
           padding: '0 18px',
           height: 34,
-          background: 'hsl(var(--rt-ink))',
+          background: 'hsl(var(--rt-accent))',
           color: 'hsl(var(--rt-paper))',
           fontSize: 12,
           fontWeight: 600,
