@@ -35,6 +35,8 @@ export interface HvacNewsMentionedAcModel {
   slug: string;
   brand: string;
   brand_logo?: string;
+  /** Dark-theme optimized brand logo (см. {@link RatingModelListItem.brand_logo_dark}). */
+  brand_logo_dark?: string;
   inner_unit: string;
   total_index?: number;
   price?: string | null;

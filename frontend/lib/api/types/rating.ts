@@ -12,6 +12,11 @@ export interface RatingBrand {
   id: number;
   name: string;
   logo: string;
+  /** Dark-theme optimized logo (white-on-transparent for mono brands).
+   *  Может быть пустой строкой для цветных логотипов — тогда фронт
+   *  использует CSS invert-fallback. До мержа backend dark-logos PR
+   *  поле может отсутствовать в ответе API; код должен быть устойчив. */
+  logo_dark?: string;
 }
 
 export interface RatingRegion {
@@ -70,6 +75,9 @@ export interface RatingModelListItem {
   slug: string;
   brand: string;
   brand_logo: string;
+  /** См. {@link RatingBrand.logo_dark}. Опционально — бекэнд может не
+   *  отдавать поле до мержа dark-logos PR. */
+  brand_logo_dark?: string;
   inner_unit: string;
   series: string;
   nominal_capacity: number | null;
