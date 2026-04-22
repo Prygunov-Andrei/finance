@@ -12,6 +12,21 @@ from ac_scoring.models import CalculationResult
 from .models import ACModel, ACModelPhoto, ACModelSupplier, ModelRawValue, ModelRegion
 
 
+def _url_with_mtime(file_field) -> str:
+    """Relative URL файла + query `?v=<mtime>` для cache-bust (Cloudflare/CDN).
+    Когда файл перезаписывается (normalize), mtime меняется → URL уникален → edge
+    cache считает ресурс новым и идёт на origin.
+    """
+    if not file_field:
+        return ""
+    url = file_field.url
+    try:
+        mtime = file_field.storage.get_modified_time(file_field.name)
+        return f"{url}?v={int(mtime.timestamp())}"
+    except Exception:
+        return url
+
+
 class BrandSerializer(serializers.ModelSerializer):
     logo = serializers.SerializerMethodField()
 
@@ -21,9 +36,7 @@ class BrandSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "name"]
 
     def get_logo(self, obj: Brand) -> str:
-        # Относительный URL — фронт-портал на другом hostname (hvac-info.com),
-        # browser подставит текущий origin. build_absolute_uri вернул бы localhost:8000.
-        return obj.logo.url if obj.logo else ""
+        return _url_with_mtime(obj.logo)
 
 
 class RegionSerializer(serializers.ModelSerializer):
@@ -84,7 +97,7 @@ class ACModelPhotoSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_image_url(self, obj: ACModelPhoto) -> str:
-        return obj.image.url if obj.image else ""
+        return _url_with_mtime(obj.image)
         return ""
 
 
@@ -145,7 +158,7 @@ class ACModelListSerializer(serializers.ModelSerializer):
         return int(rank) if rank is not None else None
 
     def get_brand_logo(self, obj: ACModel) -> str:
-        return obj.brand.logo.url if obj.brand.logo else ""
+        return _url_with_mtime(obj.brand.logo)
 
     def get_index_max(self, _obj: ACModel) -> float:
         return float(self.context.get("index_max", 100.0))
@@ -386,7 +399,7 @@ class MethodologyCriterionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_photo_url(self, obj: MethodologyCriterion) -> str:
-        return obj.criterion.photo.url if obj.criterion.photo else ""
+        return _url_with_mtime(obj.criterion.photo)
 
 
 class MethodologySerializer(serializers.ModelSerializer):
