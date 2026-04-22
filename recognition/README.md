@@ -182,9 +182,22 @@ PYTHONPATH=. .venv/bin/python -m pytest --cov=app --cov-report=term-missing
 ```
 
 Ожидания: pytest 100+ passed, coverage ≥ 80%, mypy/ruff clean. Golden suite
-идёт по реальной ОВ2-спецификации (`ismeta/tests/fixtures/golden/`):
-- `golden` — legacy recall ≥ 138 items, Vision не вызывается;
-- `golden_llm` — E15.04 recall ≥ 135, time ≤ 45s, 1 OpenAI call / стр.
+включает два fixture'а (`ismeta/tests/fixtures/golden/`) — оба запускаются
+при `pytest -m golden_llm` и проверяются в каждом релизе:
+
+- **spec-ov2-152items.pdf** (ОВ2, 9 стр, ≈152 позиции) — основной recall
+  baseline.
+  - `golden` — legacy text-layer recall ≥ 138 items, Vision не вызывается;
+  - `golden_llm` — E15.04+E15.05 column-aware recall ≥ 140 items, ≥ 6
+    секций, time ≤ 45s.
+- **spec-aov.pdf** (ЭОМ/автоматика, 2 стр, 29 позиций) — второй golden
+  после QA-сессии 3 (2026-04-22).
+  - `golden_llm` — все 29 позиций, ≥ 4 секций из 5, префикс «N.» очищен,
+    штамп «Взаим.инв.» отфильтрован, column shift проверен на 10
+    «Комплект автоматизации» (R19).
+
+Dual-regression обязательна: оба теста должны проходить после любого
+редактирования `spec_normalizer.py` / `pdf_text.py`.
 
 ## Pipeline: text-layer extraction + LLM normalization (E15.04)
 
