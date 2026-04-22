@@ -44,8 +44,16 @@ def _content_bbox(img: Image.Image) -> tuple[int, int, int, int] | None:
     return inverted.getbbox()
 
 
-def normalize_logo_file(src_bytes: bytes) -> bytes:
-    """Принимает bytes исходного логотипа, возвращает bytes нормализованного PNG."""
+def normalize_logo_file(
+    src_bytes: bytes,
+    max_content_w: int = MAX_CONTENT_W,
+    max_content_h: int = MAX_CONTENT_H,
+) -> bytes:
+    """Принимает bytes исходного логотипа, возвращает bytes нормализованного PNG.
+
+    `max_content_w`/`max_content_h` — опциональный override для content-box
+    (boost для визуально мелких логотипов, default 160×40).
+    """
     img = Image.open(io.BytesIO(src_bytes)).convert("RGBA")
 
     bbox = _content_bbox(img)
@@ -54,7 +62,7 @@ def normalize_logo_file(src_bytes: bytes) -> bytes:
 
     content = img.crop(bbox)
 
-    scale = min(MAX_CONTENT_W / content.width, MAX_CONTENT_H / content.height)
+    scale = min(max_content_w / content.width, max_content_h / content.height)
     new_w = max(1, int(round(content.width * scale)))
     new_h = max(1, int(round(content.height * scale)))
     content = content.resize((new_w, new_h), Image.LANCZOS)

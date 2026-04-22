@@ -12,7 +12,11 @@ from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 
 from ac_brands.models import Brand
-from ac_brands.services.logo_normalizer import normalize_logo_file
+from ac_brands.services.logo_normalizer import (
+    MAX_CONTENT_H,
+    MAX_CONTENT_W,
+    normalize_logo_file,
+)
 
 BACKUP_SUBDIR = "pre-normalize"
 
@@ -34,6 +38,18 @@ class Command(BaseCommand):
             "--force",
             action="store_true",
             help="Перезаписать backup, даже если он уже есть.",
+        )
+        parser.add_argument(
+            "--content-max-w",
+            type=int,
+            default=MAX_CONTENT_W,
+            help=f"Max ширина content-box (default {MAX_CONTENT_W}). Больше = крупнее лого.",
+        )
+        parser.add_argument(
+            "--content-max-h",
+            type=int,
+            default=MAX_CONTENT_H,
+            help=f"Max высота content-box (default {MAX_CONTENT_H}). Больше = крупнее лого.",
         )
 
     def handle(self, *args, **opts):
@@ -68,7 +84,11 @@ class Command(BaseCommand):
                 continue
 
             try:
-                normalized_bytes = normalize_logo_file(src_bytes)
+                normalized_bytes = normalize_logo_file(
+                    src_bytes,
+                    max_content_w=opts["content_max_w"],
+                    max_content_h=opts["content_max_h"],
+                )
             except Exception as exc:
                 self.stderr.write(self.style.ERROR(f"  FAIL {brand.name}: {exc}"))
                 failed += 1
