@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingMethodology } from '@/lib/api/services/rating';
+import BackToRating from '../_components/BackToRating';
 
 import MethodologyHero from './MethodologyHero';
 import MethodologyTable from './MethodologyTable';
@@ -12,7 +13,8 @@ export const metadata: Metadata = {
     'Методика расчёта индекса «Август-климат»: 30 параметров, веса, шкалы.',
 };
 
-export const revalidate = 3600;
+// force-dynamic — иначе build-time SSG может захватить пустой API (см. /ratings/ урок)
+export const dynamic = 'force-dynamic';
 
 export default async function RatingMethodologyPage() {
   let methodology: Awaited<ReturnType<typeof getRatingMethodology>> = {
@@ -34,6 +36,7 @@ export default async function RatingMethodologyPage() {
     <>
       <HvacInfoHeader />
       <main className="hvac-content">
+        <BackToRating />
         <MethodologyHero
           stats={methodology.stats}
           criteriaCount={methodology.criteria.length}

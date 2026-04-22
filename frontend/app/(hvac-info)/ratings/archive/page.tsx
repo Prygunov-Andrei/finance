@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingArchiveModels } from '@/lib/api/services/rating';
+import BackToRating from '../_components/BackToRating';
 
 import ArchiveHero from './ArchiveHero';
 import ArchiveTable from './ArchiveTable';
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
     'Модели кондиционеров, выбывшие из рейтинга: снятые с производства, ушедшие с рынка РФ.',
 };
 
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
 
 export default async function RatingArchivePage() {
   let models: Awaited<ReturnType<typeof getRatingArchiveModels>> = [];
@@ -25,6 +26,7 @@ export default async function RatingArchivePage() {
     <>
       <HvacInfoHeader />
       <main className="hvac-content">
+        <BackToRating />
         <ArchiveHero count={models.length} />
         <ArchiveTable models={models} />
       </main>

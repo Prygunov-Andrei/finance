@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingBrands } from '@/lib/api/services/rating';
+import BackToRating from '../_components/BackToRating';
 
 import SubmitForm from './SubmitForm';
 
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
     'Форма заявки на добавление кондиционера в рейтинг Август-климат: замеры, фото, контакты.',
 };
 
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
 
 export default async function RatingSubmitPage() {
   let brands: Awaited<ReturnType<typeof getRatingBrands>> = [];
@@ -24,6 +25,7 @@ export default async function RatingSubmitPage() {
     <>
       <HvacInfoHeader />
       <main className="hvac-content">
+        <BackToRating />
         <SubmitForm brands={brands} />
       </main>
     </>
