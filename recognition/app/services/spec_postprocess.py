@@ -10,12 +10,25 @@
    был применён к НЕ-серийной позиции. Sticky разрешён только когда текущая
    name содержит variant-marker (буквы + цифра): ПН2, ПД1, КВО-10 и т.п.
    Если LLM приписал sticky «Решётка» к «Воздуховод 250х100» — это ошибка.
+
+E15-06 it2:
+
+3. `restore_from_bbox_rows` (QA #55 strict) — сверить item.name с cells.name
+   исходной bbox-row. Если LLM эмитировала «Решётка» для row где cells.name =
+   «Воздуховод 250х100» — восстановить «Воздуховод» как источник истины.
+   `cap_sticky_name` не видит подмены (работает только с LLM output).
+
+4. `cover_bbox_rows` (QA #51 strict) — coverage-check: для каждой bbox-row
+   с непустым cells.name убедиться что есть соответствующий item. Если
+   row не покрыт items — это потерянная continuation, склеиваем в
+   предыдущий item.name.
 """
 
 from __future__ import annotations
 
 import re
 
+from .pdf_text import TableRow
 from .spec_normalizer import NormalizedItem
 
 # Предлоги / союзы которые однозначно начинают continuation.
@@ -216,3 +229,178 @@ def cap_sticky_name(
         out.append(item)
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# E15-06 it2 — bbox-row safety-net (QA #55 strict, #51 strict)
+# ---------------------------------------------------------------------------
+
+# «Значимое слово» в cells.name — буквенная последовательность ≥ 4 символов,
+# начинающаяся с заглавной буквы (имя собственное / термин). Используется
+# как якорь для detection подмены LLM'ом name.
+_WORD_CAPITAL_RE = re.compile(r"^[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё]{3,}", re.UNICODE)
+
+
+def _first_significant_word(text: str) -> str:
+    """Вернуть первое «значимое слово» (≥4 букв с заглавной) из text, либо ''.
+
+    Нужно для comparison item.name vs cells.name: если cells.name начинается
+    с «Воздуховод», а item.name — с «Решётка», первое слово различается →
+    LLM подменила.
+    """
+    s = (text or "").strip()
+    if not s:
+        return ""
+    first_chunk = s.split()[0] if s.split() else ""
+    m = _WORD_CAPITAL_RE.match(first_chunk)
+    if not m:
+        return ""
+    return m.group(0)
+
+
+def restore_from_bbox_rows(
+    items: list[NormalizedItem],
+    rows: list[TableRow],
+) -> list[NormalizedItem]:
+    """QA #55 strict: восстановить item.name из cells.name если LLM подменила.
+
+    Фон: `cap_sticky_name` режет sticky только если видит её как префикс в
+    item.name. Но LLM часто ПОЛНОСТЬЮ заменяет cells.name = «Воздуховод» на
+    sticky «Решётка» (не добавляет, а подставляет). cap_sticky_name этого не
+    ловит.
+
+    Эвристика:
+
+    1. Для каждого item с source_row_index != None находим соответствующую row.
+    2. Если cells.name пусто — skip (row-variant без name, legit sticky).
+    3. Если cells.name начинается с variant-marker (ПН2, В1-3) — skip
+       (legit sticky: «Клапан ПН2» и cells.name = «ПН2-4,5»).
+    4. Иначе сравниваем первое значимое слово item.name vs cells.name:
+       - если разные И первое слово cells.name ≥ 4 символов — item.name
+         подменили, восстанавливаем name = cells.name (full value, не только
+         первое слово).
+
+    Не ломаем: если у row cells.name == item.name — ничего не трогаем. Если
+    item.model_name непуст и cells.model непуст — это полноценный item с
+    корректной parent-name сверху (НЕ case #55), тоже не трогаем.
+    """
+    if not items or not rows:
+        return items
+
+    rows_by_idx: dict[int, TableRow] = {r.row_index: r for r in rows}
+
+    for item in items:
+        idx = item.source_row_index
+        if idx is None:
+            continue
+        row = rows_by_idx.get(idx)
+        if row is None:
+            continue
+        cells_name = (row.cells.get("name") or "").strip()
+        if not cells_name:
+            continue
+        # Legit sticky: cells.name начинается с variant-marker ("ПН2-4,5") —
+        # это row-variant, имя legit наследуется от sticky-parent.
+        if _has_variant_marker(cells_name):
+            continue
+        # Если cells.name целиком совпадает с item.name — порядок.
+        if cells_name == item.name.strip():
+            continue
+
+        first_cells = _first_significant_word(cells_name)
+        first_item = _first_significant_word(item.name)
+        if not first_cells:
+            # cells.name короткая / без capital word — не наш кейс.
+            continue
+        if first_cells == first_item:
+            # LLM добавила/склеила continuation к cells.name, но корень тот же.
+            continue
+        # ПОДМЕНА: item.name начинается с другого корня чем cells.name.
+        # Восстанавливаем cells.name полностью. model/brand/qty остаются от item.
+        item.name = cells_name[:500]
+
+    return items
+
+
+def cover_bbox_rows(
+    items: list[NormalizedItem],
+    rows: list[TableRow],
+) -> list[NormalizedItem]:
+    """QA #51 strict: склеить bbox-rows которые LLM потеряла как continuation.
+
+    Фон: `apply_no_qty_merge` работает на items — а LLM иногда просто
+    ВЫБРАСЫВАЕТ continuation-row вовсе, и в items её нет. Post-process по
+    items не видит что пропала.
+
+    Эвристика:
+
+    1. Собираем set covered_rows = {source_row_index для items с != None}.
+    2. Идём по rows по порядку. Для row i где cells.name непуст, row не
+       section-heading, row не покрыт items:
+       - cells.qty/unit/model/brand пусты → это continuation, склеиваем
+         cells.name с предыдущим выведенным items[].name (ближайшим с
+         source_row_index < i).
+       - иначе → legit lost item, не наше дело (log как warning и оставить).
+
+    Не добавляет новых items (мы не знаем qty/unit потерянной позиции);
+    только склеивает continuation-строки. Потеря complete-позиции остаётся
+    видимой через vision_counter / expected_count tolerance.
+
+    Если source_row_index не заполнен вообще (LLM проигнорировал правило 17)
+    — пропускаем (без mapping coverage-check неадекватен).
+    """
+    if not items or not rows:
+        return items
+
+    have_any_index = any(it.source_row_index is not None for it in items)
+    if not have_any_index:
+        return items
+
+    covered: set[int] = {
+        it.source_row_index for it in items if it.source_row_index is not None
+    }
+
+    for row in rows:
+        if row.row_index in covered:
+            continue
+        cells_name = (row.cells.get("name") or "").strip()
+        if not cells_name:
+            continue
+        if row.is_section_heading:
+            continue
+        # Это continuation (нет qty/unit/model/brand)?
+        has_qty = bool((row.cells.get("qty") or "").strip())
+        has_unit = bool((row.cells.get("unit") or "").strip())
+        has_model = bool((row.cells.get("model") or "").strip())
+        has_brand = bool((row.cells.get("brand") or "").strip())
+        is_continuation = not (has_qty or has_unit or has_model or has_brand)
+        if not is_continuation:
+            # Это полноценная потерянная позиция — склеивать в name
+            # соседнего item нельзя, это исказит данные. Оставляем для
+            # vision_counter / suspicious-flag.
+            continue
+        # Находим ближайший предыдущий item (по source_row_index < row.row_index).
+        prev_item: NormalizedItem | None = None
+        prev_idx = -1
+        for it in items:
+            if it.source_row_index is None:
+                continue
+            if it.source_row_index < row.row_index and it.source_row_index > prev_idx:
+                prev_idx = it.source_row_index
+                prev_item = it
+        if prev_item is None:
+            # Continuation до первого item — пропускаем (некуда приклеивать).
+            continue
+        # Приклеиваем только если остаток действительно похож на continuation
+        # (иначе это заголовок / шум, не трогаем).
+        if not (
+            _looks_like_continuation(cells_name)
+            or len(cells_name) <= 60
+        ):
+            continue
+        prev_item.name = (
+            f"{prev_item.name.rstrip()} {cells_name.strip()}".strip()
+        )[:500]
+        covered.add(row.row_index)
+
+    return items

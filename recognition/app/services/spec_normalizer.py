@@ -47,6 +47,11 @@ class NormalizedItem:
     # несколькими разделами (spec-aov — до 3 разделов на странице). Если LLM
     # не указал — вызывающий код применит page-level new_section.
     section_name: str = ""
+    # E15-06 it2 (#55/#51): индекс bbox-row из которой item произошёл.
+    # Нужен post-process хукам restore_from_bbox_rows (сверка name с cells)
+    # и cover_bbox_rows (coverage-check потерянных continuation-rows).
+    # None если item пришёл не из bbox-rows (vision-fallback / legacy path).
+    source_row_index: int | None = None
 
 
 @dataclass
@@ -63,6 +68,12 @@ class NormalizedPage:
     # странице. Используется в SpecParser для cross-check: если expected >
     # len(items) + tolerance → retry multimodal (bbox мог потерять хвост).
     expected_count: int = 0
+    # E15-06 it2 (#52/#9): независимый vision-based counter (отдельный cheap
+    # call по картинке страницы, не по bbox-rows). Заполняется SpecParser'ом
+    # после normalize, в самой normalize_via_llm всегда 0. Нужен потому что
+    # expected_count работает на тех же bbox, что и парсинг → «видит» только
+    # то что успел распарсить → хвостовые потери не детектирует.
+    expected_count_vision: int = 0
 
 
 NORMALIZE_PROMPT_TEMPLATE = """Ты обрабатываешь страницу проектной спецификации ОВиК/ЭОМ (форма 1а ГОСТ 21.110).
@@ -292,16 +303,42 @@ Python-layer для детекции пропущенных позиций на 
 
 Если ты не уверена — поставь expected_count = len(items).
 
+ПРАВИЛО 17 — source_row_index (E15-06 it2, #55/#51, traceability):
+
+Каждому item ОБЯЗАТЕЛЬНО укажи `source_row_index: int` — значение
+`row_index` той bbox-row, откуда ты взяла основные поля (qty, unit,
+model, brand). Если item склеен из нескольких rows (name-continuation,
+sticky-variant) — укажи row_index ПЕРВОЙ row'ы источника (ту, где есть
+qty/unit — «реальной» позиции). Если не можешь определить — ставь -1.
+
+Нужно для Python-layer safety-net: сверки item.name с исходной
+cells.name и поиска потерянных continuation-rows.
+
+ПРАВИЛО 18 — ПОЛНОЕ ПОКРЫТИЕ ROWS (E15-06 it2, #51 strict):
+
+ВСЕ rows имеющие cells['name'] != "" ОБЯЗАНЫ попасть в output — либо как
+отдельный item, либо как часть склеенного name, либо как section-heading.
+Если ты не знаешь что делать с row — ПРИКЛЕЙ cells['name'] к предыдущему
+items[].name через пробел. НЕ выбрасывай rows молча: потеря информации
+хуже чем избыточный текст в name.
+
+Исключение: если cells['name'] — явный штамп ЕСКД (правило 7b) или шапка
+таблицы (правило 7a), row можно пропустить. Во всех остальных случаях —
+ОБЯЗАТЕЛЬНО эмитить или приклеивать.
+
 ВЫХОДНОЙ JSON (строго один объект, ничего вокруг):
 - new_section: str — секция по окончании страницы (без числового префикса,
   без trailing `:`/`—`/`-`, см. правило 1d)
 - new_sticky: str — sticky parent name по окончании страницы
 - expected_count: int — сколько позиций ты видишь на странице (правило 16)
 - items: array of {name, model_name, brand, manufacturer, unit, quantity,
-  comments, system_prefix, section_name}
+  comments, system_prefix, section_name, source_row_index}
 
 Поле system_prefix = значение pos из row если был системный код (правило 5b);
 иначе "".
+
+Поле source_row_index — см. правило 17 (row_index исходной bbox-row; -1 если
+неизвестно).
 
 Поле items[].section_name — название секции, в которой находился item в
 момент эмита. Страница может содержать НЕСКОЛЬКО секций (напр. «1.
@@ -495,6 +532,22 @@ async def normalize_via_llm(
     )
 
 
+def _parse_source_row_index(entry: dict) -> int | None:
+    """E15-06 it2: row_index исходной bbox-row. None если LLM не указал или
+    поставил -1/невалидное значение.
+    """
+    raw = entry.get("source_row_index")
+    if raw is None:
+        return None
+    try:
+        idx = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if idx < 0:
+        return None
+    return idx
+
+
 def _parse_expected_count(
     data: dict, items: list[NormalizedItem], warnings: list[str]
 ) -> int:
@@ -685,6 +738,7 @@ async def normalize_via_llm_multimodal(
                 section_name=_normalize_section_name(
                     str(entry.get("section_name") or "")
                 ),
+                source_row_index=_parse_source_row_index(entry),
             )
         )
 

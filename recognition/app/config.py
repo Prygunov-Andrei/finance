@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # E15-06 (#52) — page-tail safety net. Если LLM сказала что видит N позиций,
     # а мы распарсили меньше — retry через multimodal. Tolerance подбирает PO.
     llm_expected_count_tolerance: int = 3
+    # E15-06 it2 (#52/#9) — vision-based safety net. Отдельный cheap vision
+    # call считает позиции по картинке страницы (независимо от bbox-rows).
+    # Если vision_count - parsed ≥ tolerance → triggered multimodal retry.
+    # Закрывает хвостовые потери, которые expected_count на bbox rows не видит.
+    llm_vision_counter_enabled: bool = True
+    llm_vision_count_tolerance: int = 2
     dpi: int = 200
     max_page_retries: int = 2
     port: int = 8003

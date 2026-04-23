@@ -24,6 +24,21 @@ logger = logging.getLogger(__name__)
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
 
+def _apply_max_tokens(payload: dict, max_tokens: int) -> None:
+    """E15-06 it2 (A/B gpt-5.2): новые reasoning-модели gpt-5.x требуют
+    `max_completion_tokens` вместо legacy `max_tokens` (последний считается
+    «unsupported parameter» и даёт 400). gpt-4o принимает и то и другое.
+
+    Простая проверка по префиксу модели — надёжнее whitelisting'а (OpenAI
+    регулярно добавляет новые варианты gpt-5.x).
+    """
+    model = str(payload.get("model") or "")
+    if model.startswith(("gpt-5", "o1", "o3", "o4")):
+        payload["max_completion_tokens"] = max_tokens
+    else:
+        payload["max_tokens"] = max_tokens
+
+
 class OpenAIVisionProvider(BaseLLMProvider):
     def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         self.api_key = api_key if api_key is not None else settings.openai_api_key
@@ -103,8 +118,8 @@ class OpenAIVisionProvider(BaseLLMProvider):
             "response_format": {"type": "json_object"},
             "temperature": temperature,
             "messages": messages,
-            "max_tokens": max_tokens or settings.llm_max_tokens,
         }
+        _apply_max_tokens(payload, max_tokens or settings.llm_max_tokens)
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
@@ -141,8 +156,8 @@ class OpenAIVisionProvider(BaseLLMProvider):
                     ],
                 }
             ],
-            "max_tokens": settings.llm_max_tokens,
         }
+        _apply_max_tokens(payload, settings.llm_max_tokens)
         data = await self._post_with_retry(payload)
         return str(data["choices"][0]["message"]["content"])
 
@@ -190,8 +205,10 @@ class OpenAIVisionProvider(BaseLLMProvider):
             "response_format": {"type": "json_object"},
             "temperature": temperature,
             "messages": messages,
-            "max_tokens": max_tokens or settings.llm_normalize_max_tokens,
         }
+        _apply_max_tokens(
+            payload, max_tokens or settings.llm_normalize_max_tokens
+        )
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0

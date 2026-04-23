@@ -36,7 +36,13 @@ from .spec_normalizer import (
     normalize_via_llm,
     normalize_via_llm_multimodal,
 )
-from .spec_postprocess import apply_no_qty_merge, cap_sticky_name
+from .spec_postprocess import (
+    apply_no_qty_merge,
+    cap_sticky_name,
+    cover_bbox_rows,
+    restore_from_bbox_rows,
+)
+from .vision_counter import count_items_on_page
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +218,45 @@ class SpecParser:
             )
         ]
         import asyncio as _asyncio
+
+        # E15-06 it2 (#52/#9) — vision-based safety-net. Параллельно с text-
+        # normalize запускаем cheap vision-call per page: LLM считает позиции
+        # по картинке (независимо от bbox-rows). Результат cross-check'ается
+        # в Phase 2b и триггерит multimodal retry если vision_count > parsed.
+        vision_count_jobs: list[Any] = []
+        vision_enabled = (
+            settings.llm_vision_counter_enabled
+            and settings.llm_multimodal_retry_enabled
+        )
+        if vision_enabled:
+            for page_num in range(state.pages_total):
+                if not pages_rows[page_num]:
+                    vision_count_jobs.append(None)
+                    continue
+                vision_count_jobs.append(
+                    self._run_vision_counter(doc, page_num)
+                )
+
         outcomes = await _asyncio.gather(*tasks)
+
+        vision_counts: dict[int, int] = {}
+        if vision_enabled and vision_count_jobs:
+            vision_results = await _asyncio.gather(
+                *[j for j in vision_count_jobs if j is not None],
+                return_exceptions=True,
+            )
+            # Восстановим соответствие page_num → count.
+            it = iter(vision_results)
+            for page_num, job in enumerate(vision_count_jobs):
+                if job is None:
+                    continue
+                res = next(it)
+                if isinstance(res, BaseException):
+                    logger.warning(
+                        "vision_counter crashed page %d: %s", page_num + 1, res
+                    )
+                    continue
+                vision_counts[page_num] = int(res)
 
         # Фаза 4 — Phase 1 results в порядке страниц + R27 conditional
         # multimodal retry на страницах с низким confidence.
@@ -231,11 +275,18 @@ class SpecParser:
                 f"page {page_num + 1}: {w}" for w in norm.warnings
             )
 
-        # R27 Phase 2 — параллельный multimodal retry. E15-06: два триггера,
+        # R27 Phase 2 — параллельный multimodal retry. E15-06 it2: три триггера,
         #   (a) confidence < threshold (R27);
-        #   (b) expected_count - parsed_count ≥ tolerance (page-tail loss, #52).
+        #   (b) expected_count - parsed_count ≥ tolerance (LLM self-check, #52 it1);
+        #   (c) vision_count - parsed_count ≥ vision_tolerance (vision safety, it2).
+        #       (c) — единственный триггер который ловит полностью потерянные
+        #       LLM'ом хвостовые rows, expected_count их «не видит».
         final_by_page: dict[int, NormalizedPage] = dict(phase1_by_page)
         retry_reasons: dict[int, str] = {}
+        # Сохраним vision-counts в NormalizedPage для отчёта / PageSummary.
+        for page_num, v_count in vision_counts.items():
+            if page_num in phase1_by_page:
+                phase1_by_page[page_num].expected_count_vision = v_count
         if settings.llm_multimodal_retry_enabled:
             retry_jobs = []
             for page_num, norm in phase1_by_page.items():
@@ -250,6 +301,14 @@ class SpecParser:
                 delta = expected - parsed
                 if delta >= settings.llm_expected_count_tolerance and rows:
                     reasons.append(f"expected-parsed={delta}")
+                v_count = vision_counts.get(page_num, 0)
+                v_delta = v_count - parsed
+                if (
+                    v_count > 0
+                    and v_delta >= settings.llm_vision_count_tolerance
+                    and rows
+                ):
+                    reasons.append(f"vision-parsed={v_delta}")
                 if reasons:
                     retried = True
                     retry_reasons[page_num] = ", ".join(reasons)
@@ -279,14 +338,26 @@ class SpecParser:
                     rows = pages_rows[page_num]
                     conf_p1 = compute_confidence(p1, rows)
                     conf_p2 = compute_confidence(norm_p2, rows)
-                    expected = max(p1.expected_count, norm_p2.expected_count)
+                    # E15-06 it2: при vision-trigger главное — coverage (закрыть
+                    # хвостовые потери), даже если confidence чуть просел.
+                    v_count = vision_counts.get(page_num, 0)
+                    if v_count > 0:
+                        expected = max(p1.expected_count, norm_p2.expected_count, v_count)
+                    else:
+                        expected = max(p1.expected_count, norm_p2.expected_count)
                     p1_coverage = len(p1.items) / max(expected, 1)
                     p2_coverage = len(norm_p2.items) / max(expected, 1)
                     accept_p2 = (
                         conf_p2 > conf_p1
                         or (p2_coverage > p1_coverage and p2_coverage >= 0.8)
+                        or (
+                            v_count > 0
+                            and len(norm_p2.items) > len(p1.items)
+                            and conf_p2 >= conf_p1 - 0.1
+                        )
                     )
                     if accept_p2:
+                        norm_p2.expected_count_vision = v_count
                         final_by_page[page_num] = norm_p2
                         # Обновляем метрики confidence для отчёта (заменяем tuple).
                         state.confidence_scores = [
@@ -305,10 +376,12 @@ class SpecParser:
         # Фаза 5 — применяем финальные результаты (после возможного retry) в
         # порядке страниц + обновление sequential state + PageSummary.
         tolerance = settings.llm_expected_count_tolerance
+        v_tolerance = settings.llm_vision_count_tolerance
         for page_num in sorted(final_by_page.keys()):
             norm = final_by_page[page_num]
             initial_sticky = stickies[page_num][1] if page_num < len(stickies) else ""
-            self._apply_postprocess(norm, initial_sticky=initial_sticky)
+            rows = pages_rows[page_num] if page_num < len(pages_rows) else []
+            self._apply_postprocess(norm, rows=rows, initial_sticky=initial_sticky)
             state.current_section = norm.new_section or state.current_section
             state.sticky_parent_name = norm.new_sticky or state.sticky_parent_name
             self._append_normalized_items(norm, page_num)
@@ -320,12 +393,22 @@ class SpecParser:
 
             retried_flag = page_num in retry_reasons
             expected = norm.expected_count or 0
+            expected_vision = (
+                norm.expected_count_vision
+                or vision_counts.get(page_num, 0)
+            )
             parsed = len(norm.items)
-            suspicious = bool(expected and (expected - parsed) >= tolerance)
+            # E15-06 it2: suspicious теперь — по vision (главный сигнал), а
+            # legacy expected_count оставляем как weaker fallback.
+            suspicious = bool(
+                (expected_vision and (expected_vision - parsed) >= v_tolerance)
+                or (expected and (expected - parsed) >= tolerance)
+            )
             state.pages_summary.append(
                 PageSummary(
                     page=page_num + 1,
                     expected_count=expected,
+                    expected_count_vision=expected_vision,
                     parsed_count=parsed,
                     retried=retried_flag,
                     suspicious=suspicious,
@@ -507,7 +590,9 @@ class SpecParser:
         )
 
         initial_sticky = state.sticky_parent_name
-        self._apply_postprocess(normalized, initial_sticky=initial_sticky)
+        self._apply_postprocess(
+            normalized, rows=rows, initial_sticky=initial_sticky
+        )
         state.current_section = normalized.new_section or state.current_section
         state.sticky_parent_name = normalized.new_sticky or state.sticky_parent_name
 
@@ -532,12 +617,23 @@ class SpecParser:
         return True
 
     def _apply_postprocess(
-        self, norm: NormalizedPage, *, initial_sticky: str
+        self,
+        norm: NormalizedPage,
+        *,
+        rows: list[TableRow] | None = None,
+        initial_sticky: str,
     ) -> None:
         """E15-06: safety-net после LLM normalize.
 
         1. apply_no_qty_merge — склеить continuation-орфаны (#51/#53).
         2. cap_sticky_name — отрезать sticky у non-series items (#55).
+        3. restore_from_bbox_rows (E15-06 it2, #55) — сверить item.name с
+           cells.name исходной bbox-row. Если LLM применила sticky к row где
+           cells.name = «Воздуховод», а item.name = «Решётка» — восстановить
+           Воздуховод. Требует rows + source_row_index.
+        4. cover_bbox_rows (E15-06 it2, #51) — coverage-check: rows с
+           непустым cells.name, не попавшие в items, склеиваем с
+           предыдущим item.name (LLM выбросила continuation).
 
         initial_sticky — sticky_parent_name на входе страницы (с предыдущей
         страницы или с входа всего документа). Нужен для cap_sticky_name,
@@ -546,11 +642,33 @@ class SpecParser:
         before = len(norm.items)
         norm.items = apply_no_qty_merge(norm.items)
         norm.items = cap_sticky_name(norm.items, initial_sticky=initial_sticky)
+        if rows:
+            norm.items = restore_from_bbox_rows(norm.items, rows)
+            norm.items = cover_bbox_rows(norm.items, rows)
         after = len(norm.items)
         if before != after:
             norm.warnings.append(
                 f"postprocess: merged {before - after} continuation row(s)"
             )
+
+    async def _run_vision_counter(
+        self, doc: "fitz.Document", page_num: int
+    ) -> int:
+        """E15-06 it2: один cheap vision-call — «сколько позиций на картинке».
+
+        Независим от bbox-parser — LLM смотрит на картинку и считает позиции
+        с qty. Используется как safety-net для детекции потерь хвоста.
+        При любой ошибке возвращает 0 (safety-net не триггерит retry).
+        """
+        try:
+            img_b64 = await run_in_threadpool(render_page_to_b64, doc, page_num)
+        except Exception as e:  # pragma: no cover
+            logger.warning(
+                "vision_counter render failed",
+                extra={"page": page_num + 1, "error": str(e)},
+            )
+            return 0
+        return await count_items_on_page(img_b64, self.provider)
 
     def _append_normalized_items(
         self, normalized: NormalizedPage, page_num: int

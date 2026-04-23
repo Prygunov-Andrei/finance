@@ -39,6 +39,10 @@ class PageSummary(BaseModel):
 
     page: int
     expected_count: int = 0
+    # E15-06 it2 (#52): vision-based self-check по картинке страницы.
+    # Независим от bbox-rows → видит хвостовые потери которые expected_count
+    # на bbox (видит только то что парсит) игнорирует.
+    expected_count_vision: int = 0
     parsed_count: int = 0
     retried: bool = False
     suspicious: bool = False
