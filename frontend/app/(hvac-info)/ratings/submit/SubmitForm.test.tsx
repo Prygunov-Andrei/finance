@@ -1,7 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 
-import type { RatingBrandOption } from '@/lib/api/types/rating';
+import type {
+  RatingBrandOption,
+  RatingMethodology,
+} from '@/lib/api/types/rating';
 
 import SubmitForm, {
   isFormReady,
@@ -285,6 +288,35 @@ describe('isSectionComplete', () => {
   });
 });
 
+const mkMethodology = (
+  criteria: RatingMethodology['criteria'] = [],
+): RatingMethodology => ({
+  version: '2026.04',
+  name: 'test',
+  criteria,
+  stats: { total_models: 10, active_criteria_count: 30, median_total_index: 70 },
+  presets: [],
+});
+
+const mkCriterion = (
+  code: string,
+  description_ru = '',
+): RatingMethodology['criteria'][number] => ({
+  code,
+  name_ru: code,
+  description_ru,
+  weight: 1,
+  unit: '',
+  value_type: 'numeric',
+  scoring_type: 'min_median_max',
+  group: 'climate',
+  group_display: 'Климат',
+  display_order: 0,
+  min_value: null,
+  median_value: null,
+  max_value: null,
+});
+
 describe('SubmitForm UI', () => {
   beforeEach(() => {
     global.fetch = vi.fn();
@@ -335,5 +367,70 @@ describe('SubmitForm UI', () => {
     });
     // fetch не должен быть вызван, т.к. isFormReady=false
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubmitForm tooltips', () => {
+  it('без methodology → рядом с label «Наличие ЭРВ» нет «?»-кнопки', () => {
+    render(<SubmitForm brands={BRANDS} />);
+    const label = screen.getByText('Наличие ЭРВ');
+    const fieldContainer = label.closest('div')?.parentElement as HTMLElement;
+    expect(fieldContainer).toBeTruthy();
+    expect(
+      within(fieldContainer).queryByRole('button', {
+        name: 'Описание критерия',
+      }),
+    ).toBeNull();
+  });
+
+  it('methodology с description_ru для erv → у «Наличие ЭРВ» появляется «?», клик раскрывает tooltip', () => {
+    const methodology = mkMethodology([
+      mkCriterion('erv', 'Электронный расширительный клапан — плавная регулировка'),
+      // Другие критерии, не влияющие на поле ЭРВ:
+      mkCriterion('drain_pan_heater', 'Обогрев поддона'),
+    ]);
+    render(<SubmitForm brands={BRANDS} methodology={methodology} />);
+    const label = screen.getByText('Наличие ЭРВ');
+    const fieldContainer = label.closest('div')?.parentElement as HTMLElement;
+    const tooltipBtn = within(fieldContainer).getByRole('button', {
+      name: 'Описание критерия',
+    }) as HTMLButtonElement;
+    expect(tooltipBtn.getAttribute('title')).toBe(
+      'Электронный расширительный клапан — плавная регулировка',
+    );
+    // До клика — tooltip не в DOM.
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.click(tooltipBtn);
+    expect(screen.getByRole('tooltip').textContent).toBe(
+      'Электронный расширительный клапан — плавная регулировка',
+    );
+  });
+
+  it('methodology с пустым description → «?» не рендерится (graceful)', () => {
+    const methodology = mkMethodology([mkCriterion('erv', '   ')]);
+    render(<SubmitForm brands={BRANDS} methodology={methodology} />);
+    const label = screen.getByText('Наличие ЭРВ');
+    const fieldContainer = label.closest('div')?.parentElement as HTMLElement;
+    expect(
+      within(fieldContainer).queryByRole('button', {
+        name: 'Описание критерия',
+      }),
+    ).toBeNull();
+  });
+
+  it('у поля без criterionCode (Бренд) tooltip не рендерится даже при полной methodology', () => {
+    const methodology = mkMethodology([
+      mkCriterion('erv', 'desc-erv'),
+      mkCriterion('drain_pan_heater', 'desc-dph'),
+    ]);
+    render(<SubmitForm brands={BRANDS} methodology={methodology} />);
+    // «Бренд» намеренно без criterionCode — для него «?» не должен быть.
+    const label = screen.getByText('Бренд');
+    const fieldContainer = label.closest('div')?.parentElement as HTMLElement;
+    expect(
+      within(fieldContainer).queryByRole('button', {
+        name: 'Описание критерия',
+      }),
+    ).toBeNull();
   });
 });

@@ -1,7 +1,9 @@
 'use client';
 
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -11,8 +13,12 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { RatingBrandOption } from '@/lib/api/types/rating';
+import type {
+  RatingBrandOption,
+  RatingMethodology,
+} from '@/lib/api/types/rating';
 
+import CriterionTooltip from '../_components/CriterionTooltip';
 import StickyCollapseHero from '../_components/StickyCollapseHero';
 import SubmitHero, { SubmitHeroCollapsed } from './SubmitHero';
 import SubmitSectionNav, { SUBMIT_SECTIONS } from './SubmitSectionNav';
@@ -208,9 +214,32 @@ export function validatePhotos(files: File[]): string | null {
   return null;
 }
 
-type Props = { brands: RatingBrandOption[] };
+type Props = {
+  brands: RatingBrandOption[];
+  /** Методология рейтинга — используется для построения map code→description_ru
+   *  и показа tooltip «?» возле меток полей. Если null (fetch упал) — форма
+   *  рендерится без подсказок, работает как раньше. */
+  methodology?: RatingMethodology | null;
+};
 
-export default function SubmitForm({ brands }: Props) {
+/**
+ * Контекст с картой criterion_code → description_ru.
+ * Компонент Field подписывается через useCriterionDescription(code),
+ * чтобы не тащить methodology через Section/Row прокидкой props.
+ * Map стабильный (useMemo), что гарантирует стабильность context value.
+ */
+const SubmitFormCriteriaContext = createContext<Map<string, string> | null>(
+  null,
+);
+
+function useCriterionDescription(code?: string): string | null {
+  const map = useContext(SubmitFormCriteriaContext);
+  if (!code || !map) return null;
+  const desc = map.get(code);
+  return desc ?? null;
+}
+
+export default function SubmitForm({ brands, methodology = null }: Props) {
   const [state, setState] = useState<FormState>(INITIAL);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -389,6 +418,18 @@ export default function SubmitForm({ brands }: Props) {
 
   const ready = useMemo(() => isFormReady(state, photos), [state, photos]);
 
+  // Map criterion.code → description_ru. Пересобираем только при смене methodology.
+  // Пустые description отфильтровываем, чтобы Field не «мигал» disabled-значком
+  // рядом с теми критериями, где подсказка ещё не заведена в админке.
+  const criteriaDescriptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of methodology?.criteria ?? []) {
+      const desc = (c.description_ru ?? '').trim();
+      if (desc) map.set(c.code, desc);
+    }
+    return map;
+  }, [methodology]);
+
   const completeness = useMemo(
     () =>
       SUBMIT_SECTIONS.reduce(
@@ -402,7 +443,7 @@ export default function SubmitForm({ brands }: Props) {
   );
 
   return (
-    <>
+    <SubmitFormCriteriaContext.Provider value={criteriaDescriptions}>
       <StickyCollapseHero
         full={<SubmitHero />}
         collapsed={<SubmitHeroCollapsed />}
@@ -546,6 +587,7 @@ export default function SubmitForm({ brands }: Props) {
           <Field
             label="Обогрев поддона"
             required
+            criterionCode="drain_pan_heater"
             error={errors.drain_pan_heater?.[0]}
           >
             <RadioGroup
@@ -557,7 +599,12 @@ export default function SubmitForm({ brands }: Props) {
               onChange={(v) => setField('drain_pan_heater', v)}
             />
           </Field>
-          <Field label="Наличие ЭРВ" required error={errors.erv?.[0]}>
+          <Field
+            label="Наличие ЭРВ"
+            required
+            criterionCode="erv"
+            error={errors.erv?.[0]}
+          >
             <BoolRadio
               value={state.erv}
               onChange={(v) => setField('erv', v)}
@@ -566,6 +613,7 @@ export default function SubmitForm({ brands }: Props) {
           <Field
             label="Регулировка оборотов вент. наруж. блока"
             required
+            criterionCode="fan_speed_outdoor"
             error={errors.fan_speed_outdoor?.[0]}
           >
             <BoolRadio
@@ -576,6 +624,7 @@ export default function SubmitForm({ brands }: Props) {
           <Field
             label="Подсветка экрана пульта"
             required
+            criterionCode="remote_backlight"
             error={errors.remote_backlight?.[0]}
           >
             <BoolRadio
@@ -588,6 +637,7 @@ export default function SubmitForm({ brands }: Props) {
             <Field
               label="Кол-во скоростей вент. внутр. блока"
               required
+              criterionCode="fan_speeds_indoor"
               error={errors.fan_speeds_indoor?.[0]}
             >
               <TextInput
@@ -602,6 +652,7 @@ export default function SubmitForm({ brands }: Props) {
             <Field
               label="Фильтры тонкой очистки"
               required
+              criterionCode="fine_filters"
               error={errors.fine_filters?.[0]}
             >
               <RadioGroup
@@ -620,6 +671,7 @@ export default function SubmitForm({ brands }: Props) {
             <Field
               label="Ионизатор"
               required
+              criterionCode="ionizer_type"
               error={errors.ionizer_type?.[0]}
             >
               <Select
@@ -632,6 +684,7 @@ export default function SubmitForm({ brands }: Props) {
             <Field
               label="Русифицированный пульт"
               required
+              criterionCode="russian_remote"
               error={errors.russian_remote?.[0]}
             >
               <Select
@@ -650,6 +703,7 @@ export default function SubmitForm({ brands }: Props) {
             <Field
               label="УФ-лампа"
               required
+              criterionCode="uv_lamp"
               error={errors.uv_lamp?.[0]}
             >
               <Select
@@ -1066,7 +1120,7 @@ export default function SubmitForm({ brands }: Props) {
           }
         `}</style>
       </main>
-    </>
+    </SubmitFormCriteriaContext.Provider>
   );
 }
 
@@ -1171,19 +1225,26 @@ function Field({
   label,
   required,
   error,
+  criterionCode,
   children,
 }: {
   label: string;
   required?: boolean;
   error?: string;
+  /** Код критерия методологии — если задан и в methodology есть
+   *  description_ru, справа от label появляется «?» с tooltip-подсказкой.
+   *  Если методология не загружена или описание пустое — «?» не рендерится. */
+  criterionCode?: string;
   children: ReactNode;
 }) {
+  const description = useCriterionDescription(criterionCode);
   return (
     <div>
       <div
         style={{
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
+          gap: 6,
           marginBottom: 6,
         }}
       >
@@ -1203,6 +1264,7 @@ function Field({
             </span>
           ) : null}
         </span>
+        {description ? <CriterionTooltip description={description} /> : null}
       </div>
       {children}
       {error ? (
