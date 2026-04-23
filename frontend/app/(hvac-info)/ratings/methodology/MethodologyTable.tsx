@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 
 import type { RatingMethodologyCriterion } from '@/lib/api/types/rating';
@@ -411,56 +410,6 @@ export default function MethodologyTable({ criteria }: Props) {
           })}
         </div>
       )}
-
-      <div
-        className="rt-methodology-footer"
-        style={{
-          marginTop: 40,
-          padding: 24,
-          background: 'hsl(var(--rt-alt))',
-          borderTop: '1px solid hsl(var(--rt-border-subtle))',
-          display: 'flex',
-          gap: 24,
-          alignItems: 'center',
-          flexWrap: 'wrap',
-        }}
-      >
-        <span style={{ fontSize: 12, color: 'hsl(var(--rt-ink-60))' }}>
-          Методика утверждена 2022 · актуальная версия v1.0
-        </span>
-        <span style={{ flex: 1 }} />
-        <button
-          type="button"
-          disabled
-          style={{
-            padding: '9px 14px',
-            fontSize: 12,
-            border: '1px solid hsl(var(--rt-border))',
-            background: 'transparent',
-            color: 'hsl(var(--rt-ink-40))',
-            borderRadius: 3,
-            cursor: 'not-allowed',
-            fontFamily: 'var(--rt-font-sans)',
-          }}
-          title="PDF в разработке"
-        >
-          Скачать PDF
-        </button>
-        <Link
-          href="/ratings/submit/"
-          style={{
-            padding: '10px 16px',
-            fontSize: 13,
-            background: 'hsl(var(--rt-ink))',
-            color: 'hsl(var(--rt-paper))',
-            borderRadius: 3,
-            textDecoration: 'none',
-            fontWeight: 500,
-          }}
-        >
-          Предложить модель →
-        </Link>
-      </div>
 
       <style>{`
         @media (max-width: 899px) {

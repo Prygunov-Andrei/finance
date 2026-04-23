@@ -7,7 +7,7 @@ import {
 } from '@/lib/api/services/rating';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
-import DetailBreadcrumb from '../_components/DetailBreadcrumb';
+import BackToRating from '../_components/BackToRating';
 import DetailHero, { DetailHeroCollapsed } from '../_components/DetailHero';
 import DetailMedia from '../_components/DetailMedia';
 import DetailAnchorNav from '../_components/DetailAnchorNav';
@@ -99,7 +99,7 @@ export default async function RatingDetailPage({ params }: Props) {
     <>
       <HvacInfoHeader />
       <main className="hvac-content">
-        <DetailBreadcrumb />
+        <BackToRating />
       </main>
       <StickyCollapseHero
         full={
