@@ -44,6 +44,44 @@ from .spec_postprocess import (
 )
 from .vision_counter import count_items_on_page
 
+# E15-06 it3 (QA #55 hardcore): маппинг section-keyword → sticky единственного
+# числа. Используется для pre-inject cells.name в rows где PDF полагается на
+# visual-continuation (cells.name пусто, только qty+unit+model). Без этого LLM
+# наследует sticky от предыдущей серии («Решётка») на Воздуховоды.
+_SECTION_KEYWORD_TO_STICKY: tuple[tuple[str, str], ...] = (
+    ("воздуховод", "Воздуховод"),
+    ("клапан", "Клапан"),
+    ("решётк", "Решётка"),
+    ("решетк", "Решётка"),
+    ("труб", "Труба"),
+    ("вентилятор", "Вентилятор"),
+    ("заслонк", "Заслонка"),
+    ("стакан", "Стакан"),
+    ("дефлектор", "Дефлектор"),
+    ("узел прохода", "Узел прохода"),
+    ("изоляц", "Изоляция"),
+    ("вставк", "Вставка"),
+    ("диффузор", "Диффузор"),
+    ("глушител", "Глушитель"),
+    ("шибер", "Шибер"),
+)
+
+
+def _sticky_from_section_heading(section_name: str) -> str:
+    """Вернуть sticky-имя единственного числа из section-heading.
+
+    «Воздуховоды приточной противодымной …» → «Воздуховод».
+    «Клапаны огнезадерживающие …» → «Клапан». Если keyword не найден —
+    возвращает '' (не обновляем sticky).
+    """
+    if not section_name:
+        return ""
+    lower = section_name.lower()
+    for keyword, sticky in _SECTION_KEYWORD_TO_STICKY:
+        if keyword in lower:
+            return sticky
+    return ""
+
 logger = logging.getLogger(__name__)
 
 CLASSIFY_PROMPT = """Ты получаешь изображение страницы проектной спецификации (ОВиК/СС).
@@ -174,6 +212,10 @@ class SpecParser:
                 pages_rows.append([])
 
         # Фаза 2 — best-effort sticky/section перед каждой страницей.
+        # E15-06 it3 (QA заход 1/10 hardcore): section-heading обновляет sticky
+        # по ключевому слову — «Воздуховоды приточной ...» → sticky «Воздуховод».
+        # Без этого sticky «ПН2-4,5 Решетка» с предыдущей series наследовался к
+        # Воздуховодам на следующей странице (items 122-130 на spec-ov2).
         stickies: list[tuple[str, str]] = []
         cur_section = ""
         cur_sticky = ""
@@ -183,8 +225,39 @@ class SpecParser:
                 name = r.cells.get("name", "")  # type: ignore[attr-defined]
                 if r.is_section_heading and name:  # type: ignore[attr-defined]
                     cur_section = name
+                    keyword_sticky = _sticky_from_section_heading(name)
+                    if keyword_sticky:
+                        cur_sticky = keyword_sticky
                 elif name:
                     cur_sticky = name
+
+        # Фаза 2b — pre-inject sticky в rows с пустым cells.name (E15-06 it3).
+        # LLM не умеет стабильно переключать sticky между страницами по
+        # section-heading (правило 18.5 помогает, но не всегда). Проще —
+        # заполнить cells.name на стороне Python для «гол»-rows (только qty/
+        # unit/model) до отправки в LLM. Тогда LLM получает явный name и не
+        # путается с sticky от предыдущей серии.
+        for page_num, rows in enumerate(pages_rows):
+            local_sticky = stickies[page_num][1]
+            for r in rows:
+                name = (r.cells.get("name") or "").strip()  # type: ignore[attr-defined]
+                if r.is_section_heading and name:  # type: ignore[attr-defined]
+                    keyword_sticky = _sticky_from_section_heading(name)
+                    if keyword_sticky:
+                        local_sticky = keyword_sticky
+                    continue
+                if name:
+                    local_sticky = name
+                    continue
+                # Пустой name + есть qty/unit/model → inject sticky.
+                cells_typed = r.cells  # type: ignore[attr-defined]
+                has_content = bool(
+                    (cells_typed.get("qty") or "").strip()
+                    or (cells_typed.get("unit") or "").strip()
+                    or (cells_typed.get("model") or "").strip()
+                )
+                if has_content and local_sticky:
+                    cells_typed["name"] = local_sticky
 
         # Фаза 3 — параллельные LLM calls (только для непустых rows).
         async def run_one(
