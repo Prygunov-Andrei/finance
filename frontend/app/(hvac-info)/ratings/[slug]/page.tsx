@@ -14,12 +14,10 @@ import DetailAnchorNav from '../_components/DetailAnchorNav';
 import StickyCollapseHero from '../_components/StickyCollapseHero';
 import DetailOverview from '../_components/DetailOverview';
 import DetailCriteria from '../_components/DetailCriteria';
-import DetailNewsMentions from '../_components/DetailNewsMentions';
 import DetailIndexViz from '../_components/DetailIndexViz';
 import DetailSpecs from '../_components/DetailSpecs';
 import DetailBuy from '../_components/DetailBuy';
 import DetailReviews from '../_components/DetailReviews';
-import DetailRelated from '../_components/DetailRelated';
 import SectionFooter from '../_components/SectionFooter';
 import { fallbackLede } from '../_components/detailHelpers';
 
@@ -129,9 +127,13 @@ export default async function RatingDetailPage({ params }: Props) {
       <main className="hvac-content">
         <DetailMedia detail={detail} />
         <DetailAnchorNav />
-        <DetailOverview detail={detail} />
-        <DetailCriteria detail={detail} />
-        <DetailNewsMentions mentions={detail.news_mentions} />
+        <DetailCriteria
+          detail={detail}
+          activeCriteriaCount={
+            methodology?.stats.active_criteria_count ?? detail.parameter_scores.length
+          }
+          methodology={methodology}
+        />
         <DetailIndexViz
           totalIndex={detail.total_index}
           median={median}
@@ -142,7 +144,7 @@ export default async function RatingDetailPage({ params }: Props) {
         <DetailSpecs detail={detail} methodology={methodology} />
         <DetailBuy detail={detail} />
         <DetailReviews detail={detail} />
-        <DetailRelated detail={detail} models={list} />
+        <DetailOverview detail={detail} />
       </main>
       <SectionFooter />
     </>
