@@ -11,6 +11,7 @@ E15.04 — добавлен column-aware path:
 import json
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 import fitz
 from fastapi.concurrency import run_in_threadpool
@@ -175,7 +176,9 @@ class SpecParser:
                     cur_sticky = name
 
         # Фаза 3 — параллельные LLM calls (только для непустых rows).
-        async def run_one(page_num: int, rows: list[TableRow], section: str, sticky: str):
+        async def run_one(
+            page_num: int, rows: list[TableRow], section: str, sticky: str
+        ) -> tuple[int, Any]:
             if not rows:
                 return page_num, None
             try:
