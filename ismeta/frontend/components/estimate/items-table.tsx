@@ -9,7 +9,7 @@ import {
   type ColumnDef,
   type ColumnSizingState,
 } from "@tanstack/react-table";
-import { Plus, Search, Star, Trash2, X } from "lucide-react";
+import { ChevronDown, Plus, Search, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -37,8 +44,9 @@ import { ProcurementStatusSelect } from "./procurement-status-select";
 import type { EquipmentTrack } from "./track-tabs";
 import { techSpecsTitle } from "./tech-specs";
 import { computeMerged, isSameSection } from "./merge-rows";
-import { ApiError, itemApi } from "@/lib/api/client";
+import { ApiError, itemApi, sectionApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
+import { pluralizeRows } from "@/lib/i18n";
 import { cn, formatCurrency, formatDecimal } from "@/lib/utils";
 import {
   MATCH_SOURCE_LABELS,
@@ -450,6 +458,100 @@ export function ItemsTable({
     },
   });
 
+  // UI-09 (#46): Перенос items между разделами.
+  // Cross-section selection разрешён. Достаточно ≥1 selected item (в отличие
+  // от Merge ≥2). N PATCH последовательно, чтобы не плодить race-conditions
+  // с optimistic locking на одной секции.
+  const moveItems = useMutation({
+    mutationFn: async ({
+      items: toMove,
+      targetSectionId,
+      targetSectionName,
+    }: {
+      items: EstimateItem[];
+      targetSectionId: UUID;
+      targetSectionName: string;
+    }) => {
+      for (const it of toMove) {
+        await itemApi.update(
+          it.id,
+          { section: targetSectionId },
+          it.version,
+          workspaceId,
+        );
+      }
+      return { count: toMove.length, name: targetSectionName };
+    },
+    onSuccess: ({ count, name }) => {
+      invalidate();
+      setSelectedIds(new Set());
+      setLastClickedId(null);
+      toast.success(
+        `Перенесено ${count} ${pluralizeRows(count)} в раздел «${name}»`,
+      );
+    },
+    onError: (e: unknown) => {
+      const detail =
+        e instanceof ApiError
+          ? (e.problem?.detail ?? "Ошибка сервера")
+          : e instanceof Error
+            ? e.message
+            : "Неизвестная ошибка";
+      toast.error(`Не удалось перенести: ${detail}`);
+      invalidate();
+    },
+  });
+
+  // Создание нового раздела из move-dropdown (inline) и сразу перенос.
+  const [creatingSectionName, setCreatingSectionName] = React.useState<
+    string | null
+  >(null);
+  const createSectionAndMove = useMutation({
+    mutationFn: async ({
+      name,
+      itemsToMove,
+    }: {
+      name: string;
+      itemsToMove: EstimateItem[];
+    }) => {
+      const section = await sectionApi.create(
+        estimateId,
+        { name, sort_order: (sections?.length ?? 0) },
+        workspaceId,
+      );
+      for (const it of itemsToMove) {
+        await itemApi.update(
+          it.id,
+          { section: section.id },
+          it.version,
+          workspaceId,
+        );
+      }
+      return { count: itemsToMove.length, name: section.name };
+    },
+    onSuccess: ({ count, name }) => {
+      qc.invalidateQueries({ queryKey: ["estimate-sections", estimateId] });
+      invalidate();
+      setSelectedIds(new Set());
+      setLastClickedId(null);
+      setCreatingSectionName(null);
+      toast.success(
+        `Перенесено ${count} ${pluralizeRows(count)} в раздел «${name}»`,
+      );
+    },
+    onError: (e: unknown) => {
+      const detail =
+        e instanceof ApiError
+          ? (e.problem?.detail ?? "Ошибка сервера")
+          : e instanceof Error
+            ? e.message
+            : "Неизвестная ошибка";
+      toast.error(`Не удалось перенести: ${detail}`);
+      invalidate();
+      setCreatingSectionName(null);
+    },
+  });
+
   const columns = React.useMemo<ColumnDef<EstimateItem>[]>(
     () => [
       {
@@ -843,11 +945,32 @@ export function ItemsTable({
   const sectionIdForNew = activeSectionId ?? fallbackSectionId;
   const canAdd = Boolean(sectionIdForNew);
 
-  const showBulkToolbar = selectedIds.size >= 2;
-  const mergeDisabled = !sameSection;
-  const mergeDisabledTooltip = mergeDisabled
-    ? "Строки должны быть в одной секции"
-    : undefined;
+  // UI-09 (#46): toolbar показывается при selection ≥1 (для Move).
+  // Merge остаётся требование ≥2 + same section — disabled state на кнопке.
+  const showBulkToolbar = selectedIds.size >= 1;
+  const mergeDisabled = selectedIds.size < 2 || !sameSection;
+  const mergeDisabledTooltip =
+    selectedIds.size < 2
+      ? "Выделите минимум 2 строки"
+      : !sameSection
+        ? "Строки должны быть в одной секции"
+        : undefined;
+
+  // Move dropdown: разделы, куда можно перенести. Если все selected items в
+  // одной секции — текущую исключаем (некуда переносить). При cross-section
+  // selection — показываем все.
+  const currentSectionIds = React.useMemo(() => {
+    const ids = new Set<UUID>();
+    for (const it of selectedItems) ids.add(it.section);
+    return ids;
+  }, [selectedItems]);
+  const moveTargets = React.useMemo(() => {
+    const all = sections ?? [];
+    if (currentSectionIds.size === 1) {
+      return all.filter((s) => !currentSectionIds.has(s.id));
+    }
+    return all;
+  }, [sections, currentSectionIds]);
   const mergePreview = React.useMemo(() => {
     if (selectedItems.length < 2) return null;
     // Порядок превью — по sort_order в пределах текущей подборки items.
@@ -866,43 +989,171 @@ export function ItemsTable({
     <div className="flex flex-1 flex-col overflow-hidden">
       {showBulkToolbar && (
         <div
-          className="sticky top-0 z-20 flex items-center gap-3 border-b bg-primary/5 px-4 py-2 text-sm"
+          className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b bg-primary/5 px-4 py-2 text-sm"
           data-testid="merge-toolbar"
           role="toolbar"
           aria-label="Действия с выделенными строками"
         >
           <span className="font-medium">
-            Выделено: {selectedIds.size}{" "}
-            {selectedIds.size === 1
-              ? "строка"
-              : selectedIds.size < 5
-                ? "строки"
-                : "строк"}
+            Выделено: {selectedIds.size} {pluralizeRows(selectedIds.size)}
           </span>
           <Button
             size="sm"
             variant="default"
             onClick={() => setMergeDialogOpen(true)}
-            disabled={mergeDisabled || mergeRows.isPending}
+            disabled={mergeDisabled || mergeRows.isPending || moveItems.isPending}
             title={mergeDisabledTooltip}
             data-testid="merge-button"
           >
             Объединить
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  moveItems.isPending ||
+                  mergeRows.isPending ||
+                  createSectionAndMove.isPending ||
+                  moveTargets.length === 0
+                }
+                title={
+                  moveTargets.length === 0
+                    ? "Нет других разделов — создайте новый через «+ Новый раздел»"
+                    : undefined
+                }
+                data-testid="move-dropdown-trigger"
+              >
+                Перенести в раздел
+                <ChevronDown className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="max-h-64 overflow-auto"
+              data-testid="move-dropdown-content"
+            >
+              {moveTargets.length === 0 ? (
+                <DropdownMenuItem disabled>
+                  Нет других разделов
+                </DropdownMenuItem>
+              ) : (
+                moveTargets.map((s) => (
+                  <DropdownMenuItem
+                    key={s.id}
+                    data-testid={`move-target-${s.id}`}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      moveItems.mutate({
+                        items: selectedItems,
+                        targetSectionId: s.id,
+                        targetSectionName: s.name,
+                      });
+                    }}
+                  >
+                    {s.name}
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                data-testid="move-new-section"
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setCreatingSectionName("");
+                }}
+              >
+                + Новый раздел…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             size="sm"
-            variant="outline"
+            variant="ghost"
             onClick={clearSelection}
-            disabled={mergeRows.isPending}
+            disabled={mergeRows.isPending || moveItems.isPending}
           >
             Отмена
           </Button>
-          {mergeDisabled && (
+          {mergeDisabled && selectedIds.size >= 2 && (
             <span className="text-xs text-muted-foreground">
-              Строки должны быть в одной секции
+              Строки должны быть в одной секции для объединения
             </span>
           )}
         </div>
+      )}
+
+      {creatingSectionName !== null && (
+        <Dialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open && !createSectionAndMove.isPending)
+              setCreatingSectionName(null);
+          }}
+        >
+          <DialogContent className="max-w-md" data-testid="new-section-dialog">
+            <DialogHeader>
+              <DialogTitle>Новый раздел</DialogTitle>
+              <DialogDescription>
+                Выделенные строки будут перенесены в новый раздел.
+              </DialogDescription>
+            </DialogHeader>
+            <input
+              autoFocus
+              type="text"
+              value={creatingSectionName}
+              onChange={(e) => setCreatingSectionName(e.target.value)}
+              placeholder="Название раздела"
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              data-testid="new-section-input"
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  creatingSectionName.trim() &&
+                  !createSectionAndMove.isPending
+                ) {
+                  createSectionAndMove.mutate({
+                    name: creatingSectionName.trim(),
+                    itemsToMove: selectedItems,
+                  });
+                }
+                if (e.key === "Escape" && !createSectionAndMove.isPending) {
+                  setCreatingSectionName(null);
+                }
+              }}
+            />
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCreatingSectionName(null)}
+                disabled={createSectionAndMove.isPending}
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={() =>
+                  creatingSectionName.trim() &&
+                  createSectionAndMove.mutate({
+                    name: creatingSectionName.trim(),
+                    itemsToMove: selectedItems,
+                  })
+                }
+                disabled={
+                  createSectionAndMove.isPending ||
+                  !creatingSectionName.trim()
+                }
+                data-testid="new-section-confirm"
+              >
+                {createSectionAndMove.isPending
+                  ? "Создаём…"
+                  : "Создать и перенести"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
       <div
         className="flex flex-wrap items-center gap-3 border-b bg-background px-4 py-2 text-sm"
