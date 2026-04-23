@@ -256,4 +256,41 @@ Name items 2/4 теперь корректно «на узле прохода У
 - PO должен **загрузить spec-ov2 через UI заново** (свежий recognition) и сверить визуально с PDF. Ожидание: 136-141 items, 8 разделов, «+10%» в comments, Противопожарные изоляции на месте, Решётка 127-130 + Воздуховоды дальше не поглощены.
 - Вопрос PO: **закрываем заход 1/10** (7/8 done) и переходим к 2/10 (новый PDF) или делаем E15-06 it2 (multimodal expected_count для хвостовой детекции)?
 
+---
+
+## Заход 1/10 — ФИНАЛ (2026-04-23 конец дня)
+
+**main @ `87af4dd`.** Счёт: **1/10 закрыт полностью**. Живой прогон spec-ov2: **153/153 items** (полное соответствие ожиданию PO).
+
+**Закрыто за день:**
+
+| # | Finding | Fix (main commit) |
+|---|---|---|
+| #50 | sections не долетали в смету | hotfix invalidateQueries estimate-sections (`1f7e7f4`) |
+| #51 | multi-line continuation (Дефлектор Цаги) | E15-06 it1 apply_no_qty_merge + промпт 12 (`49ee1be`) |
+| #52 | хвостовые потери | E15-06 it2 vision_counter + bbox hardening (`a88b3f4` + `4f6c2ae` + `9415040`) |
+| #53 | подразделы как товары | E15-06 it1 промпт 13 (`49ee1be`) |
+| #54 | примечания «+10%» потеряны | E15-06 it1 промпт 15 (`49ee1be`) |
+| #55 | sticky «Решётка» на Воздуховоды | E15-06 it3 sticky pre-inject + keyword mapping (`f23dd1c`) |
+| #56 | kerning «Защитныйкозырек» | DEV-BACKLOG #24 |
+| #57 | pos-name разделитель | DEV-BACKLOG #25 |
+
+**Дополнительно закрыто по ходу:**
+- **UI-09 data-loss** (`section_id` не в whitelist → CASCADE DELETE items при Merge Sections) — `b5b9306`
+- **gpt-4o → gpt-5.2** для всех задач (extract / multimodal / classify) — `f44f887`
+- **OpenAI 401 shell env vs .env conflict** — `9415040` через `env_file: .env` в compose
+- **title-block bucket false-positive** (3 бага в `_is_title_block_bucket`) — `4f6c2ae` + `9415040`
+
+**Новые задачи в DEV-BACKLOG:**
+- **#27 UI-11** live-progress PDF-import (stream per-page + батч-вставка items)
+- **#28** Excel экспорт — столбец Модель не формируется
+- **#29** свободная заметка-стикер у сметы
+
+**Метрики финал:**
+- spec-ov2: **153/153 items**, 8 sections, 4 Огнезащитных / 3 Противопожарных — на месте, 31 item с comments «+10%», time ~75 сек на gpt-5.2
+- spec-aov: 29 items (регрессий нет)
+- spec-tabs: 183-196 items
+
+**Следующий шаг:** заход 2/10 — новый PDF от PO. Всё готово.
+
 
