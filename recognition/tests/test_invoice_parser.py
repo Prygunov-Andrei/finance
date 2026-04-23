@@ -233,6 +233,7 @@ class _FakeTextProvider(BaseLLMProvider):
         *,
         max_tokens: int | None = None,  # noqa: ARG002
         temperature: float = 0.0,  # noqa: ARG002
+        system_prompt: str | None = None,  # noqa: ARG002
     ) -> TextCompletion:
         if self._fail:
             return TextCompletion(content="NOT JSON", prompt_tokens=0, completion_tokens=0)

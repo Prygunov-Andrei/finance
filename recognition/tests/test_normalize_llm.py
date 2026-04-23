@@ -33,8 +33,9 @@ class _StubProvider(BaseLLMProvider):
     async def vision_complete(self, image_b64, prompt):  # noqa: ARG002
         raise AssertionError("vision не должен вызываться в normalize-тестах")
 
-    async def text_complete(self, prompt, *, max_tokens=None, temperature=0.0):  # noqa: ARG002
+    async def text_complete(self, prompt, *, max_tokens=None, temperature=0.0, system_prompt=None):  # noqa: ARG002
         self.last_prompt = prompt
+        self.last_system_prompt = system_prompt
         return TextCompletion(
             content=self._resp,
             prompt_tokens=self._pt,
@@ -395,12 +396,12 @@ class _MultimodalStubProvider(BaseLLMProvider):
     async def vision_complete(self, image_b64, prompt):  # noqa: ARG002
         raise AssertionError("vision не должен вызываться")
 
-    async def text_complete(self, prompt, *, max_tokens=None, temperature=0.0):  # noqa: ARG002
+    async def text_complete(self, prompt, *, max_tokens=None, temperature=0.0, system_prompt=None):  # noqa: ARG002
         self.text_calls += 1
         return TextCompletion(content=self._text, prompt_tokens=100, completion_tokens=50)
 
     async def multimodal_complete(
-        self, prompt, *, image_b64, max_tokens=None, temperature=0.0
+        self, prompt, *, image_b64, max_tokens=None, temperature=0.0, system_prompt=None
     ):  # noqa: ARG002
         self.multimodal_calls += 1
         return TextCompletion(content=self._mm, prompt_tokens=200, completion_tokens=80)

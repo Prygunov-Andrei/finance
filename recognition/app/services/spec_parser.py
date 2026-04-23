@@ -84,11 +84,13 @@ class _ParseState:
     llm_calls: int = 0
     llm_prompt_tokens: int = 0
     llm_completion_tokens: int = 0
+    llm_cached_tokens: int = 0  # TD-01: prompt-cache hits
     llm_warnings: list[str] = field(default_factory=list)
     # E15.05 it2 (R27): метрики multimodal retry.
     multimodal_retries: int = 0
     multimodal_prompt_tokens: int = 0
     multimodal_completion_tokens: int = 0
+    multimodal_cached_tokens: int = 0  # TD-01
     # Per-page confidence — сохраняется для отчёта/логов.
     confidence_scores: list[tuple[int, float, bool]] = field(default_factory=list)
 
@@ -221,6 +223,7 @@ class SpecParser:
             state.llm_calls += 1
             state.llm_prompt_tokens += norm.prompt_tokens
             state.llm_completion_tokens += norm.completion_tokens
+            state.llm_cached_tokens += norm.cached_tokens
             state.llm_warnings.extend(
                 f"page {page_num + 1}: {w}" for w in norm.warnings
             )
@@ -271,6 +274,7 @@ class SpecParser:
                     state.multimodal_retries += 1
                     state.multimodal_prompt_tokens += norm_p2.prompt_tokens
                     state.multimodal_completion_tokens += norm_p2.completion_tokens
+                    state.multimodal_cached_tokens += norm_p2.cached_tokens
                     state.llm_warnings.extend(
                         f"page {page_num + 1} [multimodal]: {w}"
                         for w in norm_p2.warnings
@@ -458,6 +462,7 @@ class SpecParser:
         state.llm_calls += 1
         state.llm_prompt_tokens += normalized.prompt_tokens
         state.llm_completion_tokens += normalized.completion_tokens
+        state.llm_cached_tokens += normalized.cached_tokens
         state.llm_warnings.extend(
             f"page {page_num + 1}: {w}" for w in normalized.warnings
         )
@@ -590,9 +595,11 @@ class SpecParser:
                     "llm_calls": state.llm_calls,
                     "prompt_tokens": state.llm_prompt_tokens,
                     "completion_tokens": state.llm_completion_tokens,
+                    "cached_tokens": state.llm_cached_tokens,
                     "multimodal_retries": state.multimodal_retries,
                     "multimodal_prompt_tokens": state.multimodal_prompt_tokens,
                     "multimodal_completion_tokens": state.multimodal_completion_tokens,
+                    "multimodal_cached_tokens": state.multimodal_cached_tokens,
                     "warnings_count": len(state.llm_warnings),
                     "confidence_scores": state.confidence_scores,
                 },

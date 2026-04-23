@@ -11,11 +11,17 @@ class TextCompletion:
     Используется для ведения LLM-метрик (tokens in/out, cost per document)
     в SpecParser → QA отчёт. Поля prompt_tokens / completion_tokens могут
     быть 0 если провайдер не вернул usage (test-стабы и т.п.).
+
+    `cached_tokens` (TD-01) — сколько prompt-токенов попало в OpenAI prompt
+    cache (prompt_tokens_details.cached_tokens). Эти токены тарифицируются
+    × 0.5 на gpt-4o family (ephemeral 5-минутный cache). 0 = cache miss или
+    провайдер без prompt caching.
     """
 
     content: str
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cached_tokens: int = 0
 
 
 class BaseLLMProvider(ABC):
@@ -30,6 +36,7 @@ class BaseLLMProvider(ABC):
         *,
         max_tokens: int | None = None,
         temperature: float = 0.0,
+        system_prompt: str | None = None,
     ) -> TextCompletion:
         """Text-in → text-out completion. Используется для column-aware
         нормализации структурированных rows (E15.04, gpt-4o с it2).
@@ -50,6 +57,7 @@ class BaseLLMProvider(ABC):
         image_b64: str,
         max_tokens: int | None = None,
         temperature: float = 0.0,
+        system_prompt: str | None = None,
     ) -> TextCompletion:
         """E15.05 it2 (R27) — text-prompt + PNG image → structured JSON.
 

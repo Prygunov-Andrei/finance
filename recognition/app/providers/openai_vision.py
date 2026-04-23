@@ -30,10 +30,45 @@ class OpenAIVisionProvider(BaseLLMProvider):
         # `model` kwarg оставлен для backward-compat (старые тесты); в runtime
         # text_complete/vision/multimodal читают settings.llm_*_model напрямую.
         self.model = model or settings.llm_model
-        self._client = httpx.AsyncClient(timeout=120.0)
+        # TD-01: HTTP/2 + persistent connections. Ключевой вин — один TCP +
+        # TLS handshake на все 9+ LLM-calls одного документа (вместо 9
+        # независимых холодных соединений). `keepalive_expiry=300` держит
+        # соединение живым 5 минут idle (совпадает с OpenAI prompt-cache
+        # TTL — логично прогревать то что потом всё равно сбросит TLS).
+        self._client = httpx.AsyncClient(
+            timeout=120.0,
+            http2=True,
+            limits=httpx.Limits(
+                max_connections=10,
+                max_keepalive_connections=5,
+                keepalive_expiry=300,
+            ),
+        )
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def warm_up(self) -> None:
+        """TD-01: прогрев TCP/TLS + HTTP/2 соединения к OpenAI.
+
+        Один короткий GET /v1/models при FastAPI startup — прогревает
+        connection pool, чтобы первый реальный spec/invoice-parse запрос
+        не платил 4-8с на TLS handshake + HTTP/2 negotiation. Ошибки
+        non-fatal: если нет сети/ключа — продолжаем, прогретый pool не
+        критичен для корректности.
+        """
+        try:
+            resp = await self._client.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=10.0,
+            )
+            logger.info(
+                "openai connection pool warmed up",
+                extra={"status_code": resp.status_code},
+            )
+        except Exception as e:
+            logger.warning("openai warm-up failed (non-fatal): %s", e)
 
     async def text_complete(
         self,
@@ -41,6 +76,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         *,
         max_tokens: int | None = None,
         temperature: float = 0.0,
+        system_prompt: str | None = None,
     ) -> TextCompletion:
         """Text completion для column-aware нормализации.
 
@@ -51,20 +87,32 @@ class OpenAIVisionProvider(BaseLLMProvider):
 
         Модель: `settings.llm_extract_model` (E15.05 it2 default = gpt-4o).
         temperature=0 — детерминизм для golden-теста.
+
+        TD-01 (prompt caching): если `system_prompt` передан, идёт первым
+        сообщением с role=system. OpenAI gpt-4o автоматически кэширует
+        одинаковые prefix-блоки ≥1024 токенов (ephemeral ~5 мин) —
+        кэшированные input-tokens тарифицируются × 0.5. Проверить hit
+        можно через `cached_tokens` в TextCompletion.
         """
+        messages: list[dict] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
         payload = {
             "model": settings.llm_extract_model,
             "response_format": {"type": "json_object"},
             "temperature": temperature,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "max_tokens": max_tokens or settings.llm_max_tokens,
         }
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
+        cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
         return TextCompletion(
             content=str(data["choices"][0]["message"]["content"]),
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
             completion_tokens=int(usage.get("completion_tokens") or 0),
+            cached_tokens=int(cached),
         )
 
     async def vision_complete(self, image_b64: str, prompt: str) -> str:
@@ -105,6 +153,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         image_b64: str,
         max_tokens: int | None = None,
         temperature: float = 0.0,
+        system_prompt: str | None = None,
     ) -> TextCompletion:
         """E15.05 it2 (R27) — Phase 2 retry: prompt + PNG → structured JSON.
 
@@ -115,34 +164,42 @@ class OpenAIVisionProvider(BaseLLMProvider):
 
         Возвращает `TextCompletion` с usage — SpecParser считает multimodal
         tokens в отдельной статье статистики.
+
+        TD-01: `system_prompt` — то же поведение что в text_complete.
         """
+        messages: list[dict] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{image_b64}",
+                            "detail": "high",
+                        },
+                    },
+                ],
+            }
+        )
         payload = {
             "model": settings.llm_multimodal_model,
             "response_format": {"type": "json_object"},
             "temperature": temperature,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{image_b64}",
-                                "detail": "high",
-                            },
-                        },
-                    ],
-                }
-            ],
+            "messages": messages,
             "max_tokens": max_tokens or settings.llm_normalize_max_tokens,
         }
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
+        cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
         return TextCompletion(
             content=str(data["choices"][0]["message"]["content"]),
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
             completion_tokens=int(usage.get("completion_tokens") or 0),
+            cached_tokens=int(cached),
         )
 
     async def _post_with_retry(self, payload: dict) -> dict:

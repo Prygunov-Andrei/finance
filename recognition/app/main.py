@@ -20,6 +20,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     provider = OpenAIVisionProvider()
     app.state.provider = provider
     app.state.provider_name = f"openai-{settings.llm_model}"
+    # TD-01: прогрев TCP/TLS/HTTP/2 connection pool к OpenAI. Первый
+    # spec/invoice-parse запрос не платит 4-8с на handshake. Ошибка
+    # non-fatal — если нет API key / сети в тестах, сервис всё равно
+    # стартует.
+    await provider.warm_up()
     try:
         yield
     finally:
