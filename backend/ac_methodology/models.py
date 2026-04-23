@@ -313,3 +313,41 @@ class MethodologyCriterion(TimestampedModel):
     @property
     def unit(self):
         return self.criterion.unit
+
+
+class RatingPreset(TimestampedModel):
+    """Пресет таба «Свой рейтинг» (например «Тишина», «Сибирь»).
+
+    Связан с Criterion через M2M. При `is_all_selected=True` M2M игнорируется
+    и пресет включает все активные критерии активной методики — это нужно
+    для пресета «Август-климат», чтобы при добавлении новых критериев он
+    автоматически их учитывал без ручного обновления M2M.
+    """
+
+    slug = models.SlugField(max_length=64, unique=True, verbose_name="Slug")
+    label = models.CharField(max_length=128, verbose_name="Название")
+    order = models.PositiveSmallIntegerField(default=0, verbose_name="Порядок")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    description = models.TextField(blank=True, default="", verbose_name="Описание")
+    criteria = models.ManyToManyField(
+        "Criterion",
+        related_name="presets",
+        verbose_name="Критерии",
+        blank=True,
+    )
+    is_all_selected = models.BooleanField(
+        default=False,
+        verbose_name="Выбирает все критерии",
+        help_text=(
+            "Если включено — M2M игнорируется, пресет включает все активные "
+            "критерии активной методики."
+        ),
+    )
+
+    class Meta:
+        ordering = ["order", "label"]
+        verbose_name = "Пресет «Свой рейтинг»"
+        verbose_name_plural = "Пресеты «Свой рейтинг»"
+
+    def __str__(self) -> str:
+        return f"{self.label} ({self.slug})"

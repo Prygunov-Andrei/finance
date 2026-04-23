@@ -8,6 +8,7 @@ from ac_methodology.models import (
     Criterion,
     MethodologyCriterion,
     MethodologyVersion,
+    RatingPreset,
 )
 
 
@@ -47,3 +48,16 @@ class MethodologyCriterionFactory(DjangoModelFactory):
     weight = 10.0
     min_value = 0.0
     max_value = 100.0
+
+
+class RatingPresetFactory(DjangoModelFactory):
+    class Meta:
+        model = RatingPreset
+        django_get_or_create = ("slug",)
+
+    slug = factory.Sequence(lambda n: f"preset-{n}")
+    label = factory.Sequence(lambda n: f"Пресет {n}")
+    order = factory.Sequence(lambda n: n)
+    is_active = True
+    description = ""
+    is_all_selected = False

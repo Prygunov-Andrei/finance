@@ -218,6 +218,68 @@ def test_methodology_404_when_no_active(client, db):
     assert resp.status_code == 404
 
 
+# ── Presets (polish-3) ────────────────────────────────────────────────
+#
+# Seed-миграция 0005 создаёт 6 пресетов, фикстура `methodology_with_noise`
+# даёт активную методику с одним критерием.
+
+
+@pytest.mark.django_db
+def test_methodology_includes_presets(client, methodology_with_noise):
+    """Ответ /methodology/ содержит массив presets длиной 6."""
+    resp = client.get("/api/public/v1/rating/methodology/")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "presets" in body
+    assert isinstance(body["presets"], list)
+    assert len(body["presets"]) == 6
+
+
+@pytest.mark.django_db
+def test_methodology_presets_shape(client, methodology_with_noise):
+    """Каждый пресет содержит нужные поля; сортировка по order."""
+    resp = client.get("/api/public/v1/rating/methodology/")
+    presets = resp.json()["presets"]
+    # Сортировка по `order` (0 → 5).
+    orders = [p["order"] for p in presets]
+    assert orders == sorted(orders)
+    # Shape.
+    for p in presets:
+        assert set(p.keys()) >= {
+            "id", "slug", "label", "order", "description",
+            "is_all_selected", "criteria_codes",
+        }
+        assert isinstance(p["criteria_codes"], list)
+
+
+@pytest.mark.django_db
+def test_methodology_avgust_preset_returns_all_active_codes(
+    client, methodology_with_noise,
+):
+    """Пресет avgust (is_all_selected) → criteria_codes = все активные
+    коды активной методики."""
+    resp = client.get("/api/public/v1/rating/methodology/")
+    body = resp.json()
+    avgust = next(p for p in body["presets"] if p["slug"] == "avgust")
+    assert avgust["is_all_selected"] is True
+    # В methodology_with_noise только один активный критерий — `noise`.
+    assert avgust["criteria_codes"] == ["noise"]
+
+
+@pytest.mark.django_db
+def test_methodology_inactive_presets_excluded(client, methodology_with_noise):
+    """Пресет с is_active=False не попадает в ответ."""
+    from ac_methodology.models import RatingPreset
+    p = RatingPreset.objects.get(slug="silence")
+    p.is_active = False
+    p.save(update_fields=["is_active"])
+
+    resp = client.get("/api/public/v1/rating/methodology/")
+    slugs = [p["slug"] for p in resp.json()["presets"]]
+    assert "silence" not in slugs
+    assert len(slugs) == 5
+
+
 # ── Export CSV ─────────────────────────────────────────────────────────
 
 
