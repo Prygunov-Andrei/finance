@@ -110,9 +110,10 @@ services:
       context: ../recognition
     container_name: ismeta-recognition
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       RECOGNITION_API_KEY: ${RECOGNITION_API_KEY:-dev-recognition-key}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # E15-06 it3: планировали gpt-5.2, но на больших PDF (19+ стр)
       # OpenAI rate-limit жестче для новой модели — parse падает с

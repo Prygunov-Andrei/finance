@@ -917,14 +917,17 @@ def _is_title_block_bucket(bucket: list[_Span], page_rect: object) -> bool:
     except AttributeError:
         return False
 
-    # Признак cell-like span: содержит число-qty (1-5 цифр подряд) или
-    # типичный model-код (буквы+цифры+разделители, например РЭД-ВВШ-500).
+    # Признак cell-like span: содержит число-qty (1-6 цифр подряд, опционально
+    # с префиксом `~`/`≈` для приблизительных значений), типичный model-код
+    # (буквы+цифры+разделители), comments-маркер, или длинное наименование
+    # кириллицей / латиницей (item name не бывает в штампе).
     has_cell_like = False
     for span in bucket:
         text = span.text.strip()
         if not text:
             continue
-        # qty / count: 1-6 цифр, возможно с точкой/запятой (децимал).
+        # qty / count: 1-6 цифр, опционально с приблизительным префиксом
+        # и децимальной точкой/запятой. «~140», «≈ 110», «1245».
         if _QTY_LIKE_RE.fullmatch(text):
             has_cell_like = True
             break
@@ -934,6 +937,13 @@ def _is_title_block_bucket(bucket: list[_Span], page_rect: object) -> bool:
             break
         # comments «+10%», «+5%» — тоже cell-content.
         if text in ("+10%", "+5%", "+3%", "+15%", "+20%"):
+            has_cell_like = True
+            break
+        # Длинное name-like наименование (≥12 букв подряд, без stamp-keywords).
+        # Штамп ЕСКД содержит короткие слова («Изм.», «Подп.», «Формат А3»).
+        # Реальная item.name: «Огнезащитная клеящая смесь», «Противопожарная
+        # изоляция» — 20+ букв. Spans таких длин не принадлежат штампу.
+        if _LONG_NAME_RE.fullmatch(text) and not is_stamp_line(text):
             has_cell_like = True
             break
     if has_cell_like:
@@ -952,9 +962,16 @@ def _is_title_block_bucket(bucket: list[_Span], page_rect: object) -> bool:
     return stamp_hits >= max(1, len(bucket) // 2 + 1)
 
 
-_QTY_LIKE_RE = re.compile(r"[\d]+(?:[.,]\d+)?")
+_QTY_LIKE_RE = re.compile(r"[~≈]?\s*[\d]+(?:[.,]\d+)?")
 _MODEL_OR_SIZE_LIKE_RE = re.compile(
     r"[A-Za-zА-Яа-яЁё]*\d+(?:[-х×x/\\.A-Za-zА-Яа-яЁё\d]*)"
+)
+# Длинное наименование: ≥12 подряд букв/пробелов/дефисов — типично для
+# name в data-row, никогда не встречается в штампе ЕСКД (штамп имеет
+# только короткие слова «Изм.», «Подп.», «Формат А3», максимум 10-12
+# символов типа «Кол.уч.»).
+_LONG_NAME_RE = re.compile(
+    r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё\s\-]{11,}",
 )
 
 
