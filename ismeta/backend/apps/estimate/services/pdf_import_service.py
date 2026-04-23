@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 # «слипшейся» multi-line строкой, лучше обрезать и записать warning, чем
 # упасть 500-кой на всём импорте. См. QA-FINDINGS-2026-04-21 #4.
 MAX_ITEM_NAME_LEN = 500
+# EstimateSection.name = CharField(max_length=512). Парсер после E15-06 it3
+# может эмитить section_name из full section-heading (multi-line merged),
+# что на некоторых PDF превышает 512. Truncate вместо 500-ки.
+MAX_SECTION_NAME_LEN = 500
 
 
 class PDFParseError(Exception):
@@ -89,6 +93,16 @@ def apply_parsed_items(
             section_name = (
                 item.get("section_name") or item.get("section") or "Импорт PDF"
             )
+            # QA заход 1/10 5th-replay: section_name может прийти слишком
+            # длинным (merged section-heading multi-line) — truncate.
+            if len(section_name) > MAX_SECTION_NAME_LEN:
+                logger.warning(
+                    "pdf_import: section_name truncated from %d to %d chars: %r...",
+                    len(section_name),
+                    MAX_SECTION_NAME_LEN,
+                    section_name[:80],
+                )
+                section_name = section_name[:MAX_SECTION_NAME_LEN]
 
             if section_name not in sections_map:
                 sec, _ = EstimateSection.objects.get_or_create(
