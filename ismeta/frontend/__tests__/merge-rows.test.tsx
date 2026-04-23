@@ -400,7 +400,7 @@ describe("ItemsTable — merge dialog и API calls (UI-06)", () => {
     );
   });
 
-  it("успешный merge → toast success «Объединено N строк в одну»", async () => {
+  it("успешный merge → toast success «Объединено N строки/строк в одну»", async () => {
     renderWithRows();
     fetchMock.mockResolvedValueOnce(
       new Response("{}", {
@@ -417,7 +417,7 @@ describe("ItemsTable — merge dialog и API calls (UI-06)", () => {
 
     await waitFor(() => {
       expect(toastMock.success).toHaveBeenCalledWith(
-        "Объединено 2 строк в одну",
+        "Объединено 2 строки в одну",
       );
     });
   });

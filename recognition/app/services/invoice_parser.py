@@ -122,9 +122,11 @@ class _InvoiceParseState:
     llm_calls: int = 0
     llm_prompt_tokens: int = 0
     llm_completion_tokens: int = 0
+    llm_cached_tokens: int = 0  # TD-01: prompt caching
     multimodal_retries: int = 0
     multimodal_prompt_tokens: int = 0
     multimodal_completion_tokens: int = 0
+    multimodal_cached_tokens: int = 0  # TD-01
     confidence_scores: list[tuple[int, float, bool]] = field(default_factory=list)
     llm_warnings: list[str] = field(default_factory=list)
 
@@ -242,6 +244,7 @@ class InvoiceParser:
         state.llm_calls += 1
         state.llm_prompt_tokens += result.prompt_tokens
         state.llm_completion_tokens += result.completion_tokens
+        state.llm_cached_tokens += result.cached_tokens
 
     # ------------------------------------------------------------------
     # Phase 1-2 — items hybrid
@@ -315,6 +318,7 @@ class InvoiceParser:
             state.llm_calls += 1
             state.llm_prompt_tokens += norm.prompt_tokens
             state.llm_completion_tokens += norm.completion_tokens
+            state.llm_cached_tokens += norm.cached_tokens
             state.llm_warnings.extend(
                 f"page {page_num + 1}: {w}" for w in norm.warnings
             )
@@ -362,6 +366,7 @@ class InvoiceParser:
                     state.multimodal_retries += 1
                     state.multimodal_prompt_tokens += norm_p2.prompt_tokens
                     state.multimodal_completion_tokens += norm_p2.completion_tokens
+                    state.multimodal_cached_tokens += norm_p2.cached_tokens
                     state.llm_warnings.extend(
                         f"page {page_num + 1} [multimodal]: {w}"
                         for w in norm_p2.warnings
@@ -573,9 +578,11 @@ class InvoiceParser:
                     "llm_calls": state.llm_calls,
                     "prompt_tokens": state.llm_prompt_tokens,
                     "completion_tokens": state.llm_completion_tokens,
+                    "cached_tokens": state.llm_cached_tokens,
                     "multimodal_retries": state.multimodal_retries,
                     "multimodal_prompt_tokens": state.multimodal_prompt_tokens,
                     "multimodal_completion_tokens": state.multimodal_completion_tokens,
+                    "multimodal_cached_tokens": state.multimodal_cached_tokens,
                     "title_block_retry": state.title_block_retry,
                     "confidence_scores": state.confidence_scores,
                     "warnings_count": len(state.llm_warnings),

@@ -1,24 +1,46 @@
 /**
- * Русский pluralize — правило «1 / 2-4 / 5+» с учётом 11-14 (всегда «5+»).
+ * Russian plural helpers.
  *
- * UI-09: local helper до момента, когда Петя вынесет в общий модуль в TD-01.
- * Если TD-01 мержится первым и экспортирует pluralizeRows/pluralizeSections —
- * заменить импорт на его helper и удалить этот файл в follow-up.
+ * Правило русской плюрализации по последним двум цифрам:
+ * - 11..19 → форма «много» (строк, разделов)
+ * - mod10 == 1 → единственное (строка, раздел)
+ * - mod10 ∈ 2..4 → «мало» (строки, раздела)
+ * - иначе → «много» (строк, разделов)
+ *
+ * Поддержаны два API:
+ *   pluralize(n, {one, few, many})      — объектная форма
+ *   pluralize(n, [one, few, many])      — tuple (совместимость с UI-09)
  */
-function pluralize(count: number, forms: [string, string, string]): string {
-  const abs = Math.abs(count);
+
+export type PluralForms = {
+  one: string;
+  few: string;
+  many: string;
+};
+
+type PluralFormsInput = PluralForms | [string, string, string];
+
+function resolveForm(n: number, forms: PluralForms): string {
+  const abs = Math.abs(n);
   const mod10 = abs % 10;
   const mod100 = abs % 100;
-  if (mod100 >= 11 && mod100 <= 14) return forms[2];
-  if (mod10 === 1) return forms[0];
-  if (mod10 >= 2 && mod10 <= 4) return forms[1];
-  return forms[2];
+  if (mod100 >= 11 && mod100 <= 19) return forms.many;
+  if (mod10 === 1) return forms.one;
+  if (mod10 >= 2 && mod10 <= 4) return forms.few;
+  return forms.many;
 }
 
-export function pluralizeRows(count: number): string {
-  return pluralize(count, ["строка", "строки", "строк"]);
+export function pluralize(n: number, forms: PluralFormsInput): string {
+  if (Array.isArray(forms)) {
+    return resolveForm(n, { one: forms[0], few: forms[1], many: forms[2] });
+  }
+  return resolveForm(n, forms);
 }
 
-export function pluralizeSections(count: number): string {
-  return pluralize(count, ["раздел", "раздела", "разделов"]);
+export function pluralizeRows(n: number): string {
+  return resolveForm(n, { one: "строка", few: "строки", many: "строк" });
+}
+
+export function pluralizeSections(n: number): string {
+  return resolveForm(n, { one: "раздел", few: "раздела", many: "разделов" });
 }

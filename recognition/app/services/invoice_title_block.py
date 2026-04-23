@@ -80,6 +80,18 @@ __PAGE_TEXT__
 """
 
 
+# TD-01 prompt caching: инструкции (всё до «ТЕКСТ ДОКУМЕНТА:») стабильны
+# между всеми invoice-документами — уносим в system message, document text
+# идёт как user message.
+_TB_SPLIT = "\nТЕКСТ ДОКУМЕНТА"
+_TB_PARTS = TITLE_BLOCK_PROMPT_TEMPLATE.split(_TB_SPLIT, 1)
+assert len(_TB_PARTS) == 2, (
+    "TITLE_BLOCK_PROMPT_TEMPLATE must contain 'ТЕКСТ ДОКУМЕНТА' separator"
+)
+TITLE_BLOCK_INSTRUCTIONS_BLOCK = _TB_PARTS[0].rstrip()
+_TITLE_BLOCK_INPUT_TEMPLATE = "ТЕКСТ ДОКУМЕНТА" + _TB_PARTS[1]
+
+
 MULTIMODAL_RETRY_PROMPT_PREFIX = """У тебя есть ДВА источника данных:
 
 1. JSON-версия text layer первой страницы (авторитетный источник ТЕКСТА).
@@ -110,6 +122,7 @@ class TitleBlockResult:
     multimodal_retry_used: bool = False
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cached_tokens: int = 0  # TD-01: prompt caching hit
 
 
 _OUR_COMPANY_INN = "5032322673"
@@ -136,15 +149,21 @@ async def extract_title_block(
     if not page_1_text.strip():
         return TitleBlockResult(supplier=InvoiceSupplier(), meta=InvoiceMeta())
 
-    prompt = TITLE_BLOCK_PROMPT_TEMPLATE.replace("__PAGE_TEXT__", page_1_text)
+    user_input = _TITLE_BLOCK_INPUT_TEMPLATE.replace("__PAGE_TEXT__", page_1_text)
 
+    # TD-01: инструкции уходят в system — кэшируется между invoice-ами (и с
+    # normalize-путём для того же документа, если cached-TTL не истёк).
     completion = await provider.text_complete(
-        prompt, temperature=0.0, max_tokens=max_tokens
+        user_input,
+        temperature=0.0,
+        max_tokens=max_tokens,
+        system_prompt=TITLE_BLOCK_INSTRUCTIONS_BLOCK,
     )
     supplier, meta = _parse_title_block_json(completion.content)
 
     prompt_tokens = completion.prompt_tokens
     completion_tokens = completion.completion_tokens
+    cached_tokens = completion.cached_tokens
     retry_used = False
 
     low_confidence = (
@@ -158,13 +177,14 @@ async def extract_title_block(
             "title_block multimodal retry",
             extra={"had_inn": bool(supplier.inn), "total": meta.total_amount},
         )
-        mm_prompt = MULTIMODAL_RETRY_PROMPT_PREFIX + prompt
+        mm_user_input = MULTIMODAL_RETRY_PROMPT_PREFIX + user_input
         try:
             mm_completion = await provider.multimodal_complete(
-                mm_prompt,
+                mm_user_input,
                 image_b64=multimodal_fallback_image_b64,
                 temperature=0.0,
                 max_tokens=max_tokens,
+                system_prompt=TITLE_BLOCK_INSTRUCTIONS_BLOCK,
             )
         except NotImplementedError:
             logger.info("provider has no multimodal_complete, skip title-block retry")
@@ -174,6 +194,7 @@ async def extract_title_block(
             meta = _merge_meta(meta, mm_meta)
             prompt_tokens += mm_completion.prompt_tokens
             completion_tokens += mm_completion.completion_tokens
+            cached_tokens += mm_completion.cached_tokens
 
     # Guard: если LLM всё-таки подсунул наши реквизиты — чистим supplier.
     if supplier.inn == _OUR_COMPANY_INN:
@@ -189,6 +210,7 @@ async def extract_title_block(
         multimodal_retry_used=retry_used,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        cached_tokens=cached_tokens,
     )
 
 

@@ -56,6 +56,7 @@ class NormalizedPage:
     new_sticky: str
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cached_tokens: int = 0  # TD-01: prompt caching hit
     raw_response: str = ""
     warnings: list[str] = field(default_factory=list)
 
@@ -248,11 +249,29 @@ rows: __ROWS_JSON__
 # Экспортируется для совместимости с docs / тестов которые могут импортировать.
 NORMALIZE_PROMPT = NORMALIZE_PROMPT_TEMPLATE
 
+# TD-01 prompt caching: разделяем static INSTRUCTIONS_BLOCK (правила 0-11,
+# схема output, объяснение полей — одинаковое для всех страниц и
+# документов) и per-call INPUT_BLOCK (current_section / sticky / rows
+# которые меняются). OpenAI автоматически кэширует одинаковый prefix
+# ≥1024 токенов на gpt-4o family (ephemeral ~5 мин). INSTRUCTIONS_BLOCK
+# идёт как role=system — это каноничный и самый надёжный pattern для
+# prompt caching.
+_SPLIT_MARKER = "\nВХОД:\n"
+_PARTS = NORMALIZE_PROMPT_TEMPLATE.split(_SPLIT_MARKER, 1)
+assert len(_PARTS) == 2, "NORMALIZE_PROMPT_TEMPLATE must contain 'ВХОД:' separator"
+NORMALIZE_INSTRUCTIONS_BLOCK = _PARTS[0].rstrip()
+_NORMALIZE_INPUT_TEMPLATE = "ВХОД:\n" + _PARTS[1]
+
 
 def _build_prompt(current_section: str, sticky_parent_name: str, rows_json: str) -> str:
     """Подстановка значений без str.format() — иначе фигурные скобки в
     JSON-схеме внутри промпта схватываются как format-слоты и падают
-    с KeyError на 'pos'/'name' и т.п."""
+    с KeyError на 'pos'/'name' и т.п.
+
+    DEPRECATED: возвращает весь промпт одним куском (backward-compat для
+    тестов). Runtime использует `_build_user_input` + INSTRUCTIONS_BLOCK
+    через system_prompt — см. normalize_via_llm.
+    """
     return (
         NORMALIZE_PROMPT_TEMPLATE
         .replace("__CURRENT_SECTION__", json.dumps(current_section, ensure_ascii=False))
@@ -261,11 +280,24 @@ def _build_prompt(current_section: str, sticky_parent_name: str, rows_json: str)
     )
 
 
+def _build_user_input(
+    current_section: str, sticky_parent_name: str, rows_json: str
+) -> str:
+    """Per-call ВХОД-блок (без instructions) — идёт как user message.
+    Instructions подаются отдельно через system_prompt (TD-01 caching)."""
+    return (
+        _NORMALIZE_INPUT_TEMPLATE
+        .replace("__CURRENT_SECTION__", json.dumps(current_section, ensure_ascii=False))
+        .replace("__STICKY__", json.dumps(sticky_parent_name, ensure_ascii=False))
+        .replace("__ROWS_JSON__", rows_json)
+    )
+
+
 # R26 post-processing: нормализация section_name (страховка на случай если
 # LLM проигнорировал правило 1d). Удаляет хвост из пробелов, двоеточий, тире,
-# дефисов. Важно: не трогает начало строки — там возможны осмысленные
-# префиксы вроде «Клапаны на кровле (снаружи)».
-_SECTION_TAIL_CLEANUP_RE = re.compile(r"[\s:—\-]+$")
+# дефисов, точек и запятых. Важно: не трогает начало строки — там возможны
+# осмысленные префиксы вроде «Клапаны на кровле (снаружи)».
+_SECTION_TAIL_CLEANUP_RE = re.compile(r"[\s:—\-.,]+$")
 
 
 def _normalize_section_name(s: str) -> str:
@@ -306,10 +338,14 @@ async def normalize_via_llm(
         )
 
     rows_json = json.dumps([_row_to_dict(r) for r in rows], ensure_ascii=False)
-    prompt = _build_prompt(current_section, sticky_parent_name, rows_json)
+    user_input = _build_user_input(current_section, sticky_parent_name, rows_json)
 
+    # TD-01: INSTRUCTIONS_BLOCK → system (кэшируется), per-call ВХОД → user.
     completion: TextCompletion = await provider.text_complete(
-        prompt, max_tokens=max_tokens, temperature=0.0
+        user_input,
+        max_tokens=max_tokens,
+        temperature=0.0,
+        system_prompt=NORMALIZE_INSTRUCTIONS_BLOCK,
     )
     raw = completion.content
 
@@ -379,6 +415,7 @@ async def normalize_via_llm(
         new_sticky=new_sticky,
         prompt_tokens=completion.prompt_tokens,
         completion_tokens=completion.completion_tokens,
+        cached_tokens=completion.cached_tokens,
         raw_response=raw,
         warnings=warnings,
     )
@@ -488,14 +525,18 @@ async def normalize_via_llm_multimodal(
         )
 
     rows_json = json.dumps([_row_to_dict(r) for r in rows], ensure_ascii=False)
-    base = _build_prompt(current_section, sticky_parent_name, rows_json)
-    prompt = MULTIMODAL_PROMPT_PREFIX + base
+    user_input = MULTIMODAL_PROMPT_PREFIX + _build_user_input(
+        current_section, sticky_parent_name, rows_json
+    )
 
+    # TD-01: тот же prompt caching что и для text-пути (instructions → system,
+    # per-call → user с картинкой).
     completion: TextCompletion = await provider.multimodal_complete(
-        prompt,
+        user_input,
         image_b64=image_b64,
         max_tokens=max_tokens,
         temperature=0.0,
+        system_prompt=NORMALIZE_INSTRUCTIONS_BLOCK,
     )
     raw = completion.content
 
@@ -563,6 +604,7 @@ async def normalize_via_llm_multimodal(
         new_sticky=new_sticky,
         prompt_tokens=completion.prompt_tokens,
         completion_tokens=completion.completion_tokens,
+        cached_tokens=completion.cached_tokens,
         raw_response=raw,
         warnings=warnings,
     )

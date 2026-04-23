@@ -792,6 +792,16 @@ class TestNormalizeSectionName:
 
         assert _normalize_section_name("Вентиляция : -") == "Вентиляция"
 
+    def test_trailing_dot_removed(self):
+        """TD-01: точка в конце секции (spec-ov2 «Жилая часть.»)."""
+        from app.services.spec_normalizer import _normalize_section_name
+
+        assert _normalize_section_name("Жилая часть.") == "Жилая часть"
+        assert _normalize_section_name("Офисная часть .") == "Офисная часть"
+        assert _normalize_section_name("Foo:") == "Foo"
+        assert _normalize_section_name("Bar,.") == "Bar"
+        assert _normalize_section_name("Baz") == "Baz"
+
     def test_internal_colon_preserved(self):
         """Двоеточие/тире в середине секции не трогаются."""
         from app.services.spec_normalizer import _normalize_section_name

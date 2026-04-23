@@ -607,7 +607,7 @@ class TableRow:
     is_section_heading: bool = False
 
 
-def _derotate_span(bb: tuple[float, float, float, float], matrix) -> tuple[float, float, float]:
+def _derotate_span(bb: tuple[float, float, float, float], matrix: Any) -> tuple[float, float, float]:
     """Применить rotation_matrix к span bbox → (disp_x, disp_y, disp_width).
 
     rotation_matrix у fitz-page мапит raw-точки в display-space (как страницу

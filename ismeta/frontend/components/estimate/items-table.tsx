@@ -440,7 +440,9 @@ export function ItemsTable({
     },
     onSuccess: (data) => {
       invalidate();
-      toast.success(`Объединено ${data.count} строк в одну`);
+      toast.success(
+        `Объединено ${data.count} ${pluralizeRows(data.count)} в одну`
+      );
       setSelectedIds(new Set());
       setLastClickedId(null);
       setMergeDialogOpen(false);

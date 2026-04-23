@@ -45,6 +45,7 @@ class NormalizedInvoicePage:
     items: list[NormalizedInvoiceItem]
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cached_tokens: int = 0  # TD-01: prompt caching hit
     raw_response: str = ""
     warnings: list[str] = field(default_factory=list)
 
@@ -219,8 +220,24 @@ def _row_to_dict(row: TableRow) -> dict:
     }
 
 
+# TD-01 prompt caching: разделяем static INSTRUCTIONS_BLOCK и per-call
+# INPUT_BLOCK — аналогично spec_normalizer. NORMALIZE_INSTRUCTIONS_BLOCK
+# идёт как role=system и кэшируется OpenAI между страницами invoice.
+_INV_SPLIT = "\nВХОД:\n"
+_INV_PARTS = NORMALIZE_INVOICE_PROMPT_TEMPLATE.split(_INV_SPLIT, 1)
+assert len(_INV_PARTS) == 2, "NORMALIZE_INVOICE_PROMPT_TEMPLATE must contain 'ВХОД:'"
+NORMALIZE_INVOICE_INSTRUCTIONS_BLOCK = _INV_PARTS[0].rstrip()
+_NORMALIZE_INVOICE_INPUT_TEMPLATE = "ВХОД:\n" + _INV_PARTS[1]
+
+
 def _build_prompt(rows_json: str) -> str:
+    """DEPRECATED (backward-compat для тестов). Runtime использует
+    `_build_user_input` + INSTRUCTIONS_BLOCK через system_prompt."""
     return NORMALIZE_INVOICE_PROMPT_TEMPLATE.replace("__ROWS_JSON__", rows_json)
+
+
+def _build_user_input(rows_json: str) -> str:
+    return _NORMALIZE_INVOICE_INPUT_TEMPLATE.replace("__ROWS_JSON__", rows_json)
 
 
 async def normalize_invoice_items_via_llm(
@@ -235,10 +252,13 @@ async def normalize_invoice_items_via_llm(
         return NormalizedInvoicePage(items=[])
 
     rows_json = json.dumps([_row_to_dict(r) for r in rows], ensure_ascii=False)
-    prompt = _build_prompt(rows_json)
+    user_input = _build_user_input(rows_json)
 
     completion: TextCompletion = await provider.text_complete(
-        prompt, temperature=0.0, max_tokens=max_tokens
+        user_input,
+        temperature=0.0,
+        max_tokens=max_tokens,
+        system_prompt=NORMALIZE_INVOICE_INSTRUCTIONS_BLOCK,
     )
     return _parse_normalized_response(completion, rows, page_number)
 
@@ -260,10 +280,14 @@ async def normalize_invoice_items_via_llm_multimodal(
         return NormalizedInvoicePage(items=[])
 
     rows_json = json.dumps([_row_to_dict(r) for r in rows], ensure_ascii=False)
-    prompt = MULTIMODAL_INVOICE_PROMPT_PREFIX + _build_prompt(rows_json)
+    user_input = MULTIMODAL_INVOICE_PROMPT_PREFIX + _build_user_input(rows_json)
 
     completion: TextCompletion = await provider.multimodal_complete(
-        prompt, image_b64=image_b64, temperature=0.0, max_tokens=max_tokens
+        user_input,
+        image_b64=image_b64,
+        temperature=0.0,
+        max_tokens=max_tokens,
+        system_prompt=NORMALIZE_INVOICE_INSTRUCTIONS_BLOCK,
     )
     return _parse_normalized_response(completion, rows, page_number)
 
@@ -331,6 +355,7 @@ def _parse_normalized_response(
         items=items,
         prompt_tokens=completion.prompt_tokens,
         completion_tokens=completion.completion_tokens,
+        cached_tokens=completion.cached_tokens,
         raw_response=raw,
         warnings=warnings,
     )
