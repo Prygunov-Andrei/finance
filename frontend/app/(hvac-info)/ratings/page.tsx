@@ -21,6 +21,7 @@ export default async function RatingHomePage() {
     name: '',
     criteria: [],
     stats: { total_models: 0, active_criteria_count: 0, median_total_index: 0 },
+    presets: [],
   };
   try {
     [models, methodology] = await Promise.all([

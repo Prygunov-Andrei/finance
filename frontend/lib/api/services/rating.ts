@@ -29,8 +29,16 @@ export function getRatingModelBySlug(slug: string): Promise<RatingModelDetail> {
   return ratingFetch<RatingModelDetail>(`/models/by-slug/${slug}/`);
 }
 
-export function getRatingMethodology(): Promise<RatingMethodology> {
-  return ratingFetch<RatingMethodology>('/methodology/');
+export async function getRatingMethodology(): Promise<RatingMethodology> {
+  // ВРЕМЕННЫЙ defaulting: backend Polish-3 (AC-Петя) пока не смержен,
+  // поле `presets` в ответе может отсутствовать. После мержа backend защита
+  // безопасна (?? [] на существующем массиве) и её можно оставить как
+  // graceful fallback. Типы считают поле обязательным, чтобы потребители
+  // не забывали его учитывать.
+  const raw = await ratingFetch<Partial<RatingMethodology> & Omit<RatingMethodology, 'presets'>>(
+    '/methodology/',
+  );
+  return { ...raw, presets: raw.presets ?? [] } as RatingMethodology;
 }
 
 export function getRatingArchiveModels(): Promise<RatingModelListItem[]> {

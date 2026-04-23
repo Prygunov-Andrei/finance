@@ -174,11 +174,26 @@ export interface RatingMethodologyStats {
   median_total_index: number;
 }
 
+export interface RatingMethodologyPreset {
+  id: number;
+  slug: string;
+  label: string;
+  order: number;
+  description: string;
+  is_all_selected: boolean;
+  criteria_codes: string[];
+}
+
 export interface RatingMethodology {
   version: string;
   name: string;
   criteria: RatingMethodologyCriterion[];
   stats: RatingMethodologyStats;
+  /** Пресеты таба «Свой рейтинг» (Polish-3). Управляются через Django Admin
+   *  и отдаются сериализатором в `methodology.presets`. До мержа backend PR
+   *  поле может отсутствовать — сервис `getRatingMethodology()` подставляет
+   *  `[]` через defaulting, чтобы фронт работал без падений. */
+  presets: RatingMethodologyPreset[];
 }
 
 export interface RatingReview {
