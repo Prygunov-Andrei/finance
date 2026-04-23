@@ -4,7 +4,11 @@ from rest_framework import serializers
 
 from ac_brands.models import Brand
 from ac_catalog.i18n import DEFAULT_LANGUAGE, get_localized_field
-from ac_methodology.models import MethodologyCriterion, MethodologyVersion
+from ac_methodology.models import (
+    MethodologyCriterion,
+    MethodologyVersion,
+    RatingPreset,
+)
 from ac_scoring.engine import compute_scores_for_model, max_possible_total_index
 from ac_scoring.engine.computation import _build_model_context, _get_scorer
 from ac_scoring.models import CalculationResult
@@ -411,16 +415,45 @@ class MethodologyCriterionSerializer(serializers.ModelSerializer):
         return _url_with_mtime(obj.criterion.photo)
 
 
+class RatingPresetSerializer(serializers.ModelSerializer):
+    """Пресет таба «Свой рейтинг» в ответе /methodology/.
+
+    `criteria_codes` — именно коды (не ID), потому что фронт в CustomRatingTab
+    оперирует `criterion.code`. Для `is_all_selected=True` возвращаем коды
+    всех активных критериев методики из context (методика передаётся в
+    context как `methodology_active`); M2M при этом игнорируется.
+    """
+
+    criteria_codes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RatingPreset
+        fields = [
+            "id", "slug", "label", "order", "description",
+            "is_all_selected", "criteria_codes",
+        ]
+        read_only_fields = fields
+
+    def get_criteria_codes(self, obj: RatingPreset) -> list[str]:
+        if obj.is_all_selected:
+            active_codes = self.context.get("methodology_active_criteria_codes")
+            if active_codes is not None:
+                return list(active_codes)
+            return []
+        return list(obj.criteria.values_list("code", flat=True))
+
+
 class MethodologySerializer(serializers.ModelSerializer):
     criteria = serializers.SerializerMethodField()
     stats = serializers.SerializerMethodField()
+    presets = serializers.SerializerMethodField()
 
     class Meta:
         model = MethodologyVersion
         fields = [
             "version", "name", "description", "is_active",
             "tab_description_index", "tab_description_quiet", "tab_description_custom",
-            "criteria", "stats",
+            "criteria", "stats", "presets",
         ]
         read_only_fields = fields
 
@@ -436,6 +469,24 @@ class MethodologySerializer(serializers.ModelSerializer):
             .order_by("display_order", "criterion__code")
         )
         return MethodologyCriterionSerializer(qs, many=True, context=self.context).data
+
+    def get_presets(self, obj: MethodologyVersion) -> list:
+        # Для is_all_selected=True пресетов сериализатору нужны коды
+        # активных критериев методики — считаем один раз, прокидываем через
+        # context, избегаем повторного запроса на каждый такой пресет.
+        active_codes = list(
+            obj.methodology_criteria.filter(is_active=True)
+            .values_list("criterion__code", flat=True)
+            .order_by("display_order", "criterion__code")
+        )
+        qs = (
+            RatingPreset.objects
+            .filter(is_active=True)
+            .prefetch_related("criteria")
+            .order_by("order", "label")
+        )
+        ctx = {**self.context, "methodology_active_criteria_codes": active_codes}
+        return RatingPresetSerializer(qs, many=True, context=ctx).data
 
     def get_stats(self, obj: MethodologyVersion) -> dict:
         """Hero-агрегаты для публичного листинга (LIST-A) + внутренние метрики.
