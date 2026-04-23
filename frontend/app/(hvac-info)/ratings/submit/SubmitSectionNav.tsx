@@ -108,6 +108,7 @@ export default function SubmitSectionNav({ completeness }: Props) {
           margin: '0 auto',
           overflowX: 'auto',
           WebkitOverflowScrolling: 'touch',
+          justifyContent: 'safe center',
         }}
       >
         {SUBMIT_SECTIONS.map((s) => {

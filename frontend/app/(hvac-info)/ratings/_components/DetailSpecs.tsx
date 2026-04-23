@@ -1,9 +1,17 @@
+'use client';
+
+import { useRef, useState } from 'react';
 import type {
   RatingMethodology,
   RatingModelDetail,
 } from '@/lib/api/types/rating';
 import { Eyebrow, H, T } from './primitives';
 import { buildSpecGroups, countSpecRows, type SpecGroup, type SpecRow } from './specs';
+import {
+  copySpecsToClipboard,
+  exportSpecsAsPdf,
+  buildCsvUrl,
+} from './detailSpecsActions';
 
 type Props = {
   detail: RatingModelDetail;
@@ -13,10 +21,32 @@ type Props = {
 export default function DetailSpecs({ detail, methodology }: Props) {
   const groups = buildSpecGroups(detail, methodology);
   const totalRows = countSpecRows(groups);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   if (groups.length === 0) return null;
+
+  const handleCopy = async () => {
+    const ok = await copySpecsToClipboard(groups);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handlePdf = async () => {
+    if (!sectionRef.current || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await exportSpecsAsPdf(sectionRef.current, detail.slug);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   return (
     <section
+      ref={sectionRef}
       data-anchor="specs"
       className="rt-detail-specs"
       style={{
@@ -47,25 +77,42 @@ export default function DetailSpecs({ detail, methodology }: Props) {
           style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}
         >
           <Eyebrow>Источник: рейтинг · {detail.methodology_version || '—'}</Eyebrow>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {(['PDF', 'CSV', 'Копировать'] as const).map((label) => (
-              <span
-                key={label}
-                aria-disabled
-                style={{
-                  padding: '6px 10px',
-                  border: '1px solid hsl(var(--rt-border))',
-                  borderRadius: 4,
-                  fontSize: 11,
-                  color: 'hsl(var(--rt-ink-40))',
-                  fontFamily: 'var(--rt-font-mono)',
-                  cursor: 'not-allowed',
-                  userSelect: 'none',
-                }}
-              >
-                ↓ {label}
-              </span>
-            ))}
+          <div
+            className="rt-specs-actions"
+            style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+          >
+            <ActionButton
+              onClick={handlePdf}
+              label={pdfBusy ? 'PDF…' : 'PDF'}
+              title="Сохранить PDF"
+              disabled={pdfBusy}
+            />
+            <a
+              href={buildCsvUrl(detail.slug)}
+              download={`${detail.slug}.csv`}
+              style={{
+                padding: '6px 10px',
+                border: '1px solid hsl(var(--rt-border))',
+                borderRadius: 4,
+                fontSize: 11,
+                color: 'hsl(var(--rt-ink))',
+                background: 'hsl(var(--rt-paper))',
+                fontFamily: 'var(--rt-font-mono)',
+                textDecoration: 'none',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+              title="Скачать CSV"
+              data-testid="specs-csv-link"
+            >
+              ↓ CSV
+            </a>
+            <ActionButton
+              onClick={handleCopy}
+              label={copied ? 'Скопировано' : 'Копировать'}
+              title="Скопировать в буфер обмена"
+              highlight={copied}
+            />
           </div>
         </div>
       </header>
@@ -102,6 +149,42 @@ export default function DetailSpecs({ detail, methodology }: Props) {
         }
       `}</style>
     </section>
+  );
+}
+
+function ActionButton({
+  onClick,
+  label,
+  title,
+  disabled,
+  highlight,
+}: {
+  onClick: () => void;
+  label: string;
+  title: string;
+  disabled?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        padding: '6px 10px',
+        border: `1px solid ${highlight ? 'hsl(var(--rt-accent))' : 'hsl(var(--rt-border))'}`,
+        borderRadius: 4,
+        fontSize: 11,
+        color: highlight ? 'hsl(var(--rt-accent))' : 'hsl(var(--rt-ink))',
+        background: highlight ? 'hsl(var(--rt-accent-bg))' : 'hsl(var(--rt-paper))',
+        fontFamily: 'var(--rt-font-mono)',
+        cursor: disabled ? 'wait' : 'pointer',
+        userSelect: 'none',
+      }}
+    >
+      ↓ {label}
+    </button>
   );
 }
 

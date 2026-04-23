@@ -2,15 +2,23 @@
 
 import { useMemo, useState } from 'react';
 import type {
+  RatingMethodology,
+  RatingMethodologyCriterion,
   RatingModelDetail,
   RatingParameterScore,
 } from '@/lib/api/types/rating';
 import { Eyebrow, H, Meter, T } from './primitives';
+import DetailEditorial from './DetailEditorial';
 
-type CritView = 'list' | 'radar' | 'grid';
+type CritView = 'list' | 'radar';
 
 type Props = {
   detail: RatingModelDetail;
+  /** Число активных критериев — берётся из methodology.stats.active_criteria_count.
+   *  parameter_scores.length может включать неактивные критерии (бекенд добавляет
+   *  их если у модели есть raw_value), поэтому для заголовка используем stats. */
+  activeCriteriaCount: number;
+  methodology: RatingMethodology | null;
 };
 
 const VIEW_DEFS: { id: CritView; label: string; icon: string }[] = [
@@ -20,22 +28,55 @@ const VIEW_DEFS: { id: CritView; label: string; icon: string }[] = [
     label: 'Паутинка',
     icon: 'M10 2 L18 8 L15 17 L5 17 L2 8 Z M10 2 L10 17 M2 8 L18 8 M5 17 L15 17',
   },
-  {
-    id: 'grid',
-    label: 'Сетка',
-    icon: 'M3 3h6v6H3z M11 3h6v6h-6z M3 11h6v6H3z M11 11h6v6h-6z',
-  },
 ];
 
-export default function DetailCriteria({ detail }: Props) {
+// Плюрализация слова «параметр» в Им.п. (1 параметр / 2-4 параметра / 5+ параметров).
+// Вырезана из общего pluralize(), чтобы явно контролировать формат заголовка.
+export function pluralParam(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'параметров';
+  if (mod10 === 1) return 'параметр';
+  if (mod10 >= 2 && mod10 <= 4) return 'параметра';
+  return 'параметров';
+}
+
+type EnrichedScore = RatingParameterScore & {
+  description_ru: string;
+  is_key_measurement: boolean;
+};
+
+export default function DetailCriteria({
+  detail,
+  activeCriteriaCount,
+  methodology,
+}: Props) {
   const [view, setView] = useState<CritView>('list');
-  const scores = useMemo(
-    () =>
-      [...detail.parameter_scores].sort(
-        (a, b) => b.weighted_score - a.weighted_score,
-      ),
-    [detail.parameter_scores],
-  );
+
+  const enrichedScores = useMemo<EnrichedScore[]>(() => {
+    const byCode = new Map<string, RatingMethodologyCriterion>();
+    for (const c of methodology?.criteria ?? []) {
+      byCode.set(c.code, c);
+    }
+    return detail.parameter_scores.map((s) => {
+      const crit = byCode.get(s.criterion_code);
+      return {
+        ...s,
+        description_ru: crit?.description_ru ?? '',
+        is_key_measurement: Boolean(crit?.is_key_measurement),
+      };
+    });
+  }, [detail.parameter_scores, methodology]);
+
+  // Ключевые замеры — первыми. Внутри каждой группы — сортировка по вкладу в индекс.
+  const sortedScores = useMemo(() => {
+    const sorted = [...enrichedScores].sort(
+      (a, b) => b.weighted_score - a.weighted_score,
+    );
+    const key = sorted.filter((s) => s.is_key_measurement);
+    const rest = sorted.filter((s) => !s.is_key_measurement);
+    return [...key, ...rest];
+  }, [enrichedScores]);
 
   return (
     <section
@@ -57,22 +98,44 @@ export default function DetailCriteria({ detail }: Props) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <Eyebrow>Оценки по критериям</Eyebrow>
           <H size={26} serif style={{ marginTop: 8, letterSpacing: -0.3 }}>
-            {scores.length} параметров рейтинга
+            {activeCriteriaCount} {pluralParam(activeCriteriaCount)} рейтинга
           </H>
         </div>
         <ViewSwitcher view={view} onChange={setView} />
       </header>
 
-      {view === 'list' && <ListView scores={scores} />}
-      {view === 'radar' && <RadarView scores={scores} totalIndex={detail.total_index} />}
-      {view === 'grid' && <GridView scores={scores} />}
+      <div className="rt-criteria-layout">
+        <div className="rt-criteria-main">
+          {view === 'list' && <ListView scores={sortedScores} />}
+          {view === 'radar' && (
+            <RadarView scores={sortedScores} totalIndex={detail.total_index} />
+          )}
+        </div>
+        <aside className="rt-criteria-aside">
+          <DetailEditorial detail={detail} />
+        </aside>
+      </div>
 
       <style>{`
+        .rt-criteria-layout {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 40px;
+          align-items: start;
+        }
+        .rt-criteria-main { min-width: 0; }
+        .rt-criteria-aside { min-width: 0; }
+        @media (max-width: 1023px) {
+          .rt-criteria-layout {
+            grid-template-columns: 1fr !important;
+            gap: 28px !important;
+          }
+          .rt-criteria-aside { order: -1; }
+        }
         @media (max-width: 899px) {
           .rt-detail-criteria { padding: 24px 18px 24px !important; }
           .rt-switcher-label { display: none !important; }
           .rt-list-row-contrib { display: none !important; }
-          .rt-grid-view { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
     </section>
@@ -144,17 +207,124 @@ function ViewSwitcher({
   );
 }
 
-function ListView({ scores }: { scores: RatingParameterScore[] }) {
+function ListView({ scores }: { scores: EnrichedScore[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {scores.map((s) => (
-        <ListRow key={s.criterion_code} score={s} />
-      ))}
+      {scores.map((s) =>
+        s.is_key_measurement ? (
+          <KeyMeasurementRow key={s.criterion_code} score={s} />
+        ) : (
+          <ListRow key={s.criterion_code} score={s} />
+        ),
+      )}
     </div>
   );
 }
 
-function ListRow({ score }: { score: RatingParameterScore }) {
+function CriterionTooltip({ description }: { description: string }) {
+  const [open, setOpen] = useState(false);
+  const hasDesc = description.trim().length > 0;
+
+  if (!hasDesc) {
+    // Нет описания — рендерим disabled-значок без tooltip.
+    return (
+      <span
+        aria-hidden
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          border: '1px solid hsl(var(--rt-ink-25))',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 9,
+          color: 'hsl(var(--rt-ink-25))',
+          fontWeight: 600,
+          lineHeight: 1,
+          flexShrink: 0,
+        }}
+      >
+        ?
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+      }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        aria-label="Описание критерия"
+        aria-expanded={open}
+        title={description}
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((v) => !v);
+        }}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+        }}
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          border: '1px solid hsl(var(--rt-ink-40))',
+          background: 'transparent',
+          padding: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 9,
+          color: 'hsl(var(--rt-ink-40))',
+          fontWeight: 600,
+          cursor: 'help',
+          lineHeight: 1,
+          flexShrink: 0,
+          fontFamily: 'var(--rt-font-sans)',
+        }}
+      >
+        ?
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            top: 'calc(100% + 6px)',
+            zIndex: 20,
+            minWidth: 220,
+            maxWidth: 320,
+            padding: '10px 12px',
+            background: 'hsl(var(--rt-ink))',
+            color: 'hsl(var(--rt-paper))',
+            borderRadius: 4,
+            fontSize: 12,
+            lineHeight: 1.45,
+            fontFamily: 'var(--rt-font-sans)',
+            boxShadow: '0 8px 20px rgba(0,0,0,.18)',
+            whiteSpace: 'normal',
+            pointerEvents: 'none',
+          }}
+        >
+          {description}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function ListRow({ score }: { score: EnrichedScore }) {
   const tickerText = score.above_reference
     ? 'выше эталона'
     : score.normalized_score < 40
@@ -197,27 +367,124 @@ function ListRow({ score }: { score: RatingParameterScore }) {
         >
           {chipValue}
         </span>
+        <CriterionTooltip description={score.description_ru} />
+        <div style={{ flex: 1 }} />
+        {tickerText && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: tickerColor,
+              fontFamily: 'var(--rt-font-mono)',
+              letterSpacing: 0.2,
+            }}
+          >
+            {tickerText}
+          </span>
+        )}
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <Meter value={score.normalized_score} width="100%" height={4} />
+      </div>
+      <div
+        style={{
+          marginTop: 7,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+        }}
+      >
+        <T
+          size={11}
+          color="hsl(var(--rt-ink-60))"
+          mono
+          className="rt-list-row-contrib"
+        >
+          Вклад в индекс:{' '}
+          <span style={{ color: 'hsl(var(--rt-ink))', fontWeight: 600 }}>
+            {score.weighted_score.toFixed(2)}
+          </span>
+        </T>
+        <div style={{ fontFamily: 'var(--rt-font-mono)', fontSize: 12 }}>
+          <span
+            style={{
+              color: 'hsl(var(--rt-ink))',
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            {score.normalized_score.toFixed(1)}
+          </span>
+          <span style={{ color: 'hsl(var(--rt-ink-40))' }}> / 100</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KeyMeasurementRow({ score }: { score: EnrichedScore }) {
+  const tickerText = score.above_reference
+    ? 'выше эталона'
+    : score.normalized_score < 40
+      ? 'ниже эталона'
+      : null;
+  const tickerColor = score.above_reference ? '#1f8f4c' : '#b24a3b';
+  const chipValue =
+    [score.raw_value, score.unit].filter(Boolean).join(' ').trim() || '—';
+
+  return (
+    <div
+      data-testid="key-measurement-row"
+      style={{
+        padding: '16px 18px',
+        marginBottom: 10,
+        background: 'hsl(var(--rt-accent-bg))',
+        border: '1px solid hsl(var(--rt-accent))',
+        borderRadius: 6,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'var(--rt-font-mono)',
+          fontSize: 10,
+          color: 'hsl(var(--rt-accent))',
+          textTransform: 'uppercase',
+          letterSpacing: 1.2,
+          fontWeight: 700,
+          marginBottom: 8,
+        }}
+      >
+        Ключевой замер
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <T size={14} weight={600}>
+          {score.criterion_name}:
+        </T>
         <span
-          title={`Методика: как считается «${score.criterion_name}»`}
-          aria-label="Как считается"
           style={{
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
-            border: '1px solid hsl(var(--rt-ink-40))',
             display: 'inline-flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 9,
-            color: 'hsl(var(--rt-ink-40))',
-            fontWeight: 600,
-            cursor: 'help',
-            lineHeight: 1,
-            flexShrink: 0,
+            padding: '3px 10px',
+            background: 'hsl(var(--rt-paper))',
+            color: 'hsl(var(--rt-accent))',
+            border: '1px solid hsl(var(--rt-accent))',
+            borderRadius: 4,
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: 'var(--rt-font-mono)',
+            letterSpacing: -0.1,
           }}
         >
-          ?
+          {chipValue}
         </span>
+        <CriterionTooltip description={score.description_ru} />
         <div style={{ flex: 1 }} />
         {tickerText && (
           <span
@@ -276,7 +543,7 @@ function RadarView({
   scores,
   totalIndex,
 }: {
-  scores: RatingParameterScore[];
+  scores: EnrichedScore[];
   totalIndex: number;
 }) {
   const N = scores.length;
@@ -392,114 +659,6 @@ function RadarView({
         </span>
         . Чем ближе фигура к внешнему контуру, тем выше итоговый индекс модели.
       </T>
-    </div>
-  );
-}
-
-function GridView({ scores }: { scores: RatingParameterScore[] }) {
-  return (
-    <div
-      className="rt-grid-view"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-        gap: 10,
-      }}
-    >
-      {scores.map((s) => (
-        <GridCard key={s.criterion_code} score={s} />
-      ))}
-    </div>
-  );
-}
-
-function GridCard({ score }: { score: RatingParameterScore }) {
-  const chipValue =
-    [score.raw_value, score.unit].filter(Boolean).join(' ').trim() || '—';
-  const tickerText = score.above_reference
-    ? 'выше'
-    : score.normalized_score < 40
-      ? 'ниже'
-      : null;
-  const tickerColor = score.above_reference ? '#1f8f4c' : '#b24a3b';
-
-  return (
-    <div
-      style={{
-        padding: '12px 14px',
-        border: '1px solid hsl(var(--rt-border-subtle))',
-        borderRadius: 6,
-        background: 'hsl(var(--rt-paper))',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <T size={11} weight={600} style={{ lineHeight: 1.3 }}>
-        {score.criterion_name}
-      </T>
-      <div
-        style={{
-          marginTop: 8,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            display: 'inline-flex',
-            padding: '2px 8px',
-            background: 'hsl(var(--rt-accent-bg))',
-            color: 'hsl(var(--rt-accent))',
-            borderRadius: 3,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: 'var(--rt-font-mono)',
-          }}
-        >
-          {chipValue}
-        </span>
-        {tickerText && (
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 600,
-              color: tickerColor,
-              fontFamily: 'var(--rt-font-mono)',
-            }}
-          >
-            {tickerText}
-          </span>
-        )}
-      </div>
-      <div style={{ marginTop: 10 }}>
-        <Meter value={score.normalized_score} width="100%" height={3} />
-      </div>
-      <div
-        style={{
-          marginTop: 7,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-        }}
-      >
-        <T size={9} color="hsl(var(--rt-ink-60))" mono>
-          Вклад {score.weighted_score.toFixed(2)}
-        </T>
-        <div style={{ fontFamily: 'var(--rt-font-mono)', fontSize: 10 }}>
-          <span
-            style={{
-              color: 'hsl(var(--rt-ink))',
-              fontWeight: 700,
-              fontSize: 12,
-            }}
-          >
-            {score.normalized_score.toFixed(1)}
-          </span>
-          <span style={{ color: 'hsl(var(--rt-ink-40))' }}> / 100</span>
-        </div>
-      </div>
     </div>
   );
 }

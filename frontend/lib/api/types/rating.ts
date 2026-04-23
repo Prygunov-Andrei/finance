@@ -166,6 +166,11 @@ export interface RatingMethodologyCriterion {
   min_value: number | null;
   median_value: number | null;
   max_value: number | null;
+  /** Polish-4: критерии с этим флагом рендерятся первым блоком в DetailCriteria
+   *  (teal background + badge «КЛЮЧЕВОЙ ЗАМЕР»). Backend AC-Петя добавляет поле
+   *  в полиш-4 (миграция 0006_criterion_is_key_measurement). До мержа backend
+   *  поле может отсутствовать — фронт устойчив (treats as false). */
+  is_key_measurement?: boolean;
 }
 
 export interface RatingMethodologyStats {
