@@ -32,7 +32,13 @@ export default function CustomRatingTab({
     [methodology.criteria]
   );
   const allCodes = useMemo(() => criteria.map((c) => c.code), [criteria]);
-  const presetDefs = useMemo(() => buildPresetsFromCriteria(criteria), [criteria]);
+  const presetDefs = useMemo<PresetDef[]>(
+    () =>
+      [...methodology.presets]
+        .sort((a, b) => a.order - b.order)
+        .map((p) => ({ id: p.slug, label: p.label, codes: p.criteria_codes })),
+    [methodology.presets]
+  );
 
   const [active, setActive] = useState<Set<string>>(() => new Set(allCodes));
   const [expanded, setExpanded] = useState(variant === 'desktop');
@@ -1161,122 +1167,13 @@ export function computeIndex(
   return num / den;
 }
 
-// ─── Presets (substring-эвристика от code / name_ru) ───────────
+// ─── Presets (приходят из API, см. methodology.presets) ────────
 
 interface PresetDef {
   id: string;
   label: string;
   codes: string[];
 }
-
-const PRESET_TAGS: Array<{
-  id: string;
-  label: string;
-  include?: string[];
-  exclude?: string[];
-  all?: boolean;
-}> = [
-  { id: 'all', label: '«Август-климат»', all: true },
-  {
-    id: 'silence',
-    label: 'Тишина',
-    include: ['noise', 'fan', 'inverter', 'silen', 'шум', 'вент', 'инверт', 'тих'],
-  },
-  {
-    id: 'cold',
-    label: 'Сибирь',
-    include: [
-      'heater',
-      'cold',
-      'winter',
-      'evi',
-      'drip',
-      '8c',
-      'heat_mode',
-      'обогрев',
-      'холод',
-      'подд',
-      'зима',
-    ],
-  },
-  {
-    id: 'budget',
-    label: 'Бюджет',
-    exclude: [
-      'wifi',
-      'ionizer',
-      'uv',
-      'alice',
-      'sensor',
-      'auto_freeze',
-      'sterilization',
-      'aromat',
-      'алис',
-      'ионизат',
-      'ультрафиол',
-      'ароматиз',
-    ],
-  },
-  {
-    id: 'house',
-    label: 'Частный дом',
-    include: [
-      'pipe',
-      'height',
-      'heat_exchanger',
-      'compressor',
-      'evi',
-      'heater',
-      'cold',
-      'фреон',
-      'перепад',
-      'теплообмен',
-      'компрес',
-    ],
-  },
-  {
-    id: 'allergy',
-    label: 'Аллергики',
-    include: [
-      'filter',
-      'ionizer',
-      'uv',
-      'sterilization',
-      'fresh_air',
-      'self_clean',
-      'heat_exchanger',
-      'compressor',
-      'фильтр',
-      'ионизат',
-      'приток',
-      'теплообмен',
-    ],
-  },
-];
-
-function matches(needles: string[], haystacks: string[]): boolean {
-  return haystacks.some((h) =>
-    needles.some((n) => h.toLowerCase().includes(n.toLowerCase()))
-  );
-}
-
-function buildPresetsFromCriteria(
-  criteria: RatingMethodologyCriterion[]
-): PresetDef[] {
-  const allCodes = criteria.map((c) => c.code);
-  return PRESET_TAGS.map((def) => {
-    if (def.all) return { id: def.id, label: def.label, codes: allCodes };
-    const picked = criteria.filter((c) => {
-      const hay = [c.code, c.name_ru ?? ''];
-      if (def.exclude) return !matches(def.exclude, hay);
-      if (def.include) return matches(def.include, hay);
-      return true;
-    });
-    return { id: def.id, label: def.label, codes: picked.map((c) => c.code) };
-  }).filter((p) => p.codes.length > 0 || p.id === 'all');
-}
-
-export { buildPresetsFromCriteria };
 
 function detectPreset(active: Set<string>, presets: PresetDef[]): string | null {
   for (const p of presets) {
