@@ -232,9 +232,8 @@ class OpenAIVisionProvider(BaseLLMProvider):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        max_attempts = 6
         last_exc: Exception | None = None
-        for attempt in range(max_attempts):
+        for attempt in range(3):
             try:
                 resp = await self._client.post(OPENAI_URL, headers=headers, json=payload)
             except httpx.HTTPError as e:
@@ -242,33 +241,23 @@ class OpenAIVisionProvider(BaseLLMProvider):
                 logger.warning(
                     "openai request failed", extra={"attempt": attempt, "error": str(e)}
                 )
-                if attempt < max_attempts - 1:
-                    await asyncio.sleep(min(30, 2 ** attempt))
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
                     continue
                 raise LLMUnavailableError(detail=f"network error: {e}") from e
 
             if resp.status_code == 429 or resp.status_code >= 500:
-                retry_after = _parse_retry_after(resp.headers.get("Retry-After"))
                 logger.warning(
                     "openai retryable status",
-                    extra={
-                        "attempt": attempt,
-                        "status_code": resp.status_code,
-                        "retry_after": retry_after,
-                    },
+                    extra={"attempt": attempt, "status_code": resp.status_code},
                 )
                 last_exc = httpx.HTTPStatusError(
                     f"status {resp.status_code}", request=resp.request, response=resp
                 )
-                if attempt < max_attempts - 1:
-                    # Respect Retry-After hint от OpenAI если есть, иначе
-                    # exponential backoff (3s, 9s, 27s, capped at 45s).
-                    if retry_after and retry_after > 0:
-                        wait = min(45.0, float(retry_after))
-                    else:
-                        wait = min(45.0, 3 * (3 ** attempt))
-                    await asyncio.sleep(wait)
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
                     continue
+                retry_after = _parse_retry_after(resp.headers.get("Retry-After"))
                 raise LLMUnavailableError(
                     detail=f"upstream status {resp.status_code}",
                     retry_after_sec=retry_after,

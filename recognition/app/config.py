@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # PDF (19+ стр) 19 text + 19 vision + retries = 38-60 одновременных
     # запросов к OpenAI API → rate-limit 429 даже на gpt-4o. Semaphore
     # внутри SpecParser гейтит jobs. 6 — безопасный default для tier-1 API.
-    llm_max_concurrency: int = 3
+    llm_max_concurrency: int = 6
     dpi: int = 200
     max_page_retries: int = 2
     port: int = 8003
