@@ -120,9 +120,9 @@ services:
       # результат (3 из 19 pages processed). Откат на gpt-4o до
       # стабилизации rate-limits OpenAI либо до введения throttle.
       # Override через env var если нужно попробовать 5.2 снова.
-      LLM_EXTRACT_MODEL: ${LLM_EXTRACT_MODEL:-gpt-4o}
-      LLM_MULTIMODAL_MODEL: ${LLM_MULTIMODAL_MODEL:-gpt-4o}
-      LLM_CLASSIFY_MODEL: ${LLM_CLASSIFY_MODEL:-gpt-4o-mini}
+      LLM_EXTRACT_MODEL: ${LLM_EXTRACT_MODEL:-gpt-5.2}
+      LLM_MULTIMODAL_MODEL: ${LLM_MULTIMODAL_MODEL:-gpt-5.2}
+      LLM_CLASSIFY_MODEL: ${LLM_CLASSIFY_MODEL:-gpt-5.2}
     ports:
       - "${RECOGNITION_PORT:-8003}:8003"
     healthcheck:
