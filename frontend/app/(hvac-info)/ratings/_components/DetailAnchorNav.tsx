@@ -5,16 +5,15 @@ import { useEffect, useState } from 'react';
 type Anchor = { id: string; label: string; active: boolean };
 
 const ANCHORS: Anchor[] = [
-  { id: 'overview', label: 'Обзор', active: true },
   { id: 'criteria', label: 'Оценки по критериям', active: true },
-  { id: 'mentions', label: 'Упоминания', active: true },
   { id: 'specs', label: 'Характеристики', active: true },
   { id: 'buy', label: 'Где купить', active: true },
   { id: 'reviews', label: 'Отзывы', active: true },
+  { id: 'overview', label: 'Обзор', active: true },
 ];
 
 export default function DetailAnchorNav() {
-  const [active, setActive] = useState<string>('overview');
+  const [active, setActive] = useState<string>('criteria');
 
   useEffect(() => {
     const activeIds = ANCHORS.filter((a) => a.active).map((a) => a.id);
