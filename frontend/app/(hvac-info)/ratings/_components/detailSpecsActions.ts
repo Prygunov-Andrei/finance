@@ -74,14 +74,23 @@ export async function exportSpecsAsPdf(
       import('html2canvas'),
       import('jspdf'),
     ]);
+    // scale=1.5 даёт ~145 dpi при A4 190мм — читаемо в печати, но без
+    // избыточного веса (scale=2 давал 22MB PNG на 1 странице).
     const canvas = await html2canvas(node, {
-      scale: 2,
+      scale: 1.5,
       backgroundColor: '#ffffff',
       useCORS: true,
     });
-    const imgData = canvas.toDataURL('image/png');
+    // JPEG q=0.85 для текста визуально неотличим от PNG, но ~8-15x легче.
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
     // A4 portrait: 210 × 297 мм. Канвас резиним по ширине ≈ 190 мм (margins 10).
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    // compress:true включает zlib-обёртку на stream objects внутри PDF.
+    const pdf = new jsPDF({
+      unit: 'mm',
+      format: 'a4',
+      orientation: 'portrait',
+      compress: true,
+    });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 10;
@@ -91,7 +100,7 @@ export async function exportSpecsAsPdf(
 
     // Если картинка выше одной страницы — разбиваем на несколько.
     if (imgHeightMm <= pageHeight - margin * 2) {
-      pdf.addImage(imgData, 'PNG', margin, margin, imgWidthMm, imgHeightMm);
+      pdf.addImage(imgData, 'JPEG', margin, margin, imgWidthMm, imgHeightMm);
     } else {
       const availHeight = pageHeight - margin * 2;
       const pxPerMm = canvas.width / imgWidthMm;
@@ -118,10 +127,10 @@ export async function exportSpecsAsPdf(
           canvas.width,
           sliceHeight,
         );
-        const sliceData = pageCanvas.toDataURL('image/png');
+        const sliceData = pageCanvas.toDataURL('image/jpeg', 0.85);
         if (pageNum > 0) pdf.addPage();
         const sliceHeightMm = (sliceHeight * imgWidthMm) / canvas.width;
-        pdf.addImage(sliceData, 'PNG', margin, margin, imgWidthMm, sliceHeightMm);
+        pdf.addImage(sliceData, 'JPEG', margin, margin, imgWidthMm, sliceHeightMm);
         yOffset += sliceHeight;
         pageNum += 1;
       }
