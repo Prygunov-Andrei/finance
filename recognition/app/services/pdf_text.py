@@ -892,19 +892,56 @@ def _assign_column(disp_x_center: float, ranges: dict[str, tuple[float, float]])
 
 
 def _is_title_block_bucket(bucket: list[_Span], page_rect: object) -> bool:
-    """Эвристика: bucket принадлежит basic-stamp / title-block зоне?
+    """Эвристика: bucket — это ТОЛЬКО штамп (title block)?
 
-    ЕСКД title block — нижний-правый угол листа; после rotation=90
-    в display space это bottom-right (disp_y close to page_height,
-    disp_x close to page_width). Span'ы «Формат А3», «Изм.», «Подп.»
-    сидят именно там. Если ≥half span'ов bucket'а целиком в правом
-    штампе И содержат stamp-ключевики — отбрасываем bucket.
+    Дропаем весь bucket СТРОГО только когда в нём НЕТ cell-like spans
+    (qty-число / model-код / unit-единица). В таблицах спецификации
+    ЕСКД колонки qty/unit/comments физически лежат в правом нижнем
+    углу страницы — там же где ЕСКД-штамп. Поэтому нельзя дропать
+    bucket «если большинство spans в правой-нижней зоне» — так мы
+    выбрасываем реальные строки с +10% / м.п. / 1245 (QA-заход 1/10:
+    4 Воздуховода на стр.2 spec-ov2 терялись именно так).
+
+    Правильное поведение: пропускать через bucket, на уровне spans
+    фильтр `is_stamp_text` отсекает штамповые слова («Подп. и дата»,
+    «Инв. № подл.»), а `is_stamp_cell` зачищает штамповые cells
+    post-merge. Если остаются cell-like spans (есть числа-qty или
+    коды-model) — это реальная data-row, сохраняем.
+
+    Функция остаётся как safety-net для bucket'ов где ВСЕ spans —
+    штампы (например «Лист | 470-05/ОВ2.СО | Формат А3»).
     """
     try:
         w = page_rect.width  # type: ignore[attr-defined]
         h = page_rect.height  # type: ignore[attr-defined]
     except AttributeError:
         return False
+
+    # Признак cell-like span: содержит число-qty (1-5 цифр подряд) или
+    # типичный model-код (буквы+цифры+разделители, например РЭД-ВВШ-500).
+    has_cell_like = False
+    for span in bucket:
+        text = span.text.strip()
+        if not text:
+            continue
+        # qty / count: 1-6 цифр, возможно с точкой/запятой (децимал).
+        if _QTY_LIKE_RE.fullmatch(text):
+            has_cell_like = True
+            break
+        # model-code или size: буквы+цифры+разделители, длина ≥ 3.
+        if _MODEL_OR_SIZE_LIKE_RE.fullmatch(text):
+            has_cell_like = True
+            break
+        # comments «+10%», «+5%» — тоже cell-content.
+        if text in ("+10%", "+5%", "+3%", "+15%", "+20%"):
+            has_cell_like = True
+            break
+    if has_cell_like:
+        return False
+
+    # Нет cell-like spans → это, скорее всего, штамп. Применяем старый
+    # zone+keyword тест для страховки (не отбрасываем случайные buckets
+    # из середины страницы).
     stamp_zone_x = w * 0.72
     stamp_zone_y = h * 0.72
     stamp_hits = 0
@@ -913,6 +950,12 @@ def _is_title_block_bucket(bucket: list[_Span], page_rect: object) -> bool:
         if in_zone or is_stamp_line(span.text):
             stamp_hits += 1
     return stamp_hits >= max(1, len(bucket) // 2 + 1)
+
+
+_QTY_LIKE_RE = re.compile(r"[\d]+(?:[.,]\d+)?")
+_MODEL_OR_SIZE_LIKE_RE = re.compile(
+    r"[A-Za-zА-Яа-яЁё]*\d+(?:[-х×x/\\.A-Za-zА-Яа-яЁё\d]*)"
+)
 
 
 def extract_structured_rows(page: object) -> list[TableRow]:
