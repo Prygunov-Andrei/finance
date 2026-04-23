@@ -115,6 +115,17 @@ class Criterion(TimestampedModel):
 
     is_active = models.BooleanField(default=True, verbose_name="Активен")
 
+    # polish-4 п.4: «ключевой замер» для детальной страницы — критерии с этим
+    # флагом рендерятся первыми в списке DetailCriteria, визуально выделены
+    # teal-box + badge «КЛЮЧЕВОЙ ЗАМЕР».
+    is_key_measurement = models.BooleanField(
+        default=False,
+        verbose_name="Ключевой замер",
+        help_text="Выделяется отдельным визуальным блоком на детальной "
+                  "странице модели (teal badge «КЛЮЧЕВОЙ ЗАМЕР» + первая "
+                  "позиция в списке критериев).",
+    )
+
     class Meta:
         ordering = ["code"]
         verbose_name = "Параметр"
