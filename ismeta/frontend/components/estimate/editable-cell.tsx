@@ -14,6 +14,12 @@ interface Props {
   disabled?: boolean;
   display?: (v: string) => React.ReactNode;
   onCommit: (next: string) => void;
+  /**
+   * Дополнительные классы для display-кнопки. По умолчанию применяется
+   * `truncate` (однострочный ellipsis), но для колонок с переносом текста
+   * (UI-08 — name, comments) нужен `whitespace-normal break-words`.
+   */
+  className?: string;
 }
 
 export function EditableCell({
@@ -23,6 +29,7 @@ export function EditableCell({
   disabled,
   display,
   onCommit,
+  className,
 }: Props) {
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(value);
@@ -68,10 +75,14 @@ export function EditableCell({
       disabled={disabled}
       onClick={() => !disabled && setEditing(true)}
       className={cn(
-        "block w-full truncate rounded px-2 py-1 text-left text-sm transition-colors",
+        "block w-full rounded px-2 py-1 text-left text-sm transition-colors",
+        // Если вызывающий не задал свой вариант переноса — оставляем truncate
+        // (однострочный ellipsis), чтобы числовые/короткие колонки не прыгали.
+        !className && "truncate",
         align === "right" && "text-right tabular-nums",
         !disabled && "hover:bg-accent/50",
         disabled && "cursor-default opacity-70",
+        className,
       )}
     >
       {display ? display(value) : value || <span className="text-muted-foreground">—</span>}

@@ -7,6 +7,7 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnSizingState,
 } from "@tanstack/react-table";
 import { Plus, Search, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +49,12 @@ import {
   type ProcurementStatus,
   type UUID,
 } from "@/lib/api/types";
+
+/**
+ * UI-08: ключ для localStorage. Суффикс `v1` — версионирование, чтобы при
+ * изменении state-shape старые значения просто игнорировались.
+ */
+export const COLUMN_SIZING_STORAGE_KEY = "ismeta.estimate-table.column-widths.v1";
 
 interface Props {
   estimateId: UUID;
@@ -124,6 +131,58 @@ export function ItemsTable({
 }: Props) {
   const qc = useQueryClient();
   const workspaceId = getWorkspaceId();
+
+  // UI-08 column widths: глобальный persist по пользователю (не per-смета).
+  // Ключ версионируется — если позже поменяем state-shape, поднимем до v2 и
+  // старые значения не поломают parse.
+  //
+  // Инициализация пустым объектом, а не lazy-initializer-с-localStorage —
+  // иначе SSR отдаст {} а client hydrate'нёт на {name:650} → mismatch
+  // warning и потенциальный flash обратно к дефолтам. Загрузку делаем в
+  // useEffect после mount, это даёт один короткий flick'er (≤1 paint), но
+  // SSR стабилен.
+  const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>(
+    {},
+  );
+  const [sizingHydrated, setSizingHydrated] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(COLUMN_SIZING_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setColumnSizing(parsed as ColumnSizingState);
+        }
+      }
+    } catch {
+      // parse error или storage disabled — остаёмся на дефолтах
+    }
+    setSizingHydrated(true);
+  }, []);
+
+  const saveTimer = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Не пишем обратно до того как подгрузили сохранённое — иначе первый
+    // mount с дефолтным {} перетрёт валидное значение в storage.
+    if (!sizingHydrated) return;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(
+          COLUMN_SIZING_STORAGE_KEY,
+          JSON.stringify(columnSizing),
+        );
+      } catch {
+        // quota exceeded / disabled — тихо пропускаем
+      }
+    }, 300);
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, [columnSizing, sizingHydrated]);
 
   // UI-07 Items Search: локальный query + 200ms debounce. URL state
   // намеренно не трогаем — поиск только на клиенте, чтобы не плодить
@@ -427,7 +486,8 @@ export function ItemsTable({
             />
           );
         },
-        size: 36,
+        size: 40,
+        enableResizing: false,
       },
       {
         id: "row",
@@ -437,7 +497,8 @@ export function ItemsTable({
             {row.index + 1}
           </span>
         ),
-        size: 40,
+        size: 44,
+        enableResizing: false,
       },
       {
         id: "key_toggle",
@@ -476,13 +537,18 @@ export function ItemsTable({
           );
         },
         size: 44,
+        enableResizing: false,
       },
       {
         accessorKey: "name",
         header: "Наименование",
+        size: 500,
+        minSize: 200,
+        maxSize: 900,
         cell: ({ row }) => (
           <EditableCell
             value={row.original.name}
+            className="whitespace-normal break-words"
             display={
               hasQuery
                 ? (v) =>
@@ -527,6 +593,8 @@ export function ItemsTable({
           );
         },
         size: 160,
+        minSize: 100,
+        maxSize: 400,
       },
       {
         accessorKey: "unit",
@@ -538,6 +606,8 @@ export function ItemsTable({
           />
         ),
         size: 80,
+        minSize: 60,
+        maxSize: 150,
       },
       {
         accessorKey: "quantity",
@@ -552,6 +622,8 @@ export function ItemsTable({
           />
         ),
         size: 90,
+        minSize: 70,
+        maxSize: 150,
       },
       {
         accessorKey: "equipment_price",
@@ -565,7 +637,9 @@ export function ItemsTable({
             onCommit={(next) => commitField(row.original, "equipment_price", next)}
           />
         ),
-        size: 120,
+        size: 110,
+        minSize: 90,
+        maxSize: 180,
       },
       {
         accessorKey: "material_price",
@@ -590,7 +664,9 @@ export function ItemsTable({
             }}
           />
         ),
-        size: 120,
+        size: 110,
+        minSize: 90,
+        maxSize: 180,
       },
       {
         accessorKey: "work_price",
@@ -604,7 +680,9 @@ export function ItemsTable({
             onCommit={(next) => commitField(row.original, "work_price", next)}
           />
         ),
-        size: 120,
+        size: 110,
+        minSize: 90,
+        maxSize: 180,
       },
       {
         accessorKey: "total",
@@ -614,7 +692,9 @@ export function ItemsTable({
             {formatCurrency(row.original.total)}
           </span>
         ),
-        size: 130,
+        size: 120,
+        minSize: 100,
+        maxSize: 200,
       },
       {
         accessorKey: "match_source",
@@ -628,7 +708,9 @@ export function ItemsTable({
             {MATCH_SOURCE_LABELS[row.original.match_source]}
           </Badge>
         ),
-        size: 110,
+        size: 130,
+        minSize: 100,
+        maxSize: 200,
       },
       ...(track === "key"
         ? [
@@ -646,12 +728,17 @@ export function ItemsTable({
                 />
               ),
               size: 150,
+              minSize: 120,
+              maxSize: 220,
             } satisfies ColumnDef<EstimateItem>,
           ]
         : []),
       {
         id: "comments",
         header: "Примечание",
+        size: 200,
+        minSize: 120,
+        maxSize: 500,
         cell: ({ row }) => {
           const value =
             typeof row.original.tech_specs?.comments === "string"
@@ -665,6 +752,7 @@ export function ItemsTable({
             >
               <EditableCell
                 value={value}
+                className="whitespace-normal break-words"
                 display={
                   hasQuery
                     ? (v) =>
@@ -682,7 +770,6 @@ export function ItemsTable({
             </div>
           );
         },
-        size: 200,
       },
       {
         id: "actions",
@@ -699,6 +786,7 @@ export function ItemsTable({
           </Button>
         ),
         size: 48,
+        enableResizing: false,
       },
     ],
     [
@@ -724,6 +812,15 @@ export function ItemsTable({
     data: visibleItems,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    // UI-08: resize по hover-handle справа от заголовка. onEnd — финальный
+    // commit при отпускании мыши (persist сработает один раз, а не на каждый
+    // пиксель drag).
+    columnResizeMode: "onEnd",
+    enableColumnResizing: true,
+    state: {
+      columnSizing,
+    },
+    onColumnSizingChange: setColumnSizing,
   });
 
   // Totals считаем по видимой выборке: при активном поиске пользователь ждёт
@@ -873,17 +970,51 @@ export function ItemsTable({
         )}
       </div>
       <div className="flex-1 overflow-auto">
-        <Table>
+        <Table
+          // UI-08: table-layout: fixed обязателен чтобы браузер соблюдал
+          // `width` на <th>. При auto-layout ширины пересчитываются по
+          // контенту — resize через setState тогда не даёт визуального
+          // эффекта. width=totalSize — сумма всех колонок (TanStack
+          // возвращает её из table.getTotalSize()).
+          style={{ tableLayout: "fixed", width: table.getTotalSize() }}
+        >
           <TableHeader className="sticky top-0 z-10 bg-background">
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead key={h.id} style={{ width: h.getSize() }}>
-                    {h.isPlaceholder
-                      ? null
-                      : flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
+                {hg.headers.map((h) => {
+                  const canResize = h.column.getCanResize();
+                  const isResizing = h.column.getIsResizing();
+                  return (
+                    <TableHead
+                      key={h.id}
+                      style={{ width: h.getSize() }}
+                      className="relative"
+                    >
+                      {h.isPlaceholder
+                        ? null
+                        : flexRender(
+                            h.column.columnDef.header,
+                            h.getContext(),
+                          )}
+                      {canResize && (
+                        <div
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={`Изменить ширину столбца ${h.column.id}`}
+                          data-testid={`resize-handle-${h.column.id}`}
+                          onMouseDown={h.getResizeHandler()}
+                          onTouchStart={h.getResizeHandler()}
+                          onClick={(e) => e.stopPropagation()}
+                          className={cn(
+                            "absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none",
+                            "hover:bg-primary/40",
+                            isResizing && "bg-primary",
+                          )}
+                        />
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
