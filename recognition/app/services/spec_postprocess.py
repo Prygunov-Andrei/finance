@@ -391,12 +391,14 @@ def cover_bbox_rows(
         if prev_item is None:
             # Continuation до первого item — пропускаем (некуда приклеивать).
             continue
-        # Приклеиваем только если остаток действительно похож на continuation
-        # (иначе это заголовок / шум, не трогаем).
-        if not (
-            _looks_like_continuation(cells_name)
-            or len(cells_name) <= 60
-        ):
+        # Приклеиваем СТРОГО если cells_name — явное continuation
+        # (lowercase/предлог/continuation-прилагательное).
+        # E15-06 it2 hotfix: убрали fallback `len <= 60` — он ложно склеивал
+        # "Воздуховод" (реальная следующая позиция, просто без qty в bbox) и
+        # legend-текст "* Вентиляторы бытовые..." к предыдущим items.
+        # Короткие non-continuation names теперь остаются uncovered и
+        # детектятся через vision_counter / expected_count tolerance.
+        if not _looks_like_continuation(cells_name):
             continue
         prev_item.name = (
             f"{prev_item.name.rstrip()} {cells_name.strip()}".strip()
