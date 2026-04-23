@@ -587,6 +587,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
           <Field
             label="Обогрев поддона"
             required
+            criterionCode="drain_pan_heater"
             error={errors.drain_pan_heater?.[0]}
           >
             <RadioGroup
@@ -598,7 +599,12 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
               onChange={(v) => setField('drain_pan_heater', v)}
             />
           </Field>
-          <Field label="Наличие ЭРВ" required error={errors.erv?.[0]}>
+          <Field
+            label="Наличие ЭРВ"
+            required
+            criterionCode="erv"
+            error={errors.erv?.[0]}
+          >
             <BoolRadio
               value={state.erv}
               onChange={(v) => setField('erv', v)}
@@ -607,6 +613,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
           <Field
             label="Регулировка оборотов вент. наруж. блока"
             required
+            criterionCode="fan_speed_outdoor"
             error={errors.fan_speed_outdoor?.[0]}
           >
             <BoolRadio
@@ -617,6 +624,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
           <Field
             label="Подсветка экрана пульта"
             required
+            criterionCode="remote_backlight"
             error={errors.remote_backlight?.[0]}
           >
             <BoolRadio
@@ -629,6 +637,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
             <Field
               label="Кол-во скоростей вент. внутр. блока"
               required
+              criterionCode="fan_speeds_indoor"
               error={errors.fan_speeds_indoor?.[0]}
             >
               <TextInput
@@ -643,6 +652,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
             <Field
               label="Фильтры тонкой очистки"
               required
+              criterionCode="fine_filters"
               error={errors.fine_filters?.[0]}
             >
               <RadioGroup
@@ -661,6 +671,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
             <Field
               label="Ионизатор"
               required
+              criterionCode="ionizer_type"
               error={errors.ionizer_type?.[0]}
             >
               <Select
@@ -673,6 +684,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
             <Field
               label="Русифицированный пульт"
               required
+              criterionCode="russian_remote"
               error={errors.russian_remote?.[0]}
             >
               <Select
@@ -691,6 +703,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
             <Field
               label="УФ-лампа"
               required
+              criterionCode="uv_lamp"
               error={errors.uv_lamp?.[0]}
             >
               <Select
