@@ -7,9 +7,11 @@ from .ac_models import (
     ACModelListView,
 )
 from .methodology_export import ExportCSVView, MethodologyView
+from .model_export import ACModelCSVExportView
 
 __all__ = [
     "ACModelArchiveListView",
+    "ACModelCSVExportView",
     "ACModelDetailBySlugView",
     "ACModelDetailView",
     "ACModelListView",

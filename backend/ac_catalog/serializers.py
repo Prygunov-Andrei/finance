@@ -397,6 +397,10 @@ class MethodologyCriterionSerializer(serializers.ModelSerializer):
     group_display = serializers.CharField(
         source="criterion.get_group_display", read_only=True,
     )
+    # polish-4 п.4: флаг «ключевого замера» (teal-выделение на детальной).
+    is_key_measurement = serializers.BooleanField(
+        source="criterion.is_key_measurement", read_only=True,
+    )
 
     class Meta:
         model = MethodologyCriterion
@@ -408,6 +412,8 @@ class MethodologyCriterionSerializer(serializers.ModelSerializer):
             "display_order", "photo_url",
             # M4.4 группа критерия в таблице «Характеристики»:
             "group", "group_display",
+            # polish-4: ключевой замер
+            "is_key_measurement",
         ]
         read_only_fields = fields
 

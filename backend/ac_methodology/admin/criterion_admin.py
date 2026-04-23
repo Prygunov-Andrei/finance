@@ -9,8 +9,12 @@ from ..models import Criterion
 class CriterionAdmin(admin.ModelAdmin):
     """Справочник параметров (standalone)."""
 
-    list_display = ("code", "name_ru", "unit", "value_type", "group", "is_active")
-    list_filter = ("value_type", "group", "is_active")
+    list_display = (
+        "code", "name_ru", "unit", "value_type", "group",
+        "is_active", "is_key_measurement",
+    )
+    list_editable = ("is_key_measurement",)
+    list_filter = ("value_type", "group", "is_active", "is_key_measurement")
     search_fields = ("code", "name_ru", "name_en")
     list_per_page = 50
     ordering = ("code",)
@@ -25,6 +29,6 @@ class CriterionAdmin(admin.ModelAdmin):
             ),
         }),
         ("Тип и статус", {
-            "fields": ("value_type", "group", "is_active"),
+            "fields": ("value_type", "group", "is_active", "is_key_measurement"),
         }),
     )

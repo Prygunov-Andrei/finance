@@ -190,3 +190,42 @@ def test_criterion_group_accepts_known_values():
         c = CriterionFactory(code=f"check_{value}", group=value)
         c.full_clean()  # без исключений
         assert c.group == value
+
+
+# ── polish-4 п.4: Criterion.is_key_measurement ─────────────────────────
+
+
+@pytest.mark.django_db
+def test_criterion_is_key_measurement_default_false():
+    """По умолчанию новый критерий НЕ помечен ключевым замером."""
+    c = CriterionFactory(code="regular_param")
+    assert c.is_key_measurement is False
+
+
+@pytest.mark.django_db
+def test_criterion_is_key_measurement_saves_and_queries():
+    """Флаг сохраняется и фильтруется через ORM."""
+    c1 = CriterionFactory(code="key_param_1", is_key_measurement=True)
+    CriterionFactory(code="regular_1", is_key_measurement=False)
+    CriterionFactory(code="regular_2", is_key_measurement=False)
+
+    keys = Criterion.objects.filter(is_key_measurement=True)
+    assert list(keys) == [c1]
+    assert Criterion.objects.filter(is_key_measurement=False).count() == 2
+
+
+@pytest.mark.django_db
+def test_criterion_is_key_measurement_toggle():
+    """Флаг можно включить и выключить повторно без ошибок."""
+    c = CriterionFactory(code="some_param")
+    assert c.is_key_measurement is False
+
+    c.is_key_measurement = True
+    c.save(update_fields=["is_key_measurement"])
+    c.refresh_from_db()
+    assert c.is_key_measurement is True
+
+    c.is_key_measurement = False
+    c.save(update_fields=["is_key_measurement"])
+    c.refresh_from_db()
+    assert c.is_key_measurement is False

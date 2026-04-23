@@ -579,3 +579,171 @@ def test_detail_news_mentions_limit_5(client, methodology):
     resp = client.get(f"/api/public/v1/rating/models/{m.pk}/")
     mentions = resp.json()["news_mentions"]
     assert len(mentions) == 5
+
+
+# ── polish-4 п.4: is_key_measurement в methodology-serializer ──────────
+
+
+@pytest.mark.django_db
+def test_methodology_criteria_include_is_key_measurement(
+    client, methodology_with_noise,
+):
+    """polish-4: MethodologyCriterionSerializer пробрасывает
+    criterion.is_key_measurement в JSON."""
+    from ac_methodology.models import Criterion as CriterionModel
+
+    crit = CriterionModel.objects.get(code="noise")
+    crit.is_key_measurement = True
+    crit.save(update_fields=["is_key_measurement"])
+
+    resp = client.get("/api/public/v1/rating/methodology/")
+    assert resp.status_code == 200
+    criteria = resp.json()["criteria"]
+    by_code = {c["code"]: c for c in criteria}
+    assert "is_key_measurement" in by_code["noise"]
+    assert by_code["noise"]["is_key_measurement"] is True
+
+
+@pytest.mark.django_db
+def test_methodology_criteria_is_key_measurement_defaults_to_false(
+    client, methodology_with_noise,
+):
+    """Если флаг не установлен — сериализатор возвращает False, не null/отсутствие."""
+    resp = client.get("/api/public/v1/rating/methodology/")
+    criteria = resp.json()["criteria"]
+    assert criteria[0]["is_key_measurement"] is False
+
+
+# ── polish-4 п.8: CSV-экспорт характеристик модели ─────────────────────
+
+
+@pytest.mark.django_db
+def test_model_csv_export_returns_csv(client, methodology):
+    """GET /models/<slug>/export.csv → 200 + CSV контент + attachment header."""
+    from ac_catalog.tests.factories import ModelRawValueFactory
+    from ac_methodology.models import Criterion as CriterionModel
+
+    crit_noise = CriterionFactory(
+        code="noise_xl", name_ru="Уровень шума",
+        unit="дБ", value_type=CriterionModel.ValueType.NUMERIC,
+        group=CriterionModel.Group.ACOUSTICS,
+    )
+    m = PublishedACModelFactory(brand=BrandFactory(name="Daikin"))
+    ModelRawValueFactory(model=m, criterion=crit_noise, raw_value="22")
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.slug}/export.csv")
+    assert resp.status_code == 200
+    assert resp["Content-Type"] == "text/csv; charset=utf-8"
+    assert "attachment" in resp["Content-Disposition"]
+    assert f'filename="{m.slug}.csv"' in resp["Content-Disposition"]
+    body = resp.content.decode("utf-8")
+    assert "Группа,Критерий,Значение,Единица" in body
+    assert "Акустика" in body
+    assert "Уровень шума" in body
+    assert "22" in body
+    assert "дБ" in body
+
+
+@pytest.mark.django_db
+def test_model_csv_export_unauthenticated(client, methodology):
+    """Публичный endpoint — без JWT возвращает 200."""
+    m = PublishedACModelFactory()
+    resp = client.get(f"/api/public/v1/rating/models/{m.slug}/export.csv")
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_model_csv_export_404_when_slug_missing(client, methodology):
+    resp = client.get("/api/public/v1/rating/models/no-such-slug/export.csv")
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_model_csv_export_404_when_not_published(client, methodology):
+    """DRAFT и ARCHIVED модели не экспортируются публично."""
+    draft = ACModelFactory(brand=BrandFactory(name="Draft"))
+    archived = ArchivedACModelFactory(brand=BrandFactory(name="Old"))
+
+    resp_d = client.get(f"/api/public/v1/rating/models/{draft.slug}/export.csv")
+    resp_a = client.get(f"/api/public/v1/rating/models/{archived.slug}/export.csv")
+    assert resp_d.status_code == 404
+    assert resp_a.status_code == 404
+
+
+@pytest.mark.django_db
+def test_model_csv_export_empty_raw_values_header_only(client, methodology):
+    """У модели без raw_values CSV содержит только шапку."""
+    m = PublishedACModelFactory()
+    resp = client.get(f"/api/public/v1/rating/models/{m.slug}/export.csv")
+    assert resp.status_code == 200
+    assert resp.content.decode("utf-8").strip() == "Группа,Критерий,Значение,Единица"
+
+
+@pytest.mark.django_db
+def test_model_csv_export_skips_empty_raw_value(client, methodology):
+    """Строки с пустым raw_value пропускаются."""
+    from ac_catalog.tests.factories import ModelRawValueFactory
+    from ac_methodology.models import Criterion as CriterionModel
+
+    crit_empty = CriterionFactory(code="empty_val", name_ru="Пустой параметр")
+    crit_filled = CriterionFactory(
+        code="filled_val", name_ru="Заполненный",
+        group=CriterionModel.Group.CONTROL,
+    )
+    m = PublishedACModelFactory()
+    ModelRawValueFactory(model=m, criterion=crit_empty, raw_value="")
+    ModelRawValueFactory(model=m, criterion=crit_filled, raw_value="on")
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.slug}/export.csv")
+    body = resp.content.decode("utf-8")
+    assert "Пустой параметр" not in body
+    assert "Заполненный" in body
+
+
+@pytest.mark.django_db
+def test_model_csv_export_groups_ordered(client, methodology):
+    """Строки отсортированы по групповому порядку (климат перед акустикой)."""
+    from ac_catalog.tests.factories import ModelRawValueFactory
+    from ac_methodology.models import Criterion as CriterionModel
+
+    crit_acoustics = CriterionFactory(
+        code="noise_x", name_ru="Шум",
+        group=CriterionModel.Group.ACOUSTICS,
+    )
+    crit_climate = CriterionFactory(
+        code="energy_x", name_ru="Энергоэффективность",
+        group=CriterionModel.Group.CLIMATE,
+    )
+    m = PublishedACModelFactory()
+    # Добавляем акустику первой — по порядку добавления она бы шла до climate,
+    # но в CSV должна идти после (сортировка по GROUP_ORDER).
+    ModelRawValueFactory(model=m, criterion=crit_acoustics, raw_value="25")
+    ModelRawValueFactory(model=m, criterion=crit_climate, raw_value="A+++")
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.slug}/export.csv")
+    body = resp.content.decode("utf-8")
+    climate_idx = body.index("Энергоэффективность")
+    acoustics_idx = body.index("Шум")
+    assert climate_idx < acoustics_idx
+
+
+@pytest.mark.django_db
+def test_model_csv_export_utf8_cyrillic(client, methodology):
+    """Кириллица в значениях корректно сериализуется как UTF-8."""
+    from ac_catalog.tests.factories import ModelRawValueFactory
+    from ac_methodology.models import Criterion as CriterionModel
+
+    crit = CriterionFactory(
+        code="russian_remote", name_ru="Русскоязычный пульт",
+        group=CriterionModel.Group.CONTROL, unit="",
+    )
+    m = PublishedACModelFactory()
+    ModelRawValueFactory(model=m, criterion=crit, raw_value="да")
+
+    resp = client.get(f"/api/public/v1/rating/models/{m.slug}/export.csv")
+    # Проверяем что content декодируется как UTF-8 без ошибок.
+    body = resp.content.decode("utf-8")
+    assert "Русскоязычный пульт" in body
+    assert "да" in body
+    # И что в байтах это именно UTF-8 (кириллица двухбайтная).
+    assert "Русскоязычный".encode("utf-8") in resp.content
