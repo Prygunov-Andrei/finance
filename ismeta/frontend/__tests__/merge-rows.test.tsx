@@ -159,8 +159,11 @@ describe("ItemsTable — checkbox selection (UI-06)", () => {
     fireEvent.click(cb);
     expect(cb.checked).toBe(true);
 
-    // toolbar не виден (только 1 выделено)
-    expect(screen.queryByTestId("merge-toolbar")).toBeNull();
+    // UI-09: toolbar показан даже при 1 выделенном (для Move), но Merge
+    // disabled до selection ≥ 2.
+    expect(screen.getByTestId("merge-toolbar")).toBeInTheDocument();
+    const mergeBtn = screen.getByTestId("merge-button") as HTMLButtonElement;
+    expect(mergeBtn.disabled).toBe(true);
   });
 
   it("shift-click выделяет диапазон строк", () => {
@@ -189,7 +192,7 @@ describe("ItemsTable — checkbox selection (UI-06)", () => {
     expect(getRowCheckbox(3).checked).toBe(false);
   });
 
-  it("toolbar появляется при выделении ≥ 2 строк, скрыт при < 2", () => {
+  it("toolbar появляется при selection ≥ 1 (UI-09 для Move); Merge-кнопка активна при ≥ 2", () => {
     const items = [
       makeItem({ id: "1", sort_order: 0 }),
       makeItem({ id: "2", sort_order: 1 }),
@@ -208,13 +211,21 @@ describe("ItemsTable — checkbox selection (UI-06)", () => {
     expect(screen.queryByTestId("merge-toolbar")).toBeNull();
 
     fireEvent.click(getRowCheckbox(0));
-    expect(screen.queryByTestId("merge-toolbar")).toBeNull();
+    // UI-09: toolbar виден при ≥1 (для Move), Merge disabled
+    expect(screen.getByTestId("merge-toolbar")).toBeInTheDocument();
+    expect(
+      (screen.getByTestId("merge-button") as HTMLButtonElement).disabled,
+    ).toBe(true);
 
     fireEvent.click(getRowCheckbox(1));
     expect(screen.getByTestId("merge-toolbar")).toBeInTheDocument();
     expect(screen.getByTestId("merge-toolbar").textContent).toContain(
       "Выделено: 2",
     );
+    // ≥2 в одной секции → Merge активен
+    expect(
+      (screen.getByTestId("merge-button") as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 });
 

@@ -80,6 +80,16 @@ export default function EstimateDetailPage({ params }: Props) {
     return { map, total };
   }, [allEstimateItems]);
 
+  // UI-09 (#47): счётчики items per section. Считаем по allEstimateItems —
+  // включает все секции, независимо от активного фильтра.
+  const sectionItemCounts = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const it of allEstimateItems) {
+      map[it.section] = (map[it.section] ?? 0) + 1;
+    }
+    return { map, total: allEstimateItems.length };
+  }, [allEstimateItems]);
+
   const trackCounts = React.useMemo<Record<EquipmentTrack, number>>(() => {
     let key = 0;
     for (const it of allItems) if (it.is_key_equipment) key++;
@@ -165,6 +175,9 @@ export default function EstimateDetailPage({ params }: Props) {
           onSelect={setSectionId}
           subtotals={sectionSubtotals.map}
           totalAll={sectionSubtotals.total}
+          itemCounts={sectionItemCounts.map}
+          totalItemCount={sectionItemCounts.total}
+          items={allEstimateItems}
         />
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-background px-6 py-3">
