@@ -114,6 +114,14 @@ services:
       RECOGNITION_API_KEY: ${RECOGNITION_API_KEY:-dev-recognition-key}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # E15-06 it3: PO go на gpt-5.2 для всех задач (QA-цикл заход 1/10).
+      # A/B Петя показал: variance ±1 vs ±3 у gpt-4o; лучше детектит
+      # suspicious через vision-counter; на spec-tabs +9 items. Ценой
+      # ~1.7× времени. Adapter _apply_max_tokens уже обрабатывает
+      # max_completion_tokens для gpt-5.x/o1/o3/o4.
+      LLM_EXTRACT_MODEL: ${LLM_EXTRACT_MODEL:-gpt-5.2}
+      LLM_MULTIMODAL_MODEL: ${LLM_MULTIMODAL_MODEL:-gpt-5.2}
+      LLM_CLASSIFY_MODEL: ${LLM_CLASSIFY_MODEL:-gpt-5.2}
     ports:
       - "${RECOGNITION_PORT:-8003}:8003"
     healthcheck:
