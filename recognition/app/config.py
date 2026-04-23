@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # Закрывает хвостовые потери, которые expected_count на bbox rows не видит.
     llm_vision_counter_enabled: bool = True
     llm_vision_count_tolerance: int = 2
+    # E15-06 it3 hotfix: ограничение на concurrent OpenAI calls. На больших
+    # PDF (19+ стр) 19 text + 19 vision + retries = 38-60 одновременных
+    # запросов к OpenAI API → rate-limit 429 даже на gpt-4o. Semaphore
+    # внутри SpecParser гейтит jobs. 6 — безопасный default для tier-1 API.
+    llm_max_concurrency: int = 6
     dpi: int = 200
     max_page_retries: int = 2
     port: int = 8003

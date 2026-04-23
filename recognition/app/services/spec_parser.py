@@ -259,30 +259,51 @@ class SpecParser:
                 if has_content and local_sticky:
                     cells_typed["name"] = local_sticky
 
-        # Фаза 3 — параллельные LLM calls (только для непустых rows).
+        # Фаза 3 — параллельные LLM calls, ограниченные семафором.
+        # E15-06 it3 hotfix: на 19+ стр PDF без throttle получаем 38-60
+        # concurrent OpenAI calls → rate-limit 429. Semaphore(6) достаточно.
+        import asyncio as _asyncio
+        llm_sema = _asyncio.Semaphore(settings.llm_max_concurrency)
+
         async def run_one(
             page_num: int, rows: list[TableRow], section: str, sticky: str
         ) -> tuple[int, Any]:
             if not rows:
                 return page_num, None
-            try:
-                norm = await normalize_via_llm(
-                    self.provider,
-                    rows,
-                    page_number=page_num + 1,
-                    current_section=section,
-                    sticky_parent_name=sticky,
-                    max_tokens=settings.llm_normalize_max_tokens,
+            async with llm_sema:
+                try:
+                    norm = await normalize_via_llm(
+                        self.provider,
+                        rows,
+                        page_number=page_num + 1,
+                        current_section=section,
+                        sticky_parent_name=sticky,
+                        max_tokens=settings.llm_normalize_max_tokens,
+                    )
+                    return page_num, norm
+                except NotImplementedError:
+                    return page_num, "no_text_complete"
+                except LLMNormalizationError as e:
+                    logger.warning(
+                        "llm normalize failed",
+                        extra={"page": page_num + 1, "error": str(e)},
+                    )
+                    return page_num, None
+
+        async def run_vision_counter_gated(page_num: int) -> int:
+            async with llm_sema:
+                return await self._run_vision_counter(doc, page_num)
+
+        async def run_multimodal_retry_gated(
+            page_num: int,
+            rows: list[TableRow],
+            norm: NormalizedPage,
+            sticky_ctx: tuple[str, str],
+        ) -> tuple[int, Any]:
+            async with llm_sema:
+                return await self._run_multimodal_retry(
+                    doc, page_num, rows, norm, sticky_ctx
                 )
-                return page_num, norm
-            except NotImplementedError:
-                return page_num, "no_text_complete"
-            except LLMNormalizationError as e:
-                logger.warning(
-                    "llm normalize failed",
-                    extra={"page": page_num + 1, "error": str(e)},
-                )
-                return page_num, None
 
         tasks = [
             run_one(pn, rows, section, sticky)
@@ -290,7 +311,6 @@ class SpecParser:
                 zip(pages_rows, stickies, strict=True)
             )
         ]
-        import asyncio as _asyncio
 
         # E15-06 it2 (#52/#9) — vision-based safety-net. Параллельно с text-
         # normalize запускаем cheap vision-call per page: LLM считает позиции
@@ -307,7 +327,7 @@ class SpecParser:
                     vision_count_jobs.append(None)
                     continue
                 vision_count_jobs.append(
-                    self._run_vision_counter(doc, page_num)
+                    run_vision_counter_gated(page_num)
                 )
 
         outcomes = await _asyncio.gather(*tasks)
@@ -386,8 +406,8 @@ class SpecParser:
                     retried = True
                     retry_reasons[page_num] = ", ".join(reasons)
                     retry_jobs.append(
-                        self._run_multimodal_retry(
-                            doc, page_num, rows, norm, stickies[page_num]
+                        run_multimodal_retry_gated(
+                            page_num, rows, norm, stickies[page_num]
                         )
                     )
                 state.confidence_scores.append((page_num + 1, conf, retried))
