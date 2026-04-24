@@ -10,6 +10,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import RichTextEditor from '../components/RichTextEditor';
 import newsService, { NewsCreateData, NewsUpdateData } from '../services/newsService';
+import EditorialMetaFields from './news-editor/EditorialMetaFields';
+import EditorialAuthorPicker from './news-editor/EditorialAuthorPicker';
+import MentionedACModelsPicker from './news-editor/MentionedACModelsPicker';
 import { toast } from 'sonner';
 import { ArrowLeft, Save, Send } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -18,6 +21,7 @@ import { ExternalLink, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { getServerBaseUrl, getMediaUrl } from '../config/api';
 import { processImageUrls } from '../utils/htmlHelpers';
+import type { HvacNewsCategory } from '@/lib/api/types/hvac';
 
 export default function NewsEditor() {
   const { id } = useParams<{ id: string }>();
@@ -36,6 +40,13 @@ export default function NewsEditor() {
   const [pubDate, setPubDate] = useState('');
   const [autoTranslate, setAutoTranslate] = useState(true);
   const [sourceUrl, setSourceUrl] = useState<string | undefined>(undefined);
+
+  // M5 — editorial-поля (публичный HVAC-портал).
+  const [category, setCategory] = useState<HvacNewsCategory>('other');
+  const [lede, setLede] = useState('');
+  const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
+  const [editorialAuthorId, setEditorialAuthorId] = useState<number | null>(null);
+  const [mentionedAcModelIds, setMentionedAcModelIds] = useState<number[]>([]);
 
   // Проверка прав администратора
   useEffect(() => {
@@ -69,12 +80,21 @@ export default function NewsEditor() {
       
       setSourceLanguage(news.source_language || 'ru');
       setStatus(news.status || 'draft');
-      
+
       // Преобразуем дату в формат datetime-local
       const date = new Date(news.pub_date);
       date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
       setPubDate(date.toISOString().slice(0, 16));
       setSourceUrl(news.source_url);
+
+      // M5 — editorial-поля
+      setCategory((news.category as HvacNewsCategory) || 'other');
+      setLede(news.lede || '');
+      setReadingTimeMinutes(news.reading_time_minutes ?? null);
+      setEditorialAuthorId(news.editorial_author?.id ?? null);
+      setMentionedAcModelIds(
+        (news.mentioned_ac_models ?? []).map((m) => m.id),
+      );
     } catch (error: unknown) {
       console.error('Failed to load news:', error);
       toast.error('Не удалось загрузить новость');
@@ -133,6 +153,11 @@ export default function NewsEditor() {
         source_language: sourceLanguage,
         auto_translate: autoTranslate,
         source_url: sourceUrl,
+        // M5 editorial-поля:
+        category,
+        lede,
+        editorial_author: editorialAuthorId,
+        mentioned_ac_models: mentionedAcModelIds,
       };
 
       if (id) {
@@ -182,6 +207,11 @@ export default function NewsEditor() {
         source_language: sourceLanguage,
         auto_translate: autoTranslate,
         source_url: sourceUrl,
+        // M5 editorial-поля:
+        category,
+        lede,
+        editorial_author: editorialAuthorId,
+        mentioned_ac_models: mentionedAcModelIds,
       };
 
       const translationNote = autoTranslate ? ' Перевод выполняется в фоне.' : '';
@@ -291,6 +321,34 @@ export default function NewsEditor() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* M5 — editorial поля (публичный HVAC-портал) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Публичная витрина</CardTitle>
+            <CardDescription>
+              Категория, лид, редактор и упомянутые AC-модели. Эти поля
+              используются на публичной HVAC-странице новости.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <EditorialMetaFields
+              category={category}
+              onCategoryChange={setCategory}
+              lede={lede}
+              onLedeChange={setLede}
+              readingTimeMinutes={readingTimeMinutes}
+            />
+            <EditorialAuthorPicker
+              value={editorialAuthorId}
+              onChange={setEditorialAuthorId}
+            />
+            <MentionedACModelsPicker
+              value={mentionedAcModelIds}
+              onChange={setMentionedAcModelIds}
+            />
           </CardContent>
         </Card>
 
