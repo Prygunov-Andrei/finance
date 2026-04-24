@@ -105,7 +105,7 @@
 - **Приоритет:** 🔥 **критический** — блокер демо PDF-import с реальным OpenAI. Без фикса весь Recognition флоу неработоспособен вне моков.
 - **Исполнитель:** IS-Петя. Задача: `E-MAT-UI-02` или `recognition/fix-json-parsing`.
 
-### 11. UI inline-edit для `tech_specs.model_name` и `tech_specs.brand` — GAP редактирования
+### 11. ~~UI inline-edit для `tech_specs.model_name`~~ ✅ _(закрыто UI-04 b252a88 21.04 + regression тесты UI-13 7ba5ec1 24.04; brand/manufacturer отложены на UI-14B если PO решит по layout)_
 
 **Контекст (вопрос Андрея 2026-04-21):**
 > «Что будет если в смете будет отдельно Наименование (один столбец) и Модель (другой столбец)?»
@@ -148,7 +148,7 @@
 
 ---
 
-### 12. Excel import — маппинг колонок «Модель / Марка / Бренд» в `tech_specs` — GAP двустороннего round-trip
+### 12. ~~Excel import — маппинг колонок «Модель / Марка / Бренд»~~ ✅ _(закрыто TD-02 1c56835 24.04)_
 
 **Контекст:**
 Сейчас `ismeta/backend/apps/estimate/excel/importer.py` **не парсит** колонки «Модель», «Марка», «Артикул», «Бренд», «Производитель». Всё что в этих колонках — игнорируется или склеивается в `name`. Последствие:
@@ -191,7 +191,7 @@
 
 ---
 
-### 13. SpecParser Vision path не применяет sticky_parent_name
+### 13. ~~SpecParser Vision path не применяет sticky_parent_name~~ ✅ _(закрыто TD-03 9661475 24.04, `_apply_vision_sticky` helper)_
 
 **Контекст:** E15.03 добавил sticky parent name в text-layer путь (`pdf_text.parse_page_items`). Vision fallback (`spec_parser._process_page` при `has_usable_text_layer=False`) создаёт `SpecItem` напрямую из LLM response — `state.sticky_parent_name` игнорируется.
 
@@ -205,7 +205,7 @@
 
 ---
 
-### 14. _STAMP_EXACT содержит короткие токены (хрупко на не-ГОСТ форматах)
+### 14. ~~_STAMP_EXACT короткие токены~~ ✅ _(закрыто TD-03 docstring+план отката; exact-match уже защищал от substring)_
 
 **Контекст:** `recognition/app/services/pdf_text.py:_STAMP_EXACT` включает "А3", "А4", "Р", "Лист", "ГИП", "во", "ния" — exact-match после strip, но короткие токены могут конфликтовать с реальными item-именами в нестандартных PDF (например «Р — резервный» или «Лист изоляции»).
 
@@ -217,7 +217,7 @@
 
 ---
 
-### 15. _SECTION_RE покрывает только ОВиК-разделы
+### 15. ~~_SECTION_RE только ОВиК~~ ✅ _(закрыто TD-03, расширен на Канализация/Вентиляция\b/Электро*/ИТП/Пожаротушение/Раздел ЭОМ/АОВ/СС/«ЭОМ. …»)_
 
 **Контекст:** Regex в `pdf_text.py` ловит только:
 `Система | Клапаны | Противодымная | Общеобменн | Воздуховоды | Воздуховод приточной | Слаботочн | Отопление | Кондиционирован | Дымоудален | Приточная | Вытяжная`.
@@ -248,7 +248,7 @@ UX (конфликт позиций) + section_name в ключе.
 
 ---
 
-### 16. spec_parser._process_page — except Exception без traceback
+### 16. ~~spec_parser._process_page — except Exception без traceback~~ ✅ _(закрыто TD-03, logger.exception)_
 
 **Контекст:** `recognition/app/services/spec_parser.py:_process_page` ловит `Exception` на уровне страницы и пишет `logger.warning(...)` со `str(e)`. Traceback теряется — регрессию в `parse_page_items` (например падение на edge-case строк) поймаем только по items, не по stack.
 
@@ -365,7 +365,7 @@ Cold-start проблема решена.
 
 **Приоритет:** 🟡 низкий — косметика.
 
-### 26. UI-10 — показ suspicious pages в result-диалоге PDF-import
+### 26. ~~UI-10 — показ suspicious pages в PDF-import~~ ✅ _(закрыто UI-10 b323bf7 + pages_summary backend в TD-02 24.04)_
 
 **Контекст:** E15-06 task 3 добавит `pages_summary` в SpecParseResponse с полем `suspicious: boolean` (True если LLM expected_count > parsed_count + retry не закрыл gap). Frontend сейчас это поле не отображает.
 
@@ -437,7 +437,7 @@ Importer делает merge с существующим `tech_specs` при upda
 Тесты: 10 новых на export/import round-trip + cyrillic edge-case
 «ВВГнг-LS-3x2.5». Закрывает также DEV-BACKLOG #12 (importer GAP).
 
-### 29. ~~Свободная заметка к смете (стикер)~~ ⏳ _(backend закрыт TD-02, 2026-04-24; frontend — отдельная задача IS-Федя)_
+### 29. ~~Свободная заметка к смете (стикер)~~ ✅ _(закрыто UI-12 6b3fbf3 24.04: стикер с autosave, backend TD-02 + frontend UI-12)_
 
 **Запрос PO (QA-цикл заход 1/10, 2026-04-23):**
 > «При смете нужны какие-то минимальные заметки, буквально одно текстовое поле, которое сохраняется и свободно редактируется — никакой истории — просто заметка (можно для красоты сделать жёлтым листочком, типа стикера).»
