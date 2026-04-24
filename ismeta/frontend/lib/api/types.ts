@@ -71,6 +71,7 @@ export interface Estimate {
   profitability_percent: string;
   advance_amount: string;
   estimated_days: number;
+  note: string;
   created_by: number | null;
   created_at: string;
   updated_at: string;

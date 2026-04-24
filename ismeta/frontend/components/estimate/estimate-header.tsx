@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/app/estimates/status-badge";
+import { EstimateNote } from "@/components/estimate/estimate-note";
 import { ApiError, estimateApi, matchingApi } from "@/lib/api/client";
 import { getWorkspaceId } from "@/lib/workspace";
 import { downloadBlob, cn } from "@/lib/utils";
@@ -213,6 +214,7 @@ export function EstimateHeader({
           </span>
           <StatusBadge status={estimate.status} />
         </div>
+        <EstimateNote estimate={estimate} />
         <HeaderActions
           onOpenValidate={onOpenValidate}
           onOpenChat={onOpenChat}

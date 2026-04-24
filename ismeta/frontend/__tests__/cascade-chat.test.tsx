@@ -69,6 +69,7 @@ function makeEstimate(overrides: Partial<Estimate> = {}): Estimate {
     profitability_percent: "0",
     advance_amount: "0",
     estimated_days: 0,
+    note: "",
     created_by: null,
     created_at: "",
     updated_at: "",
