@@ -733,6 +733,22 @@ def _detect_column_ranges(
     # и теряет spans за пределами header extent.
     detected, last_header_idx_multi = _merge_multi_row_header(buckets)
     if _is_multi_row_header(buckets, last_header_idx_multi) and len(detected) >= 4:
+        # Spec-3 заход 3/10 Класс A: на сложных header'ах (6 row multi-line)
+        # фрагментированный «Завод | - | изготови- | тель» не склеивается
+        # patterns matcher'ом, manufacturer column теряется, unit захватывает
+        # её пространство. Если между model и unit большой gap (>150pt ≈ ширина
+        # manufacturer в ГОСТ) И manufacturer не detected — вставляем его
+        # искусственно. На spec-ov2/АОВ manufacturer детектится штатно, fix
+        # не срабатывает (условие not in detected → False).
+        if (
+            "model" in detected
+            and "unit" in detected
+            and "manufacturer" not in detected
+        ):
+            model_hi = detected["model"][1]
+            unit_lo = detected["unit"][0]
+            if unit_lo - model_hi > 150:
+                detected["manufacturer"] = (model_hi + 5, unit_lo - 5)
         return _build_ranges_from_detected(detected), last_header_idx_multi
 
     # Fallback — single-row с shift-калибровкой (pre-it2 поведение).
