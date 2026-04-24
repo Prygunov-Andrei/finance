@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.conf import settings
 from .models import (
-    NewsPost, NewsMedia, NewsAuthor, Comment, MediaUpload,
+    NewsPost, NewsMedia, NewsAuthor, NewsCategory, Comment, MediaUpload,
     SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall,
     RatingCriterion, RatingConfiguration, RatingRun, NewsDuplicateGroup,
 )
@@ -58,10 +58,38 @@ class NewsAuthorSerializer(serializers.ModelSerializer):
         return _url_with_mtime(obj.avatar)
 
 
+class NewsCategorySerializer(serializers.ModelSerializer):
+    """CRUD сериализатор для раздела новостей (ERP UI).
+
+    slug — read-only для существующих записей (immutable identity: FK на
+    NewsPost ссылается по slug; переименование = новая категория + bulk-миграция
+    новостей через /bulk-update-category/).
+    """
+
+    class Meta:
+        model = NewsCategory
+        fields = ("slug", "name", "order", "is_active")
+
+    def update(self, instance, validated_data):
+        # Slug immutable: игнорируем попытки изменить, даже если пришёл в payload.
+        validated_data.pop("slug", None)
+        return super().update(instance, validated_data)
+
+
+class NewsCategoryLiteSerializer(serializers.ModelSerializer):
+    """Read-only вложение NewsCategory в NewsPost.category_object."""
+
+    class Meta:
+        model = NewsCategory
+        fields = ("slug", "name", "order", "is_active")
+        read_only_fields = fields
+
+
 class NewsPostSerializer(serializers.ModelSerializer):
     media = NewsMediaSerializer(many=True, read_only=True)
     author = serializers.SerializerMethodField()
     category_display = serializers.CharField(source='get_category_display', read_only=True)
+    category_object = NewsCategoryLiteSerializer(source="category_ref", read_only=True)
     editorial_author = NewsAuthorLiteSerializer(read_only=True)
     mentioned_ac_models = serializers.SerializerMethodField()
     
@@ -97,7 +125,7 @@ class NewsPostSerializer(serializers.ModelSerializer):
             'star_rating', 'rating_explanation', 'matched_criteria', 'duplicate_group',
             'translation_status', 'translation_error',
             # M5 — HVAC news redesign:
-            'category', 'category_display', 'lede', 'reading_time_minutes',
+            'category', 'category_display', 'category_object', 'lede', 'reading_time_minutes',
             'editorial_author', 'mentioned_ac_models',
         )
         read_only_fields = (
@@ -107,7 +135,7 @@ class NewsPostSerializer(serializers.ModelSerializer):
             'is_no_news_found', 'manufacturer',
             'rating_explanation', 'matched_criteria', 'duplicate_group',
             'translation_status', 'translation_error',
-            'category_display', 'editorial_author', 'mentioned_ac_models',
+            'category_display', 'category_object', 'editorial_author', 'mentioned_ac_models',
         )
     
     def _get_translation_field(self, obj, field_name, lang_code):
