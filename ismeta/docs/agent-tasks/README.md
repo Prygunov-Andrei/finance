@@ -25,6 +25,8 @@
 
 | Файл | Кому | Статус | Ветка |
 |---|---|---|---|
+| [TD-03-recognition-backend-polish-petya.md](./TD-03-recognition-backend-polish-petya.md) | Петя | 🟢 **Active** — tech debt batch (#6/#13/#14/#15/#16/#20) | `recognition/13-td-03-polish` |
+| [UI-13-inline-edit-tech-specs-fedya.md](./UI-13-inline-edit-tech-specs-fedya.md) | Федя | 🟡 **Active** — inline-edit model/brand (DEV-BACKLOG #11) | `ismeta/ui-13-inline-edit-tech-specs` |
 | [E17-quote-xlsx-parser-petya.md](./E17-quote-xlsx-parser-petya.md) | Петя | 🟡 **DRAFT** — не стартовать без явного go PO | (pending) |
 
 **Примечание:** E17 в draft — scope проектировался до обсуждения с PO. Workflow КП в ERP — отдельная продуктовая тема (см. `ismeta/docs/OPEN-QUESTIONS-procurement-ux.md`). Backend-расширение Recognition полезно само по себе, но запускаем только по явному согласию.
