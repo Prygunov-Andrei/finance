@@ -1,5 +1,12 @@
 import type { HvacNews as NewsItem } from '@/lib/api/types/hvac';
 
+/**
+ * @deprecated Используйте динамические категории, построенные из
+ * `items.category_object` через useMemo (см. NewsCategoryFilter).
+ * Этот массив остаётся как fallback для случая, когда в первой странице
+ * новостей нет ни одной записи с category_object (например, при пустой БД
+ * или сбое save-sync на бэке).
+ */
 export const NEWS_CATEGORIES: Array<{ code: string; label: string }> = [
   { code: 'all', label: 'Все' },
   { code: 'business', label: 'Деловые' },

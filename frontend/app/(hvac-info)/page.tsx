@@ -29,7 +29,7 @@ export default async function NewsFeedPage() {
         <NewsFeedHero items={items} />
         <div className="rt-feed-controls-row">
           <Suspense fallback={null}>
-            <NewsCategoryFilter />
+            <NewsCategoryFilter items={items} />
           </Suspense>
           <Suspense fallback={null}>
             <NewsViewSwitcher />
