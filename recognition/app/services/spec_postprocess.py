@@ -44,11 +44,12 @@ _CONTINUATION_PREFIXES = (
 )
 
 # Spec-3 Class B: word-break с дефисом + пробел в name (LLM-уровень).
-# Pattern: прежняя буква кириллицы + «-» + whitespace + cyrillic lowercase →
-# склейка без tire и space. «по- крытием» → «покрытием», «ком- плектом» →
-# «комплектом». Latin не трогаем (могут быть код-маркеры типа «TI-HF»).
-# После uppercase — тоже не трогаем (могут быть list items «1 - Заголовок»).
-_WORD_BREAK_DASH_RE = re.compile(r"([а-яёА-ЯЁ])-\s+([а-яё])")
+# Pattern: cyrillic lowercase + «-» + whitespace + cyrillic letter (любой регистр)
+# → склейка без tire и space. «по- крытием» → «покрытием», «по- Теплозащитное»
+# → «поТеплозащитное» (дубль-name из overlap-LLM, перед anti-duplicate).
+# Первая буква — только lowercase (чтобы не зацепить list items «1 - Заголовок»
+# или коды «А - 12»). Latin вообще не трогаем (могут быть коды типа «TI-HF»).
+_WORD_BREAK_DASH_RE = re.compile(r"([а-яё])-\s+([а-яёА-ЯЁ])")
 
 
 def _unbreak_dash_word(text: str) -> str:
@@ -69,7 +70,10 @@ _SERIES_SUFFIX_RE = re.compile(
 )
 
 
-def inherit_series_parent(items: list[NormalizedItem]) -> list[NormalizedItem]:
+def inherit_series_parent(
+    items: list[NormalizedItem],
+    rows: "list[TableRow] | None" = None,
+) -> list[NormalizedItem]:
     """Class G/H: items с name-suffix («n=4сек.», «Ду15», «ф100») inheritуют
     полное name от ближайшего предыдущего items с ТОЧНО ТЕМ ЖЕ model_name.
 
@@ -85,6 +89,7 @@ def inherit_series_parent(items: list[NormalizedItem]) -> list[NormalizedItem]:
       pattern → не matches.
     - spec-АОВ кабели имеют полное name → не matches.
     """
+    _ = rows  # reserved for future use
     if not items:
         return items
     # Pass 1: snapshot original names + is_suffix flag.
@@ -104,14 +109,13 @@ def inherit_series_parent(items: list[NormalizedItem]) -> list[NormalizedItem]:
         for j in range(i - 1, max(-1, i - 6), -1):
             prev_name_orig, prev_is_suffix = snapshot[j]
             if prev_is_suffix:
-                continue  # сам suffix — ищем дальше назад
+                continue
             prev = items[j]
             if prev.model_name != it.model_name:
                 continue
             alpha_count = sum(1 for c in prev_name_orig if c.isalpha())
             if alpha_count < 15:
                 continue
-            # Найден parent — inherit оригинальный parent + текущий suffix.
             suffix = it.name.strip()
             it.name = f"{prev_name_orig.rstrip()} {suffix}".strip()
             break

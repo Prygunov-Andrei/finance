@@ -835,7 +835,7 @@ class SpecParser:
             it.name = _unbreak_dash_word(it.name)
         # Spec-3 Class G/H: series suffix items («n=4сек.», «Ду15», «ф100»)
         # наследуют parent name от соседнего выше с тем же model_name.
-        norm.items = inherit_series_parent(norm.items)
+        norm.items = inherit_series_parent(norm.items, rows)
         after = len(norm.items)
         if before != after:
             norm.warnings.append(

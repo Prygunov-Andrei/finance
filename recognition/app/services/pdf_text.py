@@ -1156,6 +1156,7 @@ def extract_structured_rows(page: object) -> list[TableRow]:
 
     rows = _merge_multiline_section_headings(rows)
     rows = _merge_continuation_rows(rows)
+    rows = _merge_series_parent_into_children(rows)
     return rows
 
 
@@ -1207,6 +1208,109 @@ def _merge_continuation_rows(rows: list[TableRow]) -> list[TableRow]:
                     prev.cells["pos"] = f"{prev_pos} {cur_pos}"
                 continue  # не добавляем row в out
         out.append(row)
+    return out
+
+
+_SERIES_CHILD_SUFFIX_RE = re.compile(
+    r"^(?:n=\d+\s*[cс]ек\.?|Ду\d+|[фØø∅]\s*\d+(?:[x×х]\d+)?)\s*$",
+    re.IGNORECASE,
+)
+_DASH_SPACE_MERGE_RE = re.compile(r"([а-яё])-\s+([а-яёА-ЯЁ])")
+
+
+def _merge_series_parent_into_children(rows: list[TableRow]) -> list[TableRow]:
+    """Spec-3 заход 3/10: series с parent-header + children-с-suffix.
+
+    Pattern:
+      Row A: cells.name = «Радиатор отопительный...» или «Трубы стальные...»
+             (name непустой, qty пустой — header без quantity)
+      Row B (0+ continuation): cells.name = «комплектно с краном...»
+             (name непустой, ВСЁ остальное пусто)
+      Row C, D, ... (2+ children): cells.name matches suffix regex
+             («n=3сек.», «Ду15», «Ø100») И cells.qty непустой
+
+    Действие: для каждого child установить cells.name = parent_full + child.name,
+    где parent_full = сцепка name-частей всех parent+continuation rows
+    (с dash-rule word-break для «по-» + «крытием» → «покрытием»). Если child
+    cells.model пустой а parent.model есть — скопировать. Parent row и
+    continuation rows удаляются (они без qty — LLM их всё равно бы не
+    эмитировала в items, а имя уже перелилось в children).
+
+    Триггер STRICT: требуется **≥2 suffix-children подряд**. Одиночный
+    suffix-child может быть legitимной позицией с pos=«Ø100» кодом.
+
+    Safety на goldens:
+    - spec-ov2: Теплозащитное покрытие имеет parent+continuation, НО после
+      них нет suffix-children (следующий item — Metal для крепления с qty,
+      полное name). suffix_count=0 → no merge, parent остаётся нетронутым.
+    - spec-АОВ: нет suffix-only rows → not triggered.
+    - spec-3: Radiator (parent + continuation + 11 children) И Трубы
+      стальные (parent-с-моделью + 3 children) — оба merge'атся.
+    """
+    _HEADER_QTY_KEYS = ("qty", "pos", "unit", "brand", "manufacturer")
+    _CONT_KEYS = (*_HEADER_QTY_KEYS, "model")
+    out: list[TableRow] = []
+    i = 0
+    while i < len(rows):
+        row = rows[i]
+        cells = row.cells
+        name = (cells.get("name") or "").strip()
+        has_qty_or_pos = any(
+            (cells.get(k) or "").strip() for k in _HEADER_QTY_KEYS
+        )
+        if (
+            not name
+            or has_qty_or_pos
+            or row.is_section_heading
+        ):
+            out.append(row)
+            i += 1
+            continue
+        # Candidate parent: name-непустое, qty/pos/unit/mfr/brand пусты.
+        # Model может быть (например «ГОСТ 3262-75» для Труб).
+        parent_name_parts: list[str] = [name]
+        j = i + 1
+        while j < len(rows):
+            rj = rows[j]
+            if rj.is_section_heading:
+                break
+            c = rj.cells
+            rname = (c.get("name") or "").strip()
+            has_any_other = any((c.get(k) or "").strip() for k in _CONT_KEYS)
+            if rname and not has_any_other:
+                parent_name_parts.append(rname)
+                j += 1
+                continue
+            break
+        # Now j = index первого row после parent+continuations.
+        # Проверяем ≥2 suffix-children с qty.
+        suffix_count = 0
+        k = j
+        while k < len(rows):
+            ck = rows[k].cells
+            ck_name = (ck.get("name") or "").strip()
+            ck_qty = (ck.get("qty") or "").strip()
+            if ck_qty and _SERIES_CHILD_SUFFIX_RE.match(ck_name):
+                suffix_count += 1
+                k += 1
+            else:
+                break
+        if suffix_count < 2:
+            out.append(row)
+            i += 1
+            continue
+        # Pattern matches. Склеиваем parent_full + dash-rule.
+        parent_full = " ".join(parent_name_parts)
+        parent_full = _DASH_SPACE_MERGE_RE.sub(r"\1\2", parent_full)
+        parent_model = (cells.get("model") or "").strip()
+        for m in range(j, j + suffix_count):
+            child_cells = rows[m].cells
+            child_name = (child_cells.get("name") or "").strip()
+            child_cells["name"] = f"{parent_full} {child_name}".strip()
+            if parent_model and not (child_cells.get("model") or "").strip():
+                child_cells["model"] = parent_model
+        # НЕ добавляем parent+continuation rows в out — они absorbed в children.
+        i = j  # Children will be appended by next iteration.
     return out
 
 
