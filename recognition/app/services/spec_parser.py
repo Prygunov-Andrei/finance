@@ -22,6 +22,7 @@ from ..schemas.spec import PagesStats, PageSummary, SpecItem, SpecParseResponse
 from ._common import _strip_markdown_fence
 from .pdf_render import render_page_to_b64
 from .pdf_text import (
+    _VARIANT_RE,
     TEXT_LAYER_MIN_CHARS_PER_PAGE,
     TableRow,
     extract_structured_rows,
@@ -683,10 +684,20 @@ class SpecParser:
 
             items_llm = await self._extract_items(page_b64, page_num)
             for item_data in items_llm:
+                raw_name = str(item_data.get("name", "")).strip()
+                # DEV-BACKLOG #13: Vision path учитывает sticky_parent_name,
+                # унаследованный из column-aware пути предыдущих страниц.
+                # Нужно для mixed PDF (native page → sticky «Воздуховод» →
+                # scan page → Vision возвращает item с variant-only name
+                # «ф100» или пустым name). Без sticky bridge рвётся.
+                final_name = _apply_vision_sticky(raw_name, state.sticky_parent_name)
+                if final_name and not _VARIANT_RE.match(final_name):
+                    # Полное имя — обновляем sticky для следующих items/страниц.
+                    state.sticky_parent_name = final_name
                 state.sort_order += 1
                 state.items.append(
                     SpecItem(
-                        name=str(item_data.get("name", "")).strip(),
+                        name=final_name,
                         model_name=str(item_data.get("model_name", "")),
                         brand=str(item_data.get("brand", "")),
                         unit=str(item_data.get("unit", "шт")),
@@ -700,8 +711,14 @@ class SpecParser:
             state.pages_processed += 1
 
         except Exception as e:
+            # DEV-BACKLOG #16: logger.exception пишет traceback в JSON-лог —
+            # регрессии в parse_page_items / extract_structured_rows ловим
+            # по stack, а не только по факту потерянных items.
             error_msg = f"Page {page_num + 1}: {e}"
-            logger.warning("spec_parse page error", extra={"page": page_num + 1, "error": str(e)})
+            logger.exception(
+                "spec_parse page error",
+                extra={"page": page_num + 1, "error": str(e)},
+            )
             state.errors.append(error_msg)
 
     async def _try_column_aware(self, page: fitz.Page, page_num: int) -> bool:
@@ -973,6 +990,23 @@ class SpecParser:
             ),
             pages_summary=sorted(state.pages_summary, key=lambda p: p.page),
         )
+
+
+def _apply_vision_sticky(raw_name: str, sticky: str) -> str:
+    """DEV-BACKLOG #13: применить sticky_parent_name в Vision-пути.
+
+    Vision LLM не знает про parent context с предыдущих страниц. Если item
+    вернулся с пустым name — это продолжение серии, используем sticky
+    целиком. Если name — только вариант («ф100», «150х100»), склеиваем
+    sticky + variant («Воздуховод ф100»). Полное имя оставляем как есть.
+    """
+    if not sticky:
+        return raw_name
+    if not raw_name:
+        return sticky
+    if _VARIANT_RE.match(raw_name):
+        return f"{sticky} {raw_name}"
+    return raw_name
 
 
 def _merge_system_prefix(item: NormalizedItem) -> str:

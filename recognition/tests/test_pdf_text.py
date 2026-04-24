@@ -86,6 +86,58 @@ class TestIsSection:
         assert not is_section_heading("Огнезащитная клеящая смесь")
         assert not is_section_heading("Противопожарная изоляция EI30")
 
+    def test_td03_extended_sections(self):
+        """DEV-BACKLOG #15: новые разделы (non-ОВиК + ЕСКД-аббревиатуры)."""
+        # Обычные слова-разделы.
+        assert is_section_heading("Канализация внутренняя")
+        assert is_section_heading("Вентиляция приточная")
+        assert is_section_heading("Электроосвещение")
+        assert is_section_heading("Электрооборудование")
+        assert is_section_heading("Теплоснабжение")
+        assert is_section_heading("Пожаротушение водяное")
+        assert is_section_heading("Дренаж кондиционеров")
+        # Аббревиатуры ЕСКД с контекстом.
+        assert is_section_heading("Раздел ЭОМ")
+        assert is_section_heading("Марка комплекта СС")
+        assert is_section_heading("Комплект АОВ")
+        assert is_section_heading("Раздел ИТП")
+        # Аббревиатура как заголовок страницы.
+        assert is_section_heading("ЭОМ. Электрооборудование")
+        assert is_section_heading("АОВ. Автоматизация")
+
+    def test_td03_extended_sections_negatives(self):
+        """DEV-BACKLOG #15: расширение не должно ловить item-имена."""
+        # Вентилятор (не «Вентиляция») — граница слова \b защищает.
+        assert not is_section_heading("Вентилятор канальный ВК-100")
+        # ЭОМ-кабель без точки+пробела после — не заголовок.
+        assert not is_section_heading("ЭОМ-кабель")
+        # Просто «ЭОМ» без контекста — не заголовок (нужен Раздел/Комплект/точка).
+        assert not is_section_heading("ЭОМ")
+
+
+class TestStampExactShortTokens:
+    """DEV-BACKLOG #14: короткие exact-match токены (А3/А4/Р/во/ния) не должны
+    ложно срабатывать на item-именах и моделях с похожими короткими подстроками."""
+
+    def test_model_with_short_token_is_not_stamp(self):
+        # «ИП-55» — фрагмент обозначения, не штамп. Exact-match гарантирует,
+        # что «ИП-55» != «ИП», даже если «ИП» вдруг появится в _STAMP_EXACT.
+        assert not is_stamp_line("ИП-55")
+        # «А3-формат» длиннее «А3» — exact-match не матчит.
+        assert not is_stamp_line("А3-формат")
+        # «Резерв» начинается с «Р», но длиннее — exact-match не срабатывает.
+        assert not is_stamp_line("Резерв")
+        # «ГИПС» длиннее «ГИП» — safe.
+        assert not is_stamp_line("ГИПС")
+        # «Решётка» начинается с «Р» — не матчит как exact.
+        assert not is_stamp_line("Решётка")
+
+    def test_bare_short_tokens_still_match(self):
+        # При этом «голый» штамп («Лист», «А3») всё ещё ловится — контракт сохранён.
+        assert is_stamp_line("Лист")
+        assert is_stamp_line("А3")
+        assert is_stamp_line("ГИП")
+
 
 class TestParseQuantity:
     def test_integer(self):

@@ -23,9 +23,11 @@ class TechSpecs(BaseModel):
       - `.model_validate()` в `EstimateItem.clean()` ловил очевидные type-ошибки
         (например int в полях brand/model_name) для whitelist-полей.
 
-    Для любых других ключей (flow, cooling, heating, diameter_mm, fire_class,
-    length_mm, section, material, class, shielded, liquid, gas, ports,
-    thickness_mm, rating и т.д.) — ConfigDict(extra="allow").
+    DEV-BACKLOG #6: whitelist расширен реальными ключами из Recognition
+    (flow/cooling/heating/power/section/material/comments/system_prefix) —
+    частые, единообразно текстовые. Любые другие ключи (diameter_mm,
+    length_mm, thickness_mm, fire_class, shielded, liquid, gas, ports,
+    rating, category и т.д.) принимаются через ConfigDict(extra="allow").
     """
 
     model_config = ConfigDict(extra="allow")
@@ -36,9 +38,19 @@ class TechSpecs(BaseModel):
     # Legacy-алиасы (до E-MAT-01 использовалось `manufacturer`/`model`).
     manufacturer: str | None = None
     model: str | None = None
-    # Часто встречающиеся спецификации ОВиК.
+    # Часто встречающиеся спецификации ОВиК (Recognition заполняет как строки
+    # с единицами: «2600 м³/ч», «7.1 кВт»).
+    flow: str | None = None
+    cooling: str | None = None
+    heating: str | None = None
+    power: str | None = None
     power_kw: Decimal | None = None
     weight_kg: Decimal | None = None
     dimensions: str | None = None
+    section: str | None = None
+    material: str | None = None
+    # UI-04 (PDF-import через Recognition): примечание + системный префикс.
+    comments: str | None = None
+    system_prefix: str | None = None
     # Номер исходной страницы (PDF import, E28).
     source_page: int | None = None
