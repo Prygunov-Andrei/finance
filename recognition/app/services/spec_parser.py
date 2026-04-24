@@ -37,6 +37,7 @@ from .spec_normalizer import (
     normalize_via_llm_multimodal,
 )
 from .spec_postprocess import (
+    _looks_like_continuation,
     apply_no_qty_merge,
     backfill_source_row_index,
     cap_sticky_name,
@@ -240,6 +241,14 @@ class SpecParser:
                     and not unit
                     and not model
                     and not brand
+                    # spec-ov2 regression (QA-заход 2/10 final check): section-
+                    # heading без is_section_heading-флага («Фасооные изделия к
+                    # вентиляторам ПДВ», начинается с заглавной) ошибочно
+                    # таскался как cross-page continuation и склеивался с last
+                    # item page 7. Требуем чтобы name ТОЧНО выглядел как
+                    # continuation (lowercase-start / предлог / continuation-
+                    # прилагательное). Consistent с cover_bbox_rows.
+                    and _looks_like_continuation(name)
                 ):
                     taken.append(rows_pi.pop(0))
                     continue
