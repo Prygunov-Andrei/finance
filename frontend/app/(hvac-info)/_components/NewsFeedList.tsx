@@ -188,11 +188,13 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
         >
           {visible.map((item) => {
             const img = getNewsHeroImage(item);
+            const hasImage = Boolean(img);
             return (
               <Link
                 key={item.id}
                 href={`/news/${item.id}`}
                 className="rt-feed-row"
+                data-no-image={hasImage ? undefined : 'true'}
                 style={{
                   textDecoration: 'none',
                   color: 'inherit',
@@ -205,19 +207,19 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
                   background: 'hsl(var(--rt-paper))',
                 }}
               >
-                <div
-                  aria-hidden
-                  className="rt-feed-row-img"
-                  style={{
-                    width: 200,
-                    height: 120,
-                    flexShrink: 0,
-                    borderRadius: 4,
-                    background: img
-                      ? `center / cover no-repeat url(${img})`
-                      : 'repeating-linear-gradient(135deg, hsl(var(--rt-ink-08)) 0 6px, hsl(var(--rt-ink-15)) 6px 12px)',
-                  }}
-                />
+                {hasImage && (
+                  <div
+                    aria-hidden
+                    className="rt-feed-row-img"
+                    style={{
+                      width: 200,
+                      height: 120,
+                      flexShrink: 0,
+                      borderRadius: 4,
+                      background: `center / cover no-repeat url(${img})`,
+                    }}
+                  />
+                )}
                 <div
                   className="rt-feed-row-body"
                   style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}
@@ -234,32 +236,49 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
                     {formatNewsDateShort(item.pub_date)} · {getNewsCategoryLabel(item)}
                   </div>
                   <div
-                    style={{
-                      fontSize: 16,
-                      fontFamily: 'var(--rt-font-serif)',
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      color: 'hsl(var(--rt-ink))',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
+                    className="rt-feed-row-title"
+                    style={
+                      hasImage
+                        ? {
+                            fontSize: 16,
+                            fontFamily: 'var(--rt-font-serif)',
+                            fontWeight: 700,
+                            lineHeight: 1.25,
+                            color: 'hsl(var(--rt-ink))',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }
+                        : {
+                            fontSize: 19,
+                            fontFamily: 'var(--rt-font-serif)',
+                            fontWeight: 700,
+                            lineHeight: 1.25,
+                            letterSpacing: -0.2,
+                            color: 'hsl(var(--rt-ink))',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }
+                    }
                   >
                     {item.title}
                   </div>
                   <div
+                    className="rt-feed-row-lede"
                     style={{
                       fontSize: 13,
                       lineHeight: 1.45,
                       color: 'hsl(var(--rt-ink-60))',
                       display: '-webkit-box',
-                      WebkitLineClamp: 3,
+                      WebkitLineClamp: hasImage ? 3 : 4,
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden',
                     }}
                   >
-                    {getNewsLede(item, 180)}
+                    {getNewsLede(item, hasImage ? 180 : 260)}
                   </div>
                 </div>
               </Link>
@@ -296,6 +315,9 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
         .rt-feed-card:hover,
         .rt-feed-row:hover {
           border-color: hsl(var(--rt-accent)) !important;
+        }
+        .rt-feed-row[data-no-image="true"] {
+          border-left: 3px solid hsl(var(--rt-accent));
         }
         @media (max-width: 1023px) {
           .rt-feed-list-wrap { padding: 18px 16px 32px !important; }

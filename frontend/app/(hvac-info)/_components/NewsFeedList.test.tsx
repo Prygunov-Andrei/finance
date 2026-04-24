@@ -42,8 +42,13 @@ describe('NewsFeedList — view modes', () => {
 
   it('?view=list: рендерит row-структуру (image и body — соседи в flex-row)', () => {
     searchParamsState.value = 'view=list';
+    const itemsWithImg = items.map((it) =>
+      mkItem(it.id, {
+        media: [{ id: it.id, file: `http://example.com/p${it.id}.jpg`, media_type: 'image' }],
+      } as Partial<HvacNews>),
+    );
     const { container } = render(
-      <NewsFeedList items={items} hasMore={false} totalCount={items.length} />,
+      <NewsFeedList items={itemsWithImg} hasMore={false} totalCount={itemsWithImg.length} />,
     );
     const list = container.querySelector('[data-view="list"]');
     expect(list).toBeInTheDocument();
@@ -51,7 +56,7 @@ describe('NewsFeedList — view modes', () => {
     expect(list).toHaveStyle({ display: 'flex', flexDirection: 'column' });
 
     const rows = container.querySelectorAll('.rt-feed-row');
-    expect(rows.length).toBe(items.length);
+    expect(rows.length).toBe(itemsWithImg.length);
     const firstRow = rows[0] as HTMLElement;
     expect(firstRow).toHaveStyle({ display: 'flex', flexDirection: 'row' });
 
@@ -185,5 +190,78 @@ describe('NewsFeedList — text-only card (no image)', () => {
     expect(card.style.height).toBe('100%');
     const body = container.querySelector('.rt-feed-card-body') as HTMLElement;
     expect(body.style.flex).toMatch(/^1\b/);
+  });
+});
+
+describe('NewsFeedList — list-mode text-only row (no image)', () => {
+  it('list-row с image: рендерит .rt-feed-row-img, data-no-image отсутствует', () => {
+    searchParamsState.value = 'view=list';
+    const withImage = mkItem(30, {
+      media: [{ id: 1, file: 'http://example.com/p.jpg', media_type: 'image' }],
+    } as Partial<HvacNews>);
+    const { container } = render(
+      <NewsFeedList items={[withImage]} hasMore={false} totalCount={1} />,
+    );
+    const row = container.querySelector('.rt-feed-row') as HTMLElement | null;
+    expect(row).toBeInTheDocument();
+    expect(row!.getAttribute('data-no-image')).toBeNull();
+    expect(container.querySelector('.rt-feed-row-img')).toBeInTheDocument();
+  });
+
+  it('list-row без image: image-блок не рендерится, ссылка имеет data-no-image="true"', () => {
+    searchParamsState.value = 'view=list';
+    const noImage = mkItem(31, { media: [], body: '<p>Только текст, нет img.</p>' });
+    const { container } = render(
+      <NewsFeedList items={[noImage]} hasMore={false} totalCount={1} />,
+    );
+    const row = container.querySelector('.rt-feed-row') as HTMLElement | null;
+    expect(row).toBeInTheDocument();
+    expect(row!.getAttribute('data-no-image')).toBe('true');
+    expect(container.querySelector('.rt-feed-row-img')).toBeNull();
+  });
+
+  it('list-row без image: title имеет className rt-feed-row-title и крупнее (serif, 19px)', () => {
+    searchParamsState.value = 'view=list';
+    const noImage = mkItem(32, {
+      media: [],
+      body: '<p>Текст лида для text-only строки в режиме списка.</p>',
+    });
+    const { container } = render(
+      <NewsFeedList items={[noImage]} hasMore={false} totalCount={1} />,
+    );
+    const title = container.querySelector('.rt-feed-row-title') as HTMLElement | null;
+    expect(title).toBeInTheDocument();
+    expect(title!.style.fontSize).toBe('19px');
+    expect(title!.style.fontFamily).toContain('--rt-font-serif');
+    expect(title!.textContent).toBe('Новость №32');
+  });
+
+  it('list-row с image: title меньшего размера (16px serif), className тот же', () => {
+    searchParamsState.value = 'view=list';
+    const withImage = mkItem(33, {
+      media: [{ id: 1, file: 'http://example.com/p.jpg', media_type: 'image' }],
+    } as Partial<HvacNews>);
+    const { container } = render(
+      <NewsFeedList items={[withImage]} hasMore={false} totalCount={1} />,
+    );
+    const title = container.querySelector('.rt-feed-row-title') as HTMLElement | null;
+    expect(title).toBeInTheDocument();
+    expect(title!.style.fontSize).toBe('16px');
+  });
+
+  it('list-row без image: body занимает всю ширину (flex:1), лид виден', () => {
+    searchParamsState.value = 'view=list';
+    const noImage = mkItem(34, {
+      media: [],
+      body: '<p>Достаточно длинный текст лида, который должен отображаться в text-only строке режима списка для занятия пространства.</p>',
+    });
+    const { container } = render(
+      <NewsFeedList items={[noImage]} hasMore={false} totalCount={1} />,
+    );
+    const body = container.querySelector('.rt-feed-row-body') as HTMLElement;
+    expect(body.style.flex).toMatch(/^1\b/);
+    const lede = container.querySelector('.rt-feed-row-lede') as HTMLElement | null;
+    expect(lede).toBeInTheDocument();
+    expect(lede!.textContent).toMatch(/Достаточно длинный текст лида/);
   });
 });
