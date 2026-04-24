@@ -1,12 +1,55 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import type { HvacNews, HvacNewsCategoryItem } from '@/lib/api/types/hvac';
 import { NEWS_CATEGORIES } from './newsHelpers';
 
-export default function NewsCategoryFilter() {
+interface ChipItem {
+  code: string;
+  label: string;
+}
+
+interface Props {
+  /**
+   * Список новостей первой страницы. NewsCategoryFilter сам собирает уникальные
+   * `category_object` через useMemo и сортирует их по `order` → `name`.
+   * Если массив пуст или нет ни одной записи с category_object — используется
+   * захардкоженный {@link NEWS_CATEGORIES} как graceful fallback.
+   */
+  items?: HvacNews[];
+}
+
+const ALL_CHIP: ChipItem = { code: 'all', label: 'Все' };
+
+function buildChipsFromItems(items: HvacNews[]): ChipItem[] {
+  const seen = new Map<string, HvacNewsCategoryItem>();
+  for (const it of items) {
+    const co = it.category_object;
+    if (co && co.is_active && !seen.has(co.slug)) {
+      seen.set(co.slug, co);
+    }
+  }
+  if (seen.size === 0) return [];
+  return Array.from(seen.values())
+    .sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.name.localeCompare(b.name, 'ru');
+    })
+    .map((c) => ({ code: c.slug, label: c.name }));
+}
+
+export default function NewsCategoryFilter({ items = [] }: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const active = params?.get('category') || 'all';
+
+  const chips: ChipItem[] = useMemo(() => {
+    const fromItems = buildChipsFromItems(items);
+    if (fromItems.length > 0) return [ALL_CHIP, ...fromItems];
+    // Fallback на хардкод (NEWS_CATEGORIES уже содержит «Все» первым).
+    return NEWS_CATEGORIES.map((c) => ({ code: c.code, label: c.label }));
+  }, [items]);
 
   const setCategory = (code: string) => {
     const next = new URLSearchParams(params?.toString() ?? '');
@@ -28,13 +71,15 @@ export default function NewsCategoryFilter() {
       }}
       className="rt-feed-chips"
     >
-      {NEWS_CATEGORIES.map((c) => {
+      {chips.map((c) => {
         const isActive = c.code === active;
         return (
           <button
             key={c.code}
             type="button"
             onClick={() => setCategory(c.code)}
+            data-testid={`category-chip-${c.code}`}
+            aria-pressed={isActive}
             style={{
               padding: '6px 12px',
               fontSize: 12,
