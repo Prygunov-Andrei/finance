@@ -338,4 +338,52 @@ Item 109 spec-ov2 получил хвост «Фасооные изделия к
 
 **Следующий шаг:** заход 3/10 — новый PDF от PO.
 
+---
+
+## Заход 3/10 — spec-3 ТАБС 199 позиций (2026-04-24)
+
+**main @ `6cdf974`.** Счёт: **3/10 в работе** — 7 из 9 классов ошибок закрыты, 3 edge cases остались. Live: 196 items (ожидание PO 199).
+
+PDF: `Том № 10_ТАБС-116-25-ОВ от 2025.12.29_СПЕЦИФИКАЦИЯ.pdf` — Вентиляция/Кондиционирование/Теплоснабжение/ИТП, 9 страниц, rotation=0, landscape.
+
+### 9 классов ошибок + fixes
+
+| Класс | Симптом | Fix commit | Статус |
+|---|---|---|---|
+| A | Столбцы перепутаны (manufacturer→unit) — все 199 items | `33c8e76` safety-net gap>150pt | ✅ |
+| B | «по- крытием» dash-break | `84c831b` regex cyrillic-only + dash-rule | ✅ |
+| C | Фрагментарное задвоение item 12 | anti-dup в cover + dash-rule | ⚠️ item 12 остался с дублем |
+| D | «№-Дроссель-клапан» (осколок штампа в pos) | `6cdf974` pos-cleanup | ✅ |
+| E | Multi-line pos «ВЕ1-»/«ВЕ11.2» → 2 item | `_merge_continuation_rows` pos-only | ✅ |
+| F | «Площадкиподнаружные» слеплено | letter+letter → space | ✅ |
+| G | «Трубы» → Ду15/20/25 без parent | `inherit_series_parent` strict model match | ⚠️ blocked без model_name |
+| H | Radiator n=Xсек. без parent + accumulating | `6cdf974` двух-проходный snapshot | ✅ но LLM не эмитит n=X |
+| I | «Т 120°С» → «Т 1200С» | superscript "0" → "°" в _join | ✅ |
+
+### Регрессия после каждого fix
+
+- spec-ov2: **153/153 items**, Огнезащитных на позициях [13, 141, 143, 152], Противопожарных 4
+- spec-АОВ: **29/29 items**, «(N)-0,66» в model items 12-14, «Шпилька» в name 26
+- spec-3: **196 items** (Δ=3 от 199, LLM variance), все столбцы правильные
+
+### Остаётся (edge cases)
+
+- **Item 12 Class C** — LLM вернула 2 items с overlapping name, склеены через space. Dedup longest-common-substring рисков регрессии, отложено.
+- **Item 197 Class J** — «У1-Шкаф узла учета» дублируется с «Д1-Шкаф...» без model. LLM artifact.
+- **n=Xсек. suffix** для Radiator — LLM совсем не эмитит. 11 items получили одно parent name + разные qty. Не регрессия (было хуже), но не полный fit.
+
+### Новые feedback memory
+
+- `feedback_agent_rebase_old_base.md` — rebase агентской ветки перед merge + stat-check
+- `feedback_check_code_before_tz.md` — проверить текущее состояние кода ДО написания ТЗ
+
+### Итог 2026-04-24
+
+- Все 4 TD пакета (TD-02 Excel/Note/pages_summary, TD-03 polish, TD-04 seed/MIN_ITEMS/ADR/CI) замержены
+- UI-10 (suspicious banner), UI-12 (стикер), UI-13 (regression тесты), UI-14 (types split) замержены
+- DEV-BACKLOG мелочей **полностью исчерпан** — остались только крупные темы (Invoice UI, UI-11 stream, E17 Quote), каждая ждёт явного go PO
+- 7 из 9 классов spec-3 закрыты, остаются edge cases (item 12, item 197, n=X suffix)
+
+**Следующий шаг:** PO возвращается после compact — финальная сверка spec-3 или переход к заходу 4/10.
+
 
