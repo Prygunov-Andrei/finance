@@ -106,3 +106,84 @@ describe('NewsFeedList — view modes', () => {
     expect(screen.getByText(/нет публикаций/i)).toBeInTheDocument();
   });
 });
+
+describe('NewsFeedList — grid card image aspect-ratio', () => {
+  it('grid-карточка с image: рендерит .rt-feed-card-img c aspect-ratio 16/9 (без фикс. высоты)', () => {
+    const withImage = mkItem(10, {
+      media: [
+        {
+          id: 1,
+          file: 'http://example.com/photo.jpg',
+          media_type: 'image',
+        },
+      ],
+      body: '<p>Текст без img.</p>',
+    } as Partial<HvacNews>);
+    const { container } = render(
+      <NewsFeedList items={[withImage]} hasMore={false} totalCount={1} />,
+    );
+    const img = container.querySelector('.rt-feed-card-img') as HTMLElement | null;
+    expect(img).toBeInTheDocument();
+    expect(img!.style.aspectRatio).toBe('16 / 9');
+    expect(img!.style.height).toBe('');
+    expect(img!.style.background).toContain('http://example.com/photo.jpg');
+    expect(img!.style.background).toMatch(/cover/);
+  });
+});
+
+describe('NewsFeedList — text-only card (no image)', () => {
+  it('grid-карточка без image: image-блок не рендерится, ссылка имеет data-no-image="true"', () => {
+    const noImage = mkItem(20, { media: [], body: '<p>Только текст, нет img.</p>' });
+    const { container } = render(
+      <NewsFeedList items={[noImage]} hasMore={false} totalCount={1} />,
+    );
+    const card = container.querySelector('.rt-feed-card') as HTMLElement | null;
+    expect(card).toBeInTheDocument();
+    expect(card!.getAttribute('data-no-image')).toBe('true');
+    expect(container.querySelector('.rt-feed-card-img')).toBeNull();
+  });
+
+  it('grid-карточка без image: title крупнее (serif, 19px) и виден лид', () => {
+    const noImage = mkItem(21, {
+      media: [],
+      body: '<p>Длинный текст лида, который должен показываться в text-only карточке для заполнения пространства карточки и сохранения единой высоты ряда grid.</p>',
+    });
+    const { container } = render(
+      <NewsFeedList items={[noImage]} hasMore={false} totalCount={1} />,
+    );
+    const title = container.querySelector('.rt-feed-card-title') as HTMLElement | null;
+    expect(title).toBeInTheDocument();
+    expect(title!.style.fontSize).toBe('19px');
+    expect(title!.style.fontFamily).toContain('--rt-font-serif');
+
+    const lede = container.querySelector('.rt-feed-card-lede') as HTMLElement | null;
+    expect(lede).toBeInTheDocument();
+    expect(lede!.textContent).toMatch(/Длинный текст лида/);
+  });
+
+  it('grid-карточка с image: title компактный (13px, sans), лид НЕ рендерится', () => {
+    const withImage = mkItem(22, {
+      media: [{ id: 1, file: 'http://example.com/p.jpg', media_type: 'image' }],
+    } as Partial<HvacNews>);
+    const { container } = render(
+      <NewsFeedList items={[withImage]} hasMore={false} totalCount={1} />,
+    );
+    const title = container.querySelector('.rt-feed-card-title') as HTMLElement | null;
+    expect(title).toBeInTheDocument();
+    expect(title!.style.fontSize).toBe('13px');
+    expect(container.querySelector('.rt-feed-card-lede')).toBeNull();
+  });
+
+  it('grid-card flex column + body flex:1 — для одинаковой высоты ряда', () => {
+    const noImage = mkItem(23, { media: [], body: '<p>Текст.</p>' });
+    const { container } = render(
+      <NewsFeedList items={[noImage]} hasMore={false} totalCount={1} />,
+    );
+    const card = container.querySelector('.rt-feed-card') as HTMLElement;
+    expect(card.style.display).toBe('flex');
+    expect(card.style.flexDirection).toBe('column');
+    expect(card.style.height).toBe('100%');
+    const body = container.querySelector('.rt-feed-card-body') as HTMLElement;
+    expect(body.style.flex).toMatch(/^1\b/);
+  });
+});
