@@ -10,11 +10,12 @@ from django.conf import settings
 from django.db.models import Sum, Count
 from decimal import Decimal
 from .models import (
-    NewsPost, Comment, MediaUpload, SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall,
+    NewsPost, NewsAuthor, Comment, MediaUpload, SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall,
     RatingCriterion, RatingConfiguration, RatingRun,
 )
 from .serializers import (
     NewsPostSerializer, NewsPostWriteSerializer, CommentSerializer, MediaUploadSerializer,
+    NewsAuthorSerializer,
     SearchConfigurationSerializer, SearchConfigurationListSerializer,
     NewsDiscoveryRunSerializer, NewsDiscoveryRunListSerializer,
     DiscoveryAPICallSerializer, DiscoveryStatsSerializer,
@@ -433,6 +434,37 @@ class MediaUploadViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+
+class NewsAuthorViewSet(viewsets.ReadOnlyModelViewSet):
+    """Справочник NewsAuthor для ERP UI (picker editorial_author в форме
+    редактирования новости).
+
+    Read-only: авторов заводит админ через /admin/. Пагинация отключена —
+    справочник маленький (5-15 записей).
+
+    Permission: IsAdminUser — эндпоинт не публичный, доступен только staff
+    ERP-пользователям (единый паттерн с MediaUploadViewSet, RatingCriterion
+    и прочими справочниками news-app).
+
+    По умолчанию возвращаются только активные (is_active=True). Для
+    отключённых авторов можно передать ?is_active=false (или ?is_active=all
+    — оба).
+    """
+    serializer_class = NewsAuthorSerializer
+    permission_classes = [permissions.IsAdminUser]
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = NewsAuthor.objects.all()
+        is_active_param = self.request.query_params.get('is_active', None)
+        if is_active_param is None:
+            # По умолчанию — только активные.
+            queryset = queryset.filter(is_active=True)
+        elif is_active_param.lower() != 'all':
+            is_active_bool = is_active_param.lower() in ('true', '1', 'yes')
+            queryset = queryset.filter(is_active=is_active_bool)
+        return queryset
 
 
 class SearchConfigurationViewSet(viewsets.ModelViewSet):

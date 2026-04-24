@@ -38,6 +38,26 @@ class NewsAuthorLiteSerializer(serializers.ModelSerializer):
         return obj.avatar.url if obj.avatar else ""
 
 
+class NewsAuthorSerializer(serializers.ModelSerializer):
+    """Справочник NewsAuthor для ERP UI picker'а (editorial_author) в форме
+    редактирования новости.
+
+    avatar — относительный URL с `?v=<mtime>` для cache-bust (Cloudflare/CDN),
+    см. ac_catalog.serializers._url_with_mtime.
+    """
+
+    avatar = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NewsAuthor
+        fields = ("id", "name", "role", "avatar", "is_active", "order")
+        read_only_fields = fields
+
+    def get_avatar(self, obj):
+        from ac_catalog.serializers import _url_with_mtime
+        return _url_with_mtime(obj.avatar)
+
+
 class NewsPostSerializer(serializers.ModelSerializer):
     media = NewsMediaSerializer(many=True, read_only=True)
     author = serializers.SerializerMethodField()
