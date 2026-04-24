@@ -10,12 +10,13 @@ from django.conf import settings
 from django.db.models import Sum, Count
 from decimal import Decimal
 from .models import (
-    NewsPost, NewsAuthor, Comment, MediaUpload, SearchConfiguration, NewsDiscoveryRun, DiscoveryAPICall,
+    NewsPost, NewsAuthor, NewsCategory, Comment, MediaUpload, SearchConfiguration,
+    NewsDiscoveryRun, DiscoveryAPICall,
     RatingCriterion, RatingConfiguration, RatingRun,
 )
 from .serializers import (
     NewsPostSerializer, NewsPostWriteSerializer, CommentSerializer, MediaUploadSerializer,
-    NewsAuthorSerializer,
+    NewsAuthorSerializer, NewsCategorySerializer,
     SearchConfigurationSerializer, SearchConfigurationListSerializer,
     NewsDiscoveryRunSerializer, NewsDiscoveryRunListSerializer,
     DiscoveryAPICallSerializer, DiscoveryStatsSerializer,
@@ -465,6 +466,88 @@ class NewsAuthorViewSet(viewsets.ReadOnlyModelViewSet):
             is_active_bool = is_active_param.lower() in ('true', '1', 'yes')
             queryset = queryset.filter(is_active=is_active_bool)
         return queryset
+
+
+class NewsCategoryViewSet(viewsets.ModelViewSet):
+    """CRUD разделов новостей для ERP UI.
+
+    Permission: IsAdminUser — публичный фронт категории редактировать не может.
+    Pagination: отключена — справочник маленький (8-20 записей).
+    Lookup: по slug (immutable identity, FK на NewsPost ссылается по slug).
+
+    DELETE — soft: is_active=False, реальный delete запрещён. Это защищает
+    от orphan PROTECT-FK на NewsPost. Для реального переноса новостей между
+    категориями используется /bulk-update-category/.
+
+    По умолчанию возвращаются только активные. ?is_active=all — все,
+    ?is_active=false — только отключённые.
+    """
+
+    queryset = NewsCategory.objects.all()
+    serializer_class = NewsCategorySerializer
+    permission_classes = [permissions.IsAdminUser]
+    lookup_field = "slug"
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = NewsCategory.objects.all()
+        is_active_param = self.request.query_params.get("is_active", None)
+        if is_active_param is None:
+            qs = qs.filter(is_active=True)
+        elif is_active_param.lower() != "all":
+            qs = qs.filter(is_active=is_active_param.lower() in ("true", "1", "yes"))
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        """Soft-delete: is_active=False. Реальный DELETE не делаем — FK PROTECT."""
+        instance = self.get_object()
+        if not instance.is_active:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        instance.is_active = False
+        instance.save(update_fields=["is_active", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NewsBulkCategoryView(APIView):
+    """PATCH /news/bulk-update-category/ — массовый перенос новостей в раздел.
+
+    Body: {"ids": [1,2,3], "category_slug": "market"}
+    Response: {"updated": 3}
+
+    Обновляет одновременно CharField `category` и FK `category_ref` (bulk-update
+    в обход save(), чтобы не триггерить per-post auto_now/translation-hooks).
+    """
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def patch(self, request):
+        ids = request.data.get("ids") or []
+        slug = request.data.get("category_slug")
+
+        if not isinstance(ids, list) or not ids:
+            return Response(
+                {"error": "ids (non-empty list) required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not slug:
+            return Response(
+                {"error": "category_slug required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            cat = NewsCategory.objects.get(slug=slug, is_active=True)
+        except NewsCategory.DoesNotExist:
+            return Response(
+                {"error": f"category '{slug}' not found or inactive"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        updated = NewsPost.objects.filter(id__in=ids).update(
+            category=cat.slug,
+            category_ref_id=cat.slug,
+        )
+        return Response({"updated": updated})
 
 
 class SearchConfigurationViewSet(viewsets.ModelViewSet):
