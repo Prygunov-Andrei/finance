@@ -14,6 +14,18 @@ export type HvacNewsCategory =
   | 'brands'
   | 'other';
 
+/**
+ * Раздел новостей как редактируемая сущность (NewsCategory).
+ * Backend: GET/POST/PATCH/DELETE /api/v1/hvac/public/news-categories/.
+ * Slug является PK (lookup-полем), хранит ключ из HvacNewsCategory enum.
+ */
+export interface HvacNewsCategoryItem {
+  slug: string;
+  name: string;
+  order: number;
+  is_active: boolean;
+}
+
 export interface HvacNewsMedia {
   id: number;
   file: string;
@@ -86,6 +98,11 @@ export interface HvacNews {
   // фронт строит graceful fallback.
   category?: HvacNewsCategory;
   category_display?: string;
+  /**
+   * Вложенный объект раздела (NewsCategorySerializer): рендерится в публичной
+   * ленте и в админ-таблице. Может быть null для старых записей до save-sync.
+   */
+  category_object?: HvacNewsCategoryItem | null;
   lede?: string;
   reading_time_minutes?: number | null;
   editorial_author?: HvacNewsEditorialAuthor | null;
