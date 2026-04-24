@@ -293,4 +293,49 @@ Name items 2/4 теперь корректно «на узле прохода У
 
 **Следующий шаг:** заход 2/10 — новый PDF от PO. Всё готово.
 
+---
+
+## Заход 2/10 — Спецификация АОВ.pdf (2026-04-24)
+
+**main @ `4997b31`.** Счёт: **2/10 закрыт полностью**. Обе спецификации (spec-ov2 и spec-АОВ) приняты PO без замечаний.
+
+**Контекст:** spec-АОВ — 2-страничная PDF, 29 позиций (rotation=0, landscape A3, разделы 1-5). После E15-06 it3 + gpt-5.2 PO прогнал через UI, обнаружил 4 класса ошибок. Fix'ы сделаны пошагово с регрессией на spec-ov2/aov/tabs после каждого.
+
+### 4 класса ошибок + фиксы (все закрыты)
+
+| Класс | Описание | Fix | Регрессия spec-ov2 |
+|---|---|---|---|
+| **A** | Item 11 TITAN «TI5-10-N-040-030-020-66» не в model | Bbox корректный, gpt-5.2 variance (без стабильного fix; в следующем прогоне поправилось) | нет |
+| **B** | Items 12-14 Кабели — model потерял «(N)-0,66» continuation-fragment | `_merge_continuation_into_prev` + `cover_bbox_rows` расширен на `is_name_plus_model` | нет |
+| **C** | Items 15-16 — cross-page continuation rows page 2 idx 0-1 приклеились как начало item 16 | **Cross-page continuation buffer** в `_process_batch_column_aware`: rows с пустыми pos+qty+unit+model+brand и lowercase-start name изымаются с page N, склеиваются в last item page N-1 | нет (проверил — нет таких кейсов) |
+| **D** | Item 26 «5.6 Шпилька» — словосочетание попало в pos-колонку | `_POS_WITH_WORD_RE` split в `extract_structured_rows`: если pos matches `^\d+(\.\d+)?\s+[А-Я][а-я]{3,}` — split на pos='5.6' + word→name | нет |
+
+### Дополнительно: source_row_index fallback
+
+**Скрытая регрессия от gpt-5.2:** модель молча игнорирует правило 17 промпта (requires source_row_index per item). Из-за этого `restore_from_bbox_rows` и `cover_bbox_rows` оба disabled (have_any_index=False) — весь bbox safety-net не работал.
+
+**Fix:** `backfill_source_row_index` — sequential mapping items[i] → i-я «head row» (row с непустым pos OR qty). Работает как fallback если LLM не заполнила. Разблокировало post-process — spec-tabs вырос 183→203 items.
+
+### Регрессия от Fix #4 (cross-page) — поймана PO на визуальной сверке
+
+Item 109 spec-ov2 получил хвост «Фасооные изделия к вентиляторам ПДВ» — row 0 page 8 (section-heading без `is_section_heading` flag) таскался в buffer. **Hotfix:** требование `_looks_like_continuation(name)` в condition → section-heading не таскается (начинается с заглавной).
+
+### Финал заход 2/10
+
+**Live результаты (spec-АОВ, gpt-5.2):**
+- **29/29 items** — полное соответствие ожиданию PO
+- Код TI5-10-...-66 полный в item 11 model
+- Items 12-14: model = «КГППнг(A)-HF NxM (N)-0,66» (правильный склей)
+- Item 15: name правильно склеен с cross-page continuation
+- Item 26: name='Шпилька', pos='5.6'
+- Нет дубля «продуктов при горении…», нет чужих хвостов
+
+**Регрессия всех 4 goldens:**
+- spec-ov2: 153-154 items, item 109 чистый, Огнезащитные/Противопожарные на местах
+- spec-aov: 29 items (стабильно)
+- spec-tabs: 203 items (было 183-196, +7 от разблокированного post-process)
+- spec-АОВ: 29/29 items, все 4 класса ошибок закрыты
+
+**Следующий шаг:** заход 3/10 — новый PDF от PO.
+
 
