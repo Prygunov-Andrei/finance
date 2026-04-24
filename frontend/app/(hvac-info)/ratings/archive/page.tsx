@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingArchiveModels } from '@/lib/api/services/rating';
 import BackToRating from '../_components/BackToRating';
-import SectionFooter from '../_components/SectionFooter';
+import SectionFooter from '../../_components/SectionFooter';
 import StickyCollapseHero from '../_components/StickyCollapseHero';
 
 import ArchiveHero, { ArchiveHeroCollapsed } from './ArchiveHero';

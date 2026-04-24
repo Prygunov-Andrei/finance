@@ -8,7 +8,7 @@ import HeroBlock, { HeroBlockCollapsed } from './_components/HeroBlock';
 import DesktopListing from './_components/DesktopListing';
 import MobileListing from './_components/MobileListing';
 import SeoBlock from './_components/SeoBlock';
-import SectionFooter from './_components/SectionFooter';
+import SectionFooter from '../_components/SectionFooter';
 
 // SSR каждый запрос — ISR snapshot при первом deploy ловит пустой backend
 // (Docker build context не видит compose-сервисы). Для 27 моделей overhead ~50ms.

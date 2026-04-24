@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Eyebrow, T } from './primitives';
+import { Eyebrow, T } from '../ratings/_components/primitives';
 
 const LINKS: Array<[string, string]> = [
   ['Как мы считаем', '/ratings/methodology/'],

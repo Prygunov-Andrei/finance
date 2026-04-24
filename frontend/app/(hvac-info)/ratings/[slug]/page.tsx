@@ -18,7 +18,7 @@ import DetailIndexViz from '../_components/DetailIndexViz';
 import DetailSpecs from '../_components/DetailSpecs';
 import DetailBuy from '../_components/DetailBuy';
 import DetailReviews from '../_components/DetailReviews';
-import SectionFooter from '../_components/SectionFooter';
+import SectionFooter from '../../_components/SectionFooter';
 import { fallbackLede } from '../_components/detailHelpers';
 
 export const revalidate = 3600;
