@@ -101,6 +101,7 @@ Phase 2:
 - Cost не блокер по решению PO, но мониторинг:
   - Phase 1 (gpt-4o vs gpt-4o-mini): ~10-20× дороже на token.
   - Phase 2: triggered < 20% страниц (по confidence score).
+  - TD-04 (2026-04-24) — после switch на gpt-5.2 цифры ниже.
 
 ### Минусы
 
@@ -111,6 +112,37 @@ Phase 2:
 - Multimodal retry прогоняет страницу ПОВТОРНО — если gpt-4o упадёт 500 / 429
   на second call, результат Phase 1 остаётся финальным (graceful degradation
   через broker-selection).
+
+### Cost refresh (TD-04, 2026-04-24 — gpt-5.2 + prompt caching)
+
+Модель по умолчанию теперь `gpt-5.2` для всех задач (extract / multimodal /
+classify) — см. `docker-compose.yml` и QA-CYCLE-10 retrospect (qa-round 1).
+Prompt caching OpenAI активирован автоматически (temperature=0, стабильный
+NORMALIZE_PROMPT_TEMPLATE → 10-минутная cache ttl).
+
+**Прайс gpt-5.2 на 2026-04-24** (platform.openai.com/docs/pricing):
+- Input: $1.75 / 1M tokens.
+- Cached input: $0.175 / 1M tokens (-90%).
+- Output: $14.00 / 1M tokens.
+
+**spec-ov2 (9 стр, mean из 3 curl-прогонов):**
+
+| Phase | prompt | cached | non-cached in | completion | cost |
+| --- | --- | --- | --- | --- | --- |
+| Phase 1 (text, 9 calls) | 65 113 | 59 008 (90.6%) | 6 105 | 17 007 | $0.259 |
+| Phase 2 (multimodal, 1.3 retries) | 12 288 | 9 216 | 3 072 | 941 | $0.020 |
+| **Итого** |  |  |  |  | **≈ $0.28** |
+
+**spec-aov (2 стр, 1 прогон):** Phase 1 $0.056 + Phase 2 $0.040 ≈ **$0.096 / doc**.
+
+**spec-tabs (~10 стр, экстраполяция по spec-ov2):** ≈ **$0.30 / doc**.
+
+Итого по сравнению со старой оценкой ADR-0024 ($0.011 на gpt-4o-mini, 143
+items) — cost вырос ~25×, recall 143→153 items (101% от 152). PO принял
+trade-off в qa-round 1.
+
+Caching даёт значимую экономию на input ($0.010 вместо $0.103 при 100%
+non-cached). Без caching cost был бы ≈$0.38/doc.
 
 ### Риски
 

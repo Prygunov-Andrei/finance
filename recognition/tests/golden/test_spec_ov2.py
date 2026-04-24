@@ -41,16 +41,12 @@ EXPECTED_PAGES_TOTAL = 9
 MIN_ITEMS = 138
 MIN_SECTIONS = 4
 
-# E15.04 LLM-path baseline: ≥140.
-# E15-06 (2026-04-23, QA-cycle round 1): после fix #51/#52/#53/#54/#55
-# качество items вырастет семантически (Решётка больше не поглощает
-# Воздуховоды; «+10%» попадает в comments; continuation-orphans склеиваются),
-# но суммарный count на этом PDF остался 141 — отдельные «Дефлектор Цаги»
-# по сути имеют разные model_name и корректно разделены. Цель 148 из ТЗ
-# требует либо доп. итерации по bbox (хвостовые потери), либо изменения
-# critera. Нижняя граница 140 держится как живая; поднять когда прогон
-# стабильно даст 145+.
-LLM_MIN_ITEMS = 140
+# E15.04 LLM-path baseline.
+# TD-04 (2026-04-24): после E15.03 hybrid + TD-03 polish прогон spec-ov2
+# стабильно даёт 153 items (3/3 curl-прогона: 153/153/153). Поднят с 140→142
+# как живая нижняя граница с запасом на LLM variance (~5%). Потолок ТЗ 148 уже
+# превышен; поднимать дальше до 148+ только после 10+ прогонов без дропов.
+LLM_MIN_ITEMS = 142
 LLM_MIN_SECTIONS = 6
 
 
@@ -125,11 +121,11 @@ _LLM_SKIP_REASON = "OPENAI_API_KEY не задан — skip golden_llm"
 @pytest.mark.asyncio
 @pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason=_LLM_SKIP_REASON)
 async def test_ov2_spec_llm_normalize_recall():
-    """E15.04: column-aware + gpt-4o-mini → recall ≥140 / 152.
+    """E15.04: column-aware + gpt-5.2 → recall ≥142 / 152.
 
-    Цель ТЗ — ≥145. Нижняя граница 140 учитывает variance LLM temperature=0
+    Цель ТЗ — ≥145. Нижняя граница 142 учитывает variance LLM temperature=0
     (строго говоря детерминирован, но OpenAI иногда делает микро-вариации).
-    При устойчивом recall ≥145 поднять LLM_MIN_ITEMS до 145.
+    TD-04 bump 140→142: 3/3 curl-прогона на свежей базе дали 153 items.
     """
     from app.providers.openai_vision import OpenAIVisionProvider
 

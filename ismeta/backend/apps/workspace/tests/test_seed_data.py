@@ -4,6 +4,7 @@ import pytest
 from django.core.management import call_command
 
 from apps.estimate.matching.knowledge import ProductKnowledge
+from apps.estimate.models import EstimateItem
 from apps.workspace.models import Workspace
 
 SEED_WS_ID = "11111111-1111-1111-1111-111111111111"
@@ -60,3 +61,27 @@ class TestSeedDevData:
         call_command("seed_dev_data")
         assert Workspace.objects.filter(id=SEED_WS_ID).exists()
         assert Workspace.objects.count() >= 2
+
+    def test_tech_specs_populated(self):
+        """TD-04 #1: seed создаёт items с разнообразным tech_specs.
+
+        Первые 6 позиций «Вентиляции» главной сметы — 6 вариантов:
+        brand+model+flow, только model, только brand, manufacturer+comments+system,
+        пустой, brand+model+power_kw+class. Всего покрытие 6 ключей ниже.
+        """
+        call_command("seed_dev_data")
+        items = list(
+            EstimateItem.objects.filter(workspace_id=SEED_WS_ID).values_list(
+                "tech_specs", flat=True
+            )
+        )
+        assert items, "seed должен создать items"
+
+        def has_key(key: str) -> bool:
+            return any((ts or {}).get(key) for ts in items)
+
+        for key in ("brand", "model_name", "manufacturer", "comments", "system", "power_kw"):
+            assert has_key(key), f"нет items с заполненным tech_specs.{key}"
+
+        # Negative control — хотя бы один item с полностью пустым tech_specs.
+        assert any(not (ts or {}) for ts in items), "нет items с пустым tech_specs"

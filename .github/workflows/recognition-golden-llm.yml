@@ -1,0 +1,97 @@
+name: Recognition Golden LLM (draft)
+
+# TD-04 (DEV-BACKLOG #23): nightly регрессия golden_llm тестов recognition
+# на реальных OpenAI вызовах. Сейчас DRAFT — schedule cron отключён, секрет
+# OPENAI_API_KEY_CI ещё не создан в репе. PO настроит secret → снять комментарий
+# с cron-блока в follow-up.
+#
+# Ручной запуск:  Actions → Recognition Golden LLM (draft) → Run workflow
+# Ожидаемое время: 3-5 мин на matrix entry (build ~1 мин + pytest 1-2 мин).
+
+on:
+  workflow_dispatch:
+    inputs:
+      llm_extract_model:
+        description: "LLM model override (default from docker-compose: gpt-5.2)"
+        required: false
+        default: "gpt-5.2"
+  # schedule:
+  #   # 02:00 UTC nightly — после активации secret OPENAI_API_KEY_CI.
+  #   - cron: "0 2 * * *"
+
+jobs:
+  golden-llm:
+    name: ${{ matrix.golden }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        golden:
+          - spec-ov2
+          - spec-aov
+          - spec-tabs
+        include:
+          - golden: spec-ov2
+            test_path: tests/golden/test_spec_ov2.py
+          - golden: spec-aov
+            test_path: tests/golden/test_spec_aov.py
+          - golden: spec-tabs
+            test_path: tests/golden/test_spec_tabs.py
+    env:
+      # Секрет пока не создан — job упадёт на «OPENAI_API_KEY пуст → skipif»
+      # в тестах. Это ожидаемо для draft-режима (workflow_dispatch для smoke
+      # YAML-синтаксиса). После PO-настройки secret — тесты заработают.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_CI }}
+      RECOGNITION_API_KEY: dev-recognition-key
+      LLM_EXTRACT_MODEL: ${{ inputs.llm_extract_model || 'gpt-5.2' }}
+      LLM_MULTIMODAL_MODEL: ${{ inputs.llm_extract_model || 'gpt-5.2' }}
+      LLM_CLASSIFY_MODEL: ${{ inputs.llm_extract_model || 'gpt-5.2' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build recognition image
+        working-directory: ismeta
+        run: |
+          cp .env.example .env || true
+          docker compose -f docker-compose.yml build recognition
+
+      - name: Start recognition + deps
+        working-directory: ismeta
+        run: |
+          docker compose -f docker-compose.yml up -d postgres redis recognition
+          # Ждём healthcheck recognition (uvicorn на 8003).
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8003/v1/healthz >/dev/null 2>&1; then
+              echo "recognition ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run golden_llm tests
+        run: |
+          docker exec -e OPENAI_API_KEY="$OPENAI_API_KEY" ismeta-recognition \
+            pytest -m golden_llm -v --tb=short ${{ matrix.test_path }}
+
+      - name: Collect pages_summary artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+          # pytest не дампит pages_summary сам — placeholder.
+          # TODO (post-draft): добавить в golden_llm фикстуру tmp_path → write_json(pages_summary).
+          docker logs ismeta-recognition > artifacts/recognition-${{ matrix.golden }}.log 2>&1 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-llm-${{ matrix.golden }}
+          path: artifacts/
+          retention-days: 7
+
+      - name: Tear down compose
+        if: always()
+        working-directory: ismeta
+        run: docker compose -f docker-compose.yml down -v

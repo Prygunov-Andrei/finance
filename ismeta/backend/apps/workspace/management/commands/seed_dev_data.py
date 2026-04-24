@@ -63,32 +63,33 @@ SEED_WORKSPACES = [
 #   - key=True + разные proc-статусы
 MAIN_ITEMS = {
     "Вентиляция": [
-        # brand+model+specs, key, quoted
+        # TD-04: первые 6 items покрывают варианты tech_specs для ручной UI-проверки
+        # (UI-02 brand/model, UI-04 model+comments, inline-edit, tooltips) — не удалять.
+        # Вариант 1: brand + model + произвольный ключ (flow).
         {"name": "Вентилятор канальный WNK 100/1", "unit": "шт", "qty": 2,
          "eq_price": 18500, "key": True, "proc": "quoted",
          "brand": "Korf", "model": "WNK 100/1",
-         "specs": {"flow": "500 м³/ч", "power": "120 Вт"}},
-        # brand+model+specs, key, requested
+         "specs": {"flow": "2600 м³/ч"}},
+        # Вариант 2: только model (brand отсутствует).
         {"name": "Вентилятор крышный MOB2600/45-3a", "unit": "шт", "qty": 1,
          "eq_price": 145000, "key": True, "proc": "requested",
-         "brand": "Systemair", "model": "MOB 2600/45-3a",
-         "specs": {"flow": "2600 м³/ч", "power": "0.75 кВт"}},
-        # без brand/model, specs
+         "model": "MOB 2600/45-3a"},
+        # Вариант 3: только brand.
         {"name": "Воздуховод прямоугольный 200×100 мм", "unit": "м.п.", "qty": 46,
          "mat_price": 460,
-         "specs": {"section": "200×100", "material": "оцинкованная сталь 0.7 мм"}},
-        # без brand/model, specs
+         "brand": "ExtraLink"},
+        # Вариант 4: manufacturer + comments + system (без brand/model).
         {"name": "Воздуховод прямоугольный 400×200 мм", "unit": "м.п.", "qty": 32,
          "mat_price": 820,
-         "specs": {"section": "400×200", "material": "оцинкованная сталь 0.7 мм"}},
-        # только brand
+         "specs": {"manufacturer": "АО «ДКС»", "comments": "+10%", "system": "ПДВ"}},
+        # Вариант 5: пустой tech_specs (negative control для tooltip/inline-edit).
         {"name": "Решётка АМН 200×200", "unit": "шт", "qty": 12,
-         "mat_price": 1250,
-         "brand": "Арктос"},
-        # только brand
+         "mat_price": 1250},
+        # Вариант 6: brand + model + power_kw + class (полный tech_specs tooltip).
         {"name": "Диффузор потолочный ДПУ-С", "unit": "шт", "qty": 8,
          "mat_price": 1800,
-         "brand": "Арктос"},
+         "brand": "Арктика", "model": "ДПУ-С",
+         "specs": {"power_kw": "7.5", "class": "EI60"}},
         # без brand/model
         {"name": "Клапан огнезадерживающий КПУ-1М Ø250", "unit": "шт", "qty": 4,
          "eq_price": 12400, "key": False, "proc": "none",
