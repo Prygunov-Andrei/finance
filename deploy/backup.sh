@@ -91,6 +91,31 @@ backup_db_docker() {
         pg_dump -Fc -U "$db_user" "$db_name" > "$dump_path"
 }
 
+# Проверяет, существует ли БД с заданным именем.
+# В docker-режиме ходим через `docker compose exec postgres psql -l`,
+# в local-режиме используем локальный psql.
+# Возвращает 0 если БД существует, 1 если нет.
+db_exists() {
+    local db_name="$1"
+    local db_user="$2"
+    local db_host="${3:-}"
+    local db_port="${4:-}"
+
+    if [ "$RUN_MODE" = "docker" ]; then
+        docker compose -f docker-compose.prod.yml exec -T postgres \
+            psql -U "$db_user" -lqt 2>/dev/null \
+            | cut -d \| -f 1 \
+            | grep -qw "$db_name"
+    else
+        if ! command -v psql >/dev/null 2>&1; then
+            return 1
+        fi
+        psql -h "$db_host" -p "$db_port" -U "$db_user" -lqt 2>/dev/null \
+            | cut -d \| -f 1 \
+            | grep -qw "$db_name"
+    fi
+}
+
 archive_directory() {
     local source_path="$1"
     local archive_path="$2"
@@ -117,12 +142,20 @@ verify_dump "$PRIMARY_DUMP_PATH"
 
 echo -e "${GREEN}[2/5] Backing up legacy HVAC PostgreSQL database (custom dump)...${NC}"
 HVAC_DUMP_PATH="$BACKUP_DIR/hvac_legacy_backup_$DATE.dump"
-if [ "$RUN_MODE" = "docker" ]; then
-    backup_db_docker "$HVAC_LEGACY_DB_NAME" "$HVAC_LEGACY_DB_USER" "$HVAC_DUMP_PATH"
+# Единая инсталляция: и ERP, и HVAC живут в одной БД finans_assistant.
+# Отдельной hvac_db здесь нет — без этой проверки pg_dump висит на таймауте
+# и ломает автоматические бекапы. Если hvac_db реально появится
+# (отдельная инсталляция), дамп снова пойдёт автоматически.
+if db_exists "$HVAC_LEGACY_DB_NAME" "$HVAC_LEGACY_DB_USER" "$HVAC_LEGACY_DB_HOST" "$HVAC_LEGACY_DB_PORT"; then
+    if [ "$RUN_MODE" = "docker" ]; then
+        backup_db_docker "$HVAC_LEGACY_DB_NAME" "$HVAC_LEGACY_DB_USER" "$HVAC_DUMP_PATH"
+    else
+        backup_db_local "$HVAC_LEGACY_DB_NAME" "$HVAC_LEGACY_DB_USER" "$HVAC_LEGACY_DB_HOST" "$HVAC_LEGACY_DB_PORT" "$HVAC_DUMP_PATH"
+    fi
+    verify_dump "$HVAC_DUMP_PATH"
 else
-    backup_db_local "$HVAC_LEGACY_DB_NAME" "$HVAC_LEGACY_DB_USER" "$HVAC_LEGACY_DB_HOST" "$HVAC_LEGACY_DB_PORT" "$HVAC_DUMP_PATH"
+    echo -e "${YELLOW}Warning: database '$HVAC_LEGACY_DB_NAME' not found — skipping legacy HVAC dump.${NC}"
 fi
-verify_dump "$HVAC_DUMP_PATH"
 
 echo -e "${GREEN}[3/5] Backing up legacy HVAC media...${NC}"
 HVAC_MEDIA_ARCHIVE="$BACKUP_DIR/hvac_legacy_media_$DATE.tar.gz"
