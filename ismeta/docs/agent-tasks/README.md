@@ -22,9 +22,10 @@
 
 | Файл | Кому | Статус | Ветка |
 |---|---|---|---|
-| [E15-06-it2-vision-safety-net-petya.md](./E15-06-it2-vision-safety-net-petya.md) | Петя | 🔴 **Active** — заход 1/10 repeated (vision counter + bbox-row comparison + gpt-5.2 A/B) | `recognition/12-e15-06-it2-vision` |
+| [TD-02-excel-note-suspicious-petya.md](./TD-02-excel-note-suspicious-petya.md) | Петя | 🟢 **Active** — Excel columns + Estimate.note + pages_summary | `ismeta/td-02-excel-note-suspicious` |
+| [UI-10-suspicious-pages-warning-fedya.md](./UI-10-suspicious-pages-warning-fedya.md) | Федя | 🟡 **Active** — warning в pdf-import-dialog (unit-тестами пока, визуально после TD-02) | `ismeta/ui-10-suspicious-pages` |
+| [UI-12-estimate-note-sticker-fedya.md](./UI-12-estimate-note-sticker-fedya.md) | Федя | 🟡 **Queued** — стикер-заметка, после мержа TD-02 | (pending) |
 | [E17-quote-xlsx-parser-petya.md](./E17-quote-xlsx-parser-petya.md) | Петя | 🟡 **DRAFT** — не стартовать без явного go PO | (pending) |
-| UI-10 pages-summary warning | Федя | 🟢 **Follow-up после E15-06** — показать warning для pages с `pages_summary[].suspicious=true` в `pdf-import-dialog.tsx` | (pending) |
 
 **Примечание:** E17 в draft — scope проектировался до обсуждения с PO. Workflow КП в ERP — отдельная продуктовая тема (см. `ismeta/docs/OPEN-QUESTIONS-procurement-ux.md`). Backend-расширение Recognition полезно само по себе, но запускаем только по явному согласию.
 
@@ -49,6 +50,7 @@
 | UI-08-column-widths-resize-persist-fedya.md | `ismeta/ui-08-column-widths` | 2026-04-23 (main `f2b01cc`) |
 | UI-09-sections-move-merge-fedya.md | `ismeta/ui-09-sections-operations` | 2026-04-23 (main `aedf80b`) |
 | E15-06-spec-robustness-petya.md | `recognition/11-e15-06-spec-robustness` | 2026-04-23 (main `49ee1be`) |
+| E15-06-it2-vision-safety-net-petya.md | `recognition/12-e15-06-it2-vision` | 2026-04-23 (main `a88b3f4`) |
 
 ## История
 
