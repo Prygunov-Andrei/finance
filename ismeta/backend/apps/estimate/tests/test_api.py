@@ -102,6 +102,80 @@ class TestEstimateCRUD:
         estimate_a.refresh_from_db()
         assert estimate_a.status == "archived"
 
+    # TD-02 (#29): свободная заметка PO к смете — «стикер».
+    def test_note_default_empty(self, client, ws_a, estimate_a):
+        resp = client.get(
+            f"/api/v1/estimates/{estimate_a.id}/", **{WS_HEADER: str(ws_a.id)}
+        )
+        assert resp.status_code == 200
+        assert resp.data["note"] == ""
+
+    def test_patch_note_persists(self, client, ws_a, estimate_a):
+        resp = client.patch(
+            f"/api/v1/estimates/{estimate_a.id}/",
+            {"note": "Позвонить Иванову по БП-2 после 15:00"},
+            format="json",
+            **{WS_HEADER: str(ws_a.id)},
+        )
+        assert resp.status_code == 200
+        assert resp.data["note"] == "Позвонить Иванову по БП-2 после 15:00"
+        estimate_a.refresh_from_db()
+        assert estimate_a.note == "Позвонить Иванову по БП-2 после 15:00"
+
+    def test_patch_note_overwrites_no_history(self, client, ws_a, estimate_a):
+        """PO спец: история не хранится, value перезаписывается."""
+        client.patch(
+            f"/api/v1/estimates/{estimate_a.id}/",
+            {"note": "первая версия"},
+            format="json",
+            **{WS_HEADER: str(ws_a.id)},
+        )
+        resp = client.patch(
+            f"/api/v1/estimates/{estimate_a.id}/",
+            {"note": "вторая"},
+            format="json",
+            **{WS_HEADER: str(ws_a.id)},
+        )
+        assert resp.status_code == 200
+        estimate_a.refresh_from_db()
+        assert estimate_a.note == "вторая"
+
+    def test_patch_note_empty_string(self, client, ws_a, estimate_a):
+        estimate_a.note = "что-то"
+        estimate_a.save(update_fields=["note"])
+        resp = client.patch(
+            f"/api/v1/estimates/{estimate_a.id}/",
+            {"note": ""},
+            format="json",
+            **{WS_HEADER: str(ws_a.id)},
+        )
+        assert resp.status_code == 200
+        estimate_a.refresh_from_db()
+        assert estimate_a.note == ""
+
+    def test_patch_note_cap_5000_chars(self, client, ws_a, estimate_a):
+        """Cap на 5000 символов — 422/400 при превышении."""
+        resp = client.patch(
+            f"/api/v1/estimates/{estimate_a.id}/",
+            {"note": "x" * 5001},
+            format="json",
+            **{WS_HEADER: str(ws_a.id)},
+        )
+        assert resp.status_code == 400
+        # поле упомянуто в ошибке
+        assert "note" in resp.data
+
+    def test_patch_note_cap_boundary_5000_ok(self, client, ws_a, estimate_a):
+        resp = client.patch(
+            f"/api/v1/estimates/{estimate_a.id}/",
+            {"note": "y" * 5000},
+            format="json",
+            **{WS_HEADER: str(ws_a.id)},
+        )
+        assert resp.status_code == 200
+        estimate_a.refresh_from_db()
+        assert len(estimate_a.note) == 5000
+
 
 @pytest.mark.django_db
 class TestSectionCRUD:

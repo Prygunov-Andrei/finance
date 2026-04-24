@@ -1,11 +1,12 @@
 """Serializers для Estimate API (E4.1)."""
 
-import json
-
 from rest_framework import serializers
 
 from apps.estimate.models import Estimate, EstimateItem, EstimateSection
 from apps.estimate.schemas import MarkupConfig
+
+# TD-02 (#29): cap для Estimate.note — чтобы не злоупотребляли free-form стикером.
+ESTIMATE_NOTE_MAX_LENGTH = 5000
 
 
 class EstimateListSerializer(serializers.ModelSerializer):
@@ -27,6 +28,7 @@ class EstimateDetailSerializer(serializers.ModelSerializer):
             "default_material_markup", "default_work_markup",
             "total_equipment", "total_materials", "total_works", "total_amount",
             "man_hours", "profitability_percent", "advance_amount", "estimated_days",
+            "note",
             "created_by", "created_at", "updated_at",
         ]
         read_only_fields = [
@@ -42,6 +44,16 @@ class EstimateDetailSerializer(serializers.ModelSerializer):
     def validate_default_work_markup(self, value):
         if value:
             MarkupConfig.model_validate(value)
+        return value
+
+    def validate_note(self, value):
+        if value is None:
+            return ""
+        if len(value) > ESTIMATE_NOTE_MAX_LENGTH:
+            raise serializers.ValidationError(
+                f"Заметка не должна превышать {ESTIMATE_NOTE_MAX_LENGTH} символов "
+                f"(передано {len(value)})."
+            )
         return value
 
 

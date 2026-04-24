@@ -145,6 +145,135 @@ class TestExcelImport:
         estimate.refresh_from_db()
         assert estimate.total_amount > 0
 
+    # -----------------------------------------------------------------
+    # TD-02 (DEV-BACKLOG #12): парсинг tech_specs-колонок UI-04
+    # -----------------------------------------------------------------
+
+    def _make_tech_specs_xlsx(self, rows, headers=None):
+        """Вариант _make_xlsx с расширенными колонками UI-04."""
+        headers = headers or [
+            "Наименование", "Модель", "Производитель", "Бренд", "Система",
+            "Ед.изм.", "Кол-во", "Цена оборуд.", "Цена мат.", "Цена работ",
+            "Примечание", "row_id",
+        ]
+        wb = Workbook()
+        ws = wb.active
+        ws.append(headers)
+        for row in rows:
+            ws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
+
+    def test_import_reads_model_manufacturer_brand(self, estimate, ws):
+        """Модель/Производитель/Бренд → в tech_specs."""
+        xlsx = self._make_tech_specs_xlsx([
+            ["Сплит 7k", "RQ-71BV-A1", "ООО Фуджицу", "Fujitsu", "К-01",
+             "шт", 2, 0, 45000, 0, "Установить до 10.05", None],
+        ])
+        result = import_estimate_xlsx(str(estimate.id), str(ws.id), xlsx)
+        assert result.created == 1
+        assert result.errors == []
+
+        item = EstimateItem.objects.get(estimate=estimate)
+        assert item.name == "Сплит 7k"
+        assert item.tech_specs.get("model_name") == "RQ-71BV-A1"
+        assert item.tech_specs.get("manufacturer") == "ООО Фуджицу"
+        assert item.tech_specs.get("brand") == "Fujitsu"
+        assert item.tech_specs.get("system") == "К-01"
+        assert item.tech_specs.get("comments") == "Установить до 10.05"
+
+    def test_import_header_variations(self, estimate, ws):
+        """Разные написания заголовков: Марка/Артикул/Изготовитель/Вендор/
+        Notes/Контур — должны мапиться корректно."""
+        xlsx = self._make_tech_specs_xlsx(
+            [["Кабель ВВГнг-LS 3x2.5", "VV-3x2.5", "ЭКЗ", "ЭЛКАБ",
+              "Э-01", "м", 100, 0, 120, 30, "bulk", None]],
+            headers=["Наименование", "Марка", "Изготовитель", "Бренд",
+                     "Контур", "Ед. изм.", "К-во", "Цена оборуд.",
+                     "Цена мат.", "Цена работ", "Notes", "row_id"],
+        )
+        result = import_estimate_xlsx(str(estimate.id), str(ws.id), xlsx)
+        assert result.created == 1
+        item = EstimateItem.objects.get(estimate=estimate)
+        assert item.tech_specs.get("model_name") == "VV-3x2.5"
+        assert item.tech_specs.get("manufacturer") == "ЭКЗ"
+        assert item.tech_specs.get("brand") == "ЭЛКАБ"
+        assert item.tech_specs.get("system") == "Э-01"
+        assert item.tech_specs.get("comments") == "bulk"
+
+    def test_import_empty_tech_specs_no_regression(self, estimate, ws):
+        """Если колонки UI-04 пустые — tech_specs остаётся {}."""
+        xlsx = self._make_tech_specs_xlsx([
+            ["Только имя", "", "", "", "", "шт", 1, 0, 100, 0, "", None],
+        ])
+        result = import_estimate_xlsx(str(estimate.id), str(ws.id), xlsx)
+        assert result.created == 1
+        item = EstimateItem.objects.get(estimate=estimate)
+        # Пустые значения не попадают в tech_specs.
+        assert item.tech_specs == {} or all(
+            not item.tech_specs.get(k)
+            for k in ("model_name", "brand", "manufacturer", "system", "comments")
+        )
+
+    def test_import_round_trip_preserves_existing_specs(self, estimate, ws):
+        """Round-trip: при update по row_id tech_specs merge'ится, а не
+        перезаписывается. Ключи, которых нет в Excel (power_kw и т.д.),
+        должны остаться."""
+        section = EstimateSection.objects.create(
+            estimate=estimate, workspace=ws, name="Вентиляция", sort_order=1,
+        )
+        item = EstimateService.create_item(section, estimate, ws.id, {
+            "name": "Вентилятор",
+            "unit": "шт",
+            "quantity": 1,
+            "material_price": 50000,
+            "tech_specs": {"power_kw": 2.2, "flow": "2600 м³/ч"},
+        })
+        old_row_id = str(item.row_id)
+
+        xlsx = self._make_tech_specs_xlsx([
+            ["Вентилятор обновлённый", "MOB-45", "MOB-LLC", "MOB", "В-01",
+             "шт", 1, 0, 55000, 0, "поправили цену", old_row_id],
+        ])
+        result = import_estimate_xlsx(str(estimate.id), str(ws.id), xlsx)
+        assert result.updated == 1
+        assert result.created == 0
+
+        updated = EstimateItem.all_objects.get(id=item.id)
+        assert updated.name == "Вентилятор обновлённый"
+        assert updated.tech_specs.get("model_name") == "MOB-45"
+        assert updated.tech_specs.get("brand") == "MOB"
+        assert updated.tech_specs.get("manufacturer") == "MOB-LLC"
+        assert updated.tech_specs.get("system") == "В-01"
+        assert updated.tech_specs.get("comments") == "поправили цену"
+        # НЕ перезаписанные ключи сохранились.
+        assert str(updated.tech_specs.get("power_kw")) == "2.2"
+        assert updated.tech_specs.get("flow") == "2600 м³/ч"
+
+    def test_import_cyrillic_model_with_hyphens(self, estimate, ws):
+        """Edge-case: кириллица с дефисами «ВВГнг-LS», «ОВ-МД»."""
+        xlsx = self._make_tech_specs_xlsx([
+            ["Кабель", "ВВГнг-LS-3x2.5", "", "", "", "м", 50, 0, 110, 30, "", None],
+        ])
+        result = import_estimate_xlsx(str(estimate.id), str(ws.id), xlsx)
+        assert result.created == 1
+        item = EstimateItem.objects.get(estimate=estimate)
+        assert item.tech_specs.get("model_name") == "ВВГнг-LS-3x2.5"
+
+    def test_import_no_tech_specs_columns_no_regression(self, estimate, ws):
+        """Старый Excel без колонок UI-04 — всё ещё импортится корректно."""
+        xlsx = _make_xlsx([
+            ["Item 1", "шт", 10, 100, 200, 50, None],
+        ])
+        result = import_estimate_xlsx(str(estimate.id), str(ws.id), xlsx)
+        assert result.created == 1
+        item = EstimateItem.objects.get(estimate=estimate)
+        assert item.name == "Item 1"
+        # tech_specs пустой — нет колонок не откуда взять.
+        assert item.tech_specs == {}
+
     def test_multipart_upload_api(self, client, estimate, ws):
         xlsx = _make_xlsx([
             ["Кабель API", "м", 50, 0, 150, 50, None],

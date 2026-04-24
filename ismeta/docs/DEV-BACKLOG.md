@@ -374,6 +374,12 @@ Cold-start проблема решена.
 **Исполнитель:** Федя.
 **Приоритет:** 🟡 follow-up к E15-06 (после мержа).
 
+**TD-02 (2026-04-24, backend):** `pages_summary` теперь пробрасывается из
+`Recognition.parse_spec` → `POST /api/v1/estimates/:id/import/pdf/` response
+(контракт: `pages_summary: list[{page, expected_count, expected_count_vision,
+parsed_count, retried, suspicious}]`). Ключ присутствует в обеих ветках
+(happy + no-items). Блокер UI-10 снят — Федя может приступать.
+
 ### 27. UI-11 — стриминг прогресса PDF-import (живой прогресс по страницам)
 
 **Запрос PO (QA-цикл заход 1/10, 2026-04-23):**
@@ -410,7 +416,7 @@ Cold-start проблема решена.
 **Исполнитель:** Петя (backend + recognition stream) + Федя (frontend).
 **Приоритет:** 🟡 major UX — не блокер для функциональности, но раздражает на больших PDF. Сделать после закрытия QA-цикла 10-заходов.
 
-### 28. Excel экспорт — столбец Модель не формируется
+### 28. ~~Excel экспорт — столбец Модель не формируется~~ ✅ _(закрыто TD-02, 2026-04-24, backend-часть)_
 
 **Запрос PO (QA-цикл заход 1/10, 2026-04-23):**
 > «При скачивании Эксель файла — столбец Модель не формируется, только наименование.»
@@ -424,7 +430,14 @@ Cold-start проблема решена.
 **Исполнитель:** IS-Петя (backend exporter) или IS-Федя если там frontend-логика.
 **Приоритет:** 🟡 minor — не блокер, но раздражает при ручной правке сметы.
 
-### 29. Свободная заметка к смете (стикер)
+**TD-02 (2026-04-24):** exporter + importer расширены полями UI-04
+(Модель / Производитель / Бренд / Система / Примечание из `tech_specs`).
+Importer делает merge с существующим `tech_specs` при update по `row_id` —
+ключи, которых нет в Excel (power_kw, flow, dimensions…), сохраняются.
+Тесты: 10 новых на export/import round-trip + cyrillic edge-case
+«ВВГнг-LS-3x2.5». Закрывает также DEV-BACKLOG #12 (importer GAP).
+
+### 29. ~~Свободная заметка к смете (стикер)~~ ⏳ _(backend закрыт TD-02, 2026-04-24; frontend — отдельная задача IS-Федя)_
 
 **Запрос PO (QA-цикл заход 1/10, 2026-04-23):**
 > «При смете нужны какие-то минимальные заметки, буквально одно текстовое поле, которое сохраняется и свободно редактируется — никакой истории — просто заметка (можно для красоты сделать жёлтым листочком, типа стикера).»
@@ -438,6 +451,13 @@ Cold-start проблема решена.
 
 **Исполнитель:** IS-Петя (backend + migration) + IS-Федя (frontend component + integration).
 **Приоритет:** 🟡 minor nice-to-have. Не срочно, после закрытия QA-цикла.
+
+**TD-02 (2026-04-24, backend):**
+- `Estimate.note: TextField(blank=True, default="")` добавлено в модель.
+- Миграция `0005_estimate_note.py`.
+- `EstimateDetailSerializer` расширен `note` + валидация ≤5000 символов.
+- PATCH `/api/v1/estimates/:id/` теперь принимает `note` — partial update, overwrite без истории.
+- 6 новых тестов (default empty, persist, overwrite-no-history, clear to empty, cap 5000+1, boundary 5000 OK).
 
 ### 23. CI валидация golden_llm через GitHub Actions secrets
 

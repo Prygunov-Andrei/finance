@@ -1,10 +1,15 @@
 """PDF import — вызов Recognition Service (standalone FastAPI, E15.02b).
 
 Recognition возвращает по specs/15-recognition-api.md §1:
-  {status, items[], errors[], pages_stats: {total, processed, skipped, error}}
+  {status, items[], errors[], pages_stats: {total, processed, skipped, error},
+   pages_summary: [{page, expected_count, parsed_count, retried, suspicious}]}
 
 Здесь маппим в легаси-контракт который ожидает pdf_views / apply_parsed_items:
-  {items, status, errors, pages_total, pages_processed, pages_skipped}
+  {items, status, errors, pages_total, pages_processed, pages_skipped,
+   pages_summary}
+
+TD-02: pages_summary пробрасывается без изменений — нужен UI-10 Феди для
+показа suspicious pages в диалоге импорта.
 """
 
 import logging
@@ -69,6 +74,7 @@ def parse_pdf_via_recognition(pdf_bytes: bytes, filename: str) -> dict:
         "pages_total": stats.get("total", 0),
         "pages_processed": stats.get("processed", 0),
         "pages_skipped": stats.get("skipped", 0),
+        "pages_summary": response.get("pages_summary", []),
     }
 
 

@@ -61,6 +61,11 @@ class Estimate(models.Model):
     advance_amount = models.DecimalField(max_digits=19, decimal_places=2, default=0)
     estimated_days = models.PositiveIntegerField(default=0)
 
+    # TD-02 (#29): свободная заметка PO к смете («стикер»). Без истории —
+    # value перезаписывается, snapshot не делаем. Cap 5000 символов —
+    # serializer валидирует.
+    note = models.TextField(blank=True, default="")
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )

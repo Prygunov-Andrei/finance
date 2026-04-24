@@ -247,6 +247,72 @@ class TestPDFImportEndpoint:
         assert resp.data["errors"] == ["Page 3: extract failed"]
         assert resp.data["pages_processed"] == 3
 
+    def test_pages_summary_passthrough(self, client, estimate, ws):
+        """TD-02 (3): pages_summary из Recognition должен попадать в response
+        import/pdf — блокирует UI-10 warning suspicious pages."""
+        with_summary = dict(SPEC_OK)
+        with_summary["pages_summary"] = [
+            {"page": 1, "expected_count": 20, "parsed_count": 20,
+             "retried": False, "suspicious": False},
+            {"page": 2, "expected_count": 25, "expected_count_vision": 27,
+             "parsed_count": 22, "retried": True, "suspicious": True},
+        ]
+        with respx.mock() as mock:
+            mock.post(f"{RECOGNITION_URL}/v1/parse/spec").mock(
+                return_value=httpx.Response(200, json=with_summary)
+            )
+            resp = client.post(
+                self.URL.format(estimate.id),
+                {"file": self._pdf_file()},
+                format="multipart",
+                **{WS_HEADER: str(ws.id)},
+            )
+        assert resp.status_code == 200
+        assert resp.data["pages_summary"] == with_summary["pages_summary"]
+        # Поле включено даже когда items есть (не только в empty-ветке).
+        assert resp.data["created"] == 4
+
+    def test_pages_summary_empty_items_branch(self, client, estimate, ws):
+        """pages_summary также пробрасывается когда items пустые."""
+        empty = {
+            "status": "error",
+            "items": [],
+            "errors": ["Не распознано"],
+            "pages_stats": {"total": 1, "processed": 0, "skipped": 0, "error": 1},
+            "pages_summary": [
+                {"page": 1, "expected_count": 10, "parsed_count": 0,
+                 "retried": True, "suspicious": True},
+            ],
+        }
+        with respx.mock() as mock:
+            mock.post(f"{RECOGNITION_URL}/v1/parse/spec").mock(
+                return_value=httpx.Response(200, json=empty)
+            )
+            resp = client.post(
+                self.URL.format(estimate.id),
+                {"file": self._pdf_file()},
+                format="multipart",
+                **{WS_HEADER: str(ws.id)},
+            )
+        assert resp.status_code == 200
+        assert resp.data["created"] == 0
+        assert resp.data["pages_summary"] == empty["pages_summary"]
+
+    def test_pages_summary_absent_defaults_to_empty_list(self, client, estimate, ws):
+        """Если Recognition не вернул pages_summary — ключ = []."""
+        with respx.mock() as mock:
+            mock.post(f"{RECOGNITION_URL}/v1/parse/spec").mock(
+                return_value=httpx.Response(200, json=SPEC_OK)
+            )
+            resp = client.post(
+                self.URL.format(estimate.id),
+                {"file": self._pdf_file()},
+                format="multipart",
+                **{WS_HEADER: str(ws.id)},
+            )
+        assert resp.status_code == 200
+        assert resp.data["pages_summary"] == []
+
     def test_no_items_returns_empty_with_error_msg(self, client, estimate, ws):
         empty = {"status": "error", "items": [], "errors": ["Не распознано"],
                  "pages_stats": {"total": 1, "processed": 0, "skipped": 0, "error": 1}}

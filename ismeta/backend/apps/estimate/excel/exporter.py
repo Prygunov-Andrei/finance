@@ -2,11 +2,15 @@
 
 Sheet 1 "Смета": разделы-разделители + строки + итоги + скрытые row_id/hash.
 Sheet 2 "Агрегаты": summary.
+
+TD-02 (#28): колонка «Модель» пропадала в экспорте (только name). После
+UI-04 tech_specs хранит model_name / brand / manufacturer / comments / system
+— все они должны попадать в Excel для двустороннего round-trip
+(DEV-BACKLOG #12).
 """
 
 import hashlib
 import io
-import json
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -19,9 +23,16 @@ SECTION_FONT = Font(bold=True, size=11, color="FFFFFF")
 SECTION_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
 TOTAL_FONT = Font(bold=True, size=11)
 
+# TD-02: расширяем набор колонок под поля UI-04 из tech_specs.
+# Порядок: базовые идентификаторы → ТТХ → цены → финансы → примечание →
+# скрытые поля round-trip.
 COLUMNS = [
     ("№", 6),
     ("Наименование", 40),
+    ("Модель", 18),
+    ("Производитель", 18),
+    ("Бренд", 14),
+    ("Система", 16),
     ("Ед.изм.", 10),
     ("Кол-во", 10),
     ("Цена оборуд.", 14),
@@ -30,6 +41,7 @@ COLUMNS = [
     ("Цена работ (закуп)", 16),
     ("Цена работ (продажа)", 18),
     ("Итого", 14),
+    ("Примечание", 40),
     ("row_id", 0),  # скрытый
     ("row_hash", 0),  # скрытый
 ]
@@ -39,6 +51,13 @@ def _row_hash(item) -> str:
     """SHA256-хэш значимых полей для Excel round-trip (ADR-0013)."""
     data = f"{item.name}|{item.unit}|{item.quantity}|{item.equipment_price}|{item.material_price}|{item.work_price}|{item.total}"
     return hashlib.sha256(data.encode()).hexdigest()[:16]
+
+
+def _spec_str(item, key: str) -> str:
+    """Безопасное чтение строкового поля tech_specs (JSONField)."""
+    specs = item.tech_specs or {}
+    val = specs.get(key)
+    return str(val) if val is not None else ""
 
 
 def export_estimate_xlsx(estimate_id, workspace_id) -> io.BytesIO:
@@ -82,6 +101,10 @@ def export_estimate_xlsx(estimate_id, workspace_id) -> io.BytesIO:
             values = [
                 item_counter,
                 item.name,
+                _spec_str(item, "model_name"),
+                _spec_str(item, "manufacturer"),
+                _spec_str(item, "brand"),
+                _spec_str(item, "system"),
                 item.unit,
                 float(item.quantity),
                 float(item.equipment_price),
@@ -90,6 +113,7 @@ def export_estimate_xlsx(estimate_id, workspace_id) -> io.BytesIO:
                 float(item.work_price),
                 float(item.work_total / item.quantity) if item.quantity else 0,
                 float(item.total),
+                _spec_str(item, "comments"),
                 str(item.row_id),
                 _row_hash(item),
             ]
@@ -100,7 +124,9 @@ def export_estimate_xlsx(estimate_id, workspace_id) -> io.BytesIO:
     # Totals row
     row_num += 1
     ws.cell(row=row_num, column=1, value="ИТОГО").font = TOTAL_FONT
-    ws.cell(row=row_num, column=10, value=float(estimate.total_amount)).font = TOTAL_FONT
+    # TD-02: колонка «Итого» переехала с 10 → 14 после вставки Модель/
+    # Производитель/Бренд/Система.
+    ws.cell(row=row_num, column=14, value=float(estimate.total_amount)).font = TOTAL_FONT
 
     # --- Sheet 2: Агрегаты ---
     ws2 = wb.create_sheet("Агрегаты")

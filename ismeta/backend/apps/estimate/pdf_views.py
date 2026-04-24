@@ -60,6 +60,7 @@ def import_pdf(request, estimate_pk):
             "errors": result.get("errors", ["Не удалось распознать позиции"]),
             "pages_total": result.get("pages_total", 0),
             "pages_processed": result.get("pages_processed", 0),
+            "pages_summary": result.get("pages_summary", []),
         })
 
     # 2. Создать позиции сразу
@@ -75,6 +76,7 @@ def import_pdf(request, estimate_pk):
         "errors": result.get("errors", []),
         "pages_total": result.get("pages_total", 0),
         "pages_processed": result.get("pages_processed", 0),
+        "pages_summary": result.get("pages_summary", []),
     })
 
 

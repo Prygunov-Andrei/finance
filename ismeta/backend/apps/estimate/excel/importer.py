@@ -42,17 +42,49 @@ def _to_decimal(val, default=Decimal("0")) -> Decimal:
 # Auto-detect column mapping
 # ---------------------------------------------------------------------------
 
-# Нечёткий маппинг: ключ → набор возможных заголовков (lowercase)
+# Нечёткий маппинг: ключ → набор возможных заголовков (normalised: lower,
+# strip trailing punctuation, ё→е).
+#
+# TD-02 (DEV-BACKLOG #12): поля UI-04 tech_specs — Модель/Производитель/
+# Бренд/Примечание/Система — должны распознаваться при импорте. Наряду с
+# экспортом (round-trip) это закрывает GAP «правка в Excel теряется».
+#
+# После E15.05 it2 brand и manufacturer — два разных поля:
+#   brand        = торговая марка (Корф, IEK, Fujitsu)
+#   manufacturer = конкретный завод-изготовитель (ООО «КОРФ», АО «ДКС»)
+# Поэтому Производитель → manufacturer, а не brand как было раньше.
+# Алиасы записаны в normalised-виде: lower, ё→е, spaces+punctuation удалены.
+# Нормализатор header'ов при импорте применяет те же правила, поэтому «Ед.изм.»,
+# «Ед. изм», «Ед изм» и «ЕД.ИЗМ» все становятся «едизм».
 _HEADER_ALIASES = {
-    "name": {"наименование", "название", "позиция", "описание", "наим.", "наим"},
-    "unit": {"ед.", "единица", "ед.изм.", "ед.изм", "ед", "единица измерения", "е.и."},
-    "quantity": {"кол-во", "количество", "к-во", "кол.", "кол", "количество, шт"},
-    "equipment_price": {"цена оборуд.", "цена оборудования", "оборудование"},
-    "material_price": {"цена мат.", "цена материалов", "материалы", "цена мат"},
-    "work_price": {"цена работ", "работы", "монтаж", "стоимость работ"},
-    "price": {"цена", "стоимость", "цена за ед.", "цена за ед", "цена ед."},
-    "row_id": {"row_id", "id строки", "идентификатор"},
+    "name": {"наименование", "название", "позиция", "описание", "наим", "имя"},
+    "unit": {"ед", "единица", "едизм", "единицаизмерения", "еи"},
+    "quantity": {"колво", "количество", "кво", "кол", "количествошт"},
+    "equipment_price": {"ценаоборуд", "ценаоборудования", "оборудование"},
+    "material_price": {"ценамат", "ценаматериалов", "материалы",
+                       "ценаматзакуп", "ценаматериаловзакуп"},
+    "work_price": {"ценаработ", "работы", "монтаж", "стоимостьработ",
+                   "ценаработзакуп"},
+    "price": {"цена", "стоимость", "ценазаед", "ценаед"},
+    "row_id": {"rowid", "idстроки", "идентификатор"},
+    "model_name": {"модель", "model", "марка", "артикул", "тип", "sku",
+                   "обозначение", "обозначениедокумента"},
+    "brand": {"бренд", "brand"},
+    "manufacturer": {"производитель", "изготовитель", "поставщик",
+                     "вендор", "manufacturer", "vendor"},
+    "comments": {"примечание", "примечания", "комментарий", "комментарии",
+                 "заметка", "notes", "comment", "comments"},
+    "system": {"система", "контур", "system"},
 }
+
+
+def _normalize_header(val) -> str:
+    """Normalise header cell: lower, ё→е, удалить пробелы и пунктуацию."""
+    if val is None:
+        return ""
+    s = str(val).strip().lower().replace("ё", "е")
+    # Удаляем пробелы, точки, запятые, двоеточия, скобки, дефисы, подчёркивания.
+    return re.sub(r"[\s.,:;()\-_]+", "", s)
 
 # Строки-итоги для пропуска
 _SKIP_PATTERNS = re.compile(
@@ -73,6 +105,18 @@ class ColumnMapping:
     work_price: int | None = None
     price: int | None = None  # единая колонка цены
     row_id: int | None = None
+    # TD-02: tech_specs поля UI-04. Складываются в item.tech_specs dict.
+    model_name: int | None = None
+    brand: int | None = None
+    manufacturer: int | None = None
+    comments: int | None = None
+    system: int | None = None
+
+
+# Набор ключей маппинга, уходящих в tech_specs (а не в top-level item field).
+_TECH_SPECS_KEYS: tuple[str, ...] = (
+    "model_name", "brand", "manufacturer", "comments", "system",
+)
 
 
 def _detect_columns(header_row: list) -> ColumnMapping:
@@ -81,10 +125,15 @@ def _detect_columns(header_row: list) -> ColumnMapping:
     for idx, cell_val in enumerate(header_row):
         if cell_val is None:
             continue
-        val = str(cell_val).strip().lower()
+        val = _normalize_header(cell_val)
+        if not val:
+            continue
         for field_name, aliases in _HEADER_ALIASES.items():
             if val in aliases:
-                setattr(mapping, field_name, idx)
+                # Не переопределяем — первый матч побеждает (чтобы не сломать
+                # существующий порядок алиасов при перекрывающихся ключах).
+                if getattr(mapping, field_name) is None:
+                    setattr(mapping, field_name, idx)
                 break
     return mapping
 
@@ -225,6 +274,19 @@ def import_estimate_xlsx(estimate_id, workspace_id, file) -> ImportResult:
                 result.errors.append(f"Строка {row_idx}: отрицательное количество ({quantity})")
                 continue
 
+            # TD-02: читаем колонки tech_specs (UI-04) если они есть.
+            spec_overrides: dict[str, str] = {}
+            for key in _TECH_SPECS_KEYS:
+                col_idx = getattr(mapping, key)
+                if col_idx is None:
+                    continue
+                raw = _get_val(values, col_idx)
+                if raw is None:
+                    continue
+                s = str(raw).strip()
+                if s:
+                    spec_overrides[key] = s
+
             sort_order += 1
             data = {
                 "name": str(name_val).strip(),
@@ -241,11 +303,20 @@ def import_estimate_xlsx(estimate_id, workspace_id, file) -> ImportResult:
                     row_id=row_id, estimate_id=estimate_id, workspace_id=workspace_id
                 ).first()
                 if existing:
+                    # Merge с существующим tech_specs, чтобы не потерять ключи
+                    # которых нет в Excel-шаблоне (dimensions, power_kw и т.д.).
+                    if spec_overrides:
+                        merged = dict(existing.tech_specs or {})
+                        merged.update(spec_overrides)
+                        data["tech_specs"] = merged
                     EstimateService.update_item(
                         existing.id, workspace_id, existing.version, data
                     )
                     result.updated += 1
                     continue
+
+            if spec_overrides:
+                data["tech_specs"] = spec_overrides
 
             create_batches.setdefault(current_section.id, []).append(data)
 
