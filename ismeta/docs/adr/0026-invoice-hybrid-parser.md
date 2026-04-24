@@ -191,11 +191,34 @@ vat_amount и vat_rate с page 2 подхватываются после fix —
 
 2. **Один большой Vision call на документ.** Отвергнуто: та же
    проблема что и текущий invoice_parser.py — recall <50% и стоимость
-   >$0.05/doc. Гибрид даёт >95% recall при $0.01-0.02/doc.
+   >$0.05/doc на gpt-4o-mini. Гибрид давал >95% recall при $0.01-0.02/doc
+   на gpt-4o-mini; после switch на gpt-5.2 (TD-04) — см. cost refresh ниже.
 
 3. **Phase 0 только на page 1.** Отвергнуто после QA на invoice-02:
    vat_amount/vat_rate сидят на page 2 после items-таблицы. Передаём
    text всех страниц до 50k символов — токены недорогие.
+
+## Cost refresh (TD-04, 2026-04-24 — gpt-5.2 + prompt caching)
+
+Модель `gpt-5.2` (единая для extract/multimodal/classify) применяется и к
+InvoiceParser. Прайс и cache-hit аналогичны ADR-0025 ($1.75/$0.175/$14 per 1M).
+
+**Экстраполяция (прямых свежих логов invoice нет — invoice пока не трогали в
+TD-04, метрики сняты на spec-ov2):**
+
+- **invoice-01** (4 items, 1-2 стр): Phase 0 title-block (~2K prompt) +
+  Phase 1 bbox (~4K) + Phase 2 multimodal если confidence<0.7 →
+  ориентир **~$0.05–0.08 / doc**.
+- **invoice-02** (15 items, 2 стр, список-формат): больше completion_tokens
+  (структурированные supplier + meta), **~$0.10–0.15 / doc**.
+
+Старая оценка ADR ($0.01–0.02/doc на gpt-4o-mini) не актуальна. Для точного
+refresh invoice goldens нужен прогон через `/v1/parse/invoice` и снятие
+`invoice_parse llm metrics` из логов — вынесено в follow-up DEV-BACKLOG
+после TD-04 вместе с обновлением E16 метрик.
+
+Общий тренд одинаков: cost вырос ~10–25× vs mini, recall вырос до 100% по
+invoice goldens, PO принял trade-off в qa-round 1.
 
 ## Следующие шаги
 
