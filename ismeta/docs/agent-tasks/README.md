@@ -25,7 +25,6 @@
 
 | Файл | Кому | Статус | Ветка |
 |---|---|---|---|
-| [UI-13-inline-edit-tech-specs-fedya.md](./UI-13-inline-edit-tech-specs-fedya.md) | Федя | 🟡 **Active** — inline-edit model/brand (DEV-BACKLOG #11) | `ismeta/ui-13-inline-edit-tech-specs` |
 | [E17-quote-xlsx-parser-petya.md](./E17-quote-xlsx-parser-petya.md) | Петя | 🟡 **DRAFT** — не стартовать без явного go PO | (pending) |
 
 **Примечание:** E17 в draft — scope проектировался до обсуждения с PO. Workflow КП в ERP — отдельная продуктовая тема (см. `ismeta/docs/OPEN-QUESTIONS-procurement-ux.md`). Backend-расширение Recognition полезно само по себе, но запускаем только по явному согласию.
@@ -56,6 +55,7 @@
 | TD-02-excel-note-suspicious-petya.md | `ismeta/td-02-excel-note-suspicious` | 2026-04-24 (main `1c56835`) |
 | UI-12-estimate-note-sticker-fedya.md | `ismeta/ui-12-estimate-note-sticker` | 2026-04-24 (main `6b3fbf3`) |
 | TD-03-recognition-backend-polish-petya.md | `recognition/13-td-03-polish` | 2026-04-24 (main `9661475`) |
+| UI-13-inline-edit-tech-specs-fedya.md | `ismeta/ui-13-inline-edit-tech-specs` | 2026-04-24 (main `7ba5ec1`, только regression тесты) |
 
 ## История
 
