@@ -194,6 +194,36 @@ function ThemeToggle() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // До mount не знаем тему (живёт в localStorage) — рендерим placeholder того же
+  // размера, что и итоговая иконка, чтобы избежать hydration-mismatch и CLS.
+  // Разметка на сервере и до mount на клиенте — идентичная: тот же <button> с тем
+  // же aria-label и пустым span 16×16 внутри.
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        aria-label="Переключить тему"
+        data-testid="theme-toggle-placeholder"
+        disabled
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 32,
+          height: 32,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          cursor: 'default',
+          color: 'hsl(var(--rt-ink-60))',
+        }}
+      >
+        <span aria-hidden style={{ display: 'inline-block', width: 16, height: 16 }} />
+      </button>
+    );
+  }
+
   const dark = resolvedTheme === 'dark';
   const onClick = () => setTheme(dark ? 'light' : 'dark');
   return (
@@ -201,6 +231,7 @@ function ThemeToggle() {
       type="button"
       onClick={onClick}
       aria-label={dark ? 'Включить светлую тему' : 'Включить тёмную тему'}
+      data-testid="theme-toggle"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -212,8 +243,6 @@ function ThemeToggle() {
         padding: 0,
         cursor: 'pointer',
         color: 'hsl(var(--rt-ink-60))',
-        opacity: mounted ? 1 : 0,
-        transition: 'opacity 120ms ease',
       }}
     >
       {dark ? (
