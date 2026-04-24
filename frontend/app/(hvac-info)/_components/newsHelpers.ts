@@ -38,11 +38,20 @@ export function formatNewsDateShort(dateString: string | null | undefined): stri
 }
 
 /**
- * Возвращает первое media-image из новости, либо null.
+ * Возвращает первое превью-изображение для карточки новости:
+ * сначала из media[], затем — первый <img> из HTML body, иначе null.
  */
 export function getNewsHeroImage(news: NewsItem): string | null {
   const file = news.media?.find((m) => (m.media_type ?? 'image') === 'image')?.file;
-  return file ?? null;
+  if (file) return file;
+
+  const body = news.body_ru || news.body || '';
+  if (!body) return null;
+
+  const match = body.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (!match?.[1]) return null;
+
+  return match[1].replace(/&amp;/g, '&');
 }
 
 /**

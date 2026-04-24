@@ -85,8 +85,45 @@ describe('getNewsHeroImage', () => {
     });
     expect(getNewsHeroImage(n)).toBe('/m/a.jpg');
   });
-  it('null если media пусто', () => {
+  it('null если media пусто и body пуст', () => {
     expect(getNewsHeroImage(mk({}))).toBeNull();
+  });
+
+  it('media пусто + body с <img src="/media/..."> → возвращает /media/...', () => {
+    const n = mk({
+      body: '<p>Текст</p><img class="editor-image" src="/media/news/uploads/photo.jpg"><p>Ещё.</p>',
+    });
+    expect(getNewsHeroImage(n)).toBe('/media/news/uploads/photo.jpg');
+  });
+
+  it('media пусто + body без <img> → null', () => {
+    expect(getNewsHeroImage(mk({ body: '<p>Только текст без картинок.</p>' }))).toBeNull();
+  });
+
+  it('media есть → игнорирует body (приоритет за media[])', () => {
+    const n = mk({
+      media: [{ id: 1, file: '/m/from-media.jpg', media_type: 'image' }],
+      body: '<img src="/m/from-body.jpg">',
+    });
+    expect(getNewsHeroImage(n)).toBe('/m/from-media.jpg');
+  });
+
+  it('body с absolute URL → возвращает как есть', () => {
+    const n = mk({ body: '<img src="https://cdn.example.com/a.jpg" alt="x">' });
+    expect(getNewsHeroImage(n)).toBe('https://cdn.example.com/a.jpg');
+  });
+
+  it('декодирует &amp; → & в src', () => {
+    const n = mk({ body: '<img src="/media/news/a.jpg?w=100&amp;h=200">' });
+    expect(getNewsHeroImage(n)).toBe('/media/news/a.jpg?w=100&h=200');
+  });
+
+  it('предпочитает body_ru если задан', () => {
+    const n = mk({
+      body: '<img src="/m/en.jpg">',
+      body_ru: '<img src="/m/ru.jpg">',
+    });
+    expect(getNewsHeroImage(n)).toBe('/m/ru.jpg');
   });
 });
 
