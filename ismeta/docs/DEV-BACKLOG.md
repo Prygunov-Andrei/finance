@@ -23,7 +23,7 @@
 - Нужна верификация на stand (prod-like): смета → загрузка реального PDF → Recognition → items с `tech_specs.brand/model_name` → UI-02 подстроки.
 - Исполнитель: Андрей (на prod) или любой агент при наличии ключа.
 
-### 3. Унификация контракта ImportResult (Excel vs PDF)
+### 3. ~~Унификация контракта ImportResult (Excel vs PDF)~~ ✅ _(закрыто UI-14 6013d81 24.04: split на ExcelImportResult + PdfImportResult, tsc ловит путаницу)_
 
 - Сейчас Excel отдаёт `{created, updated, errors}`, PDF через Recognition — `{created, sections, errors, pages_total, pages_processed}`.
 - MVP-решение: `updated?: number` optional в общем `ImportResult` type.

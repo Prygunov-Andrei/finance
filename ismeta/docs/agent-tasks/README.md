@@ -26,7 +26,6 @@
 | Файл | Кому | Статус | Ветка |
 |---|---|---|---|
 | [TD-04-seed-min-items-adr-ci-petya.md](./TD-04-seed-min-items-adr-ci-petya.md) | Петя | 🟢 **Active** — seed/LLM_MIN_ITEMS/ADR cost/CI draft (~0.5д) | `recognition/14-td-04-polish` |
-| [UI-14-import-result-types-split-fedya.md](./UI-14-import-result-types-split-fedya.md) | Федя | 🟢 **Active** — split ImportResult типов (~1ч) | `ismeta/ui-14-import-result-types` |
 | [E17-quote-xlsx-parser-petya.md](./E17-quote-xlsx-parser-petya.md) | Петя | 🟡 **DRAFT** — не стартовать без явного go PO | (pending) |
 
 **Примечание:** E17 в draft — scope проектировался до обсуждения с PO. Workflow КП в ERP — отдельная продуктовая тема (см. `ismeta/docs/OPEN-QUESTIONS-procurement-ux.md`). Backend-расширение Recognition полезно само по себе, но запускаем только по явному согласию.
@@ -58,6 +57,7 @@
 | UI-12-estimate-note-sticker-fedya.md | `ismeta/ui-12-estimate-note-sticker` | 2026-04-24 (main `6b3fbf3`) |
 | TD-03-recognition-backend-polish-petya.md | `recognition/13-td-03-polish` | 2026-04-24 (main `9661475`) |
 | UI-13-inline-edit-tech-specs-fedya.md | `ismeta/ui-13-inline-edit-tech-specs` | 2026-04-24 (main `7ba5ec1`, только regression тесты) |
+| UI-14-import-result-types-split-fedya.md | `ismeta/ui-14-import-result-types` | 2026-04-24 (main `6013d81`) |
 
 ## История
 
