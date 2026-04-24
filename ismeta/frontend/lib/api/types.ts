@@ -251,6 +251,15 @@ export interface PdfProbeResponse {
   estimated_seconds: number;
 }
 
+export interface PageSummary {
+  page: number;
+  expected_count: number;
+  expected_count_vision: number;
+  parsed_count: number;
+  retried: boolean;
+  suspicious: boolean;
+}
+
 export interface ImportResult {
   created: number;
   // updated — только Excel-импорт возвращает это поле (update-aware по row_id).
@@ -262,6 +271,10 @@ export interface ImportResult {
   errors: string[];
   pages_total?: number;
   pages_processed?: number;
+  // pages_summary — PDF-импорт через Recognition (после TD-02): покадровый отчёт
+  // с флагом suspicious=true когда vision-counter видит позиций больше чем парсер.
+  // Optional: legacy backend без поля — поле просто отсутствует.
+  pages_summary?: PageSummary[];
 }
 
 export interface PdfItem {

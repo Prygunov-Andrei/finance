@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileText, Loader2 } from "lucide-react";
+import { AlertTriangle, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -252,6 +252,38 @@ export function PdfImportDialog({ estimateId, open, onOpenChange }: Props) {
               <span className="font-medium text-green-600">✓ Создано: {result.created} позиций</span>
               {result.sections ? <span className="text-muted-foreground">({result.sections} разделов)</span> : null}
             </div>
+            {result.pages_summary && result.pages_summary.some((p) => p.suspicious) && (
+              <div
+                className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm"
+                data-testid="pdf-import-suspicious-warning"
+              >
+                <div className="flex items-center gap-2 font-medium text-amber-900">
+                  <AlertTriangle className="h-4 w-4" />
+                  Возможны пропущенные позиции
+                </div>
+                <div className="mt-1 text-xs text-amber-800">
+                  На страницах{" "}
+                  <span className="font-mono">
+                    {result.pages_summary
+                      .filter((p) => p.suspicious)
+                      .map((p) => p.page)
+                      .join(", ")}
+                  </span>{" "}
+                  система распознала меньше позиций чем насчитала проверка по
+                  изображению. Сверьте вручную с оригиналом PDF.
+                </div>
+                <ul className="mt-2 space-y-0.5 text-xs text-amber-700">
+                  {result.pages_summary
+                    .filter((p) => p.suspicious)
+                    .map((p) => (
+                      <li key={p.page}>
+                        стр. {p.page}: распознано {p.parsed_count}, проверка «видит» {p.expected_count_vision}
+                        {p.retried ? " (retry не помог)" : ""}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
             {result.pages_total ? (
               <div className="text-xs text-muted-foreground">
                 Обработано страниц: {result.pages_processed ?? 0} из {result.pages_total}
