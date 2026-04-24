@@ -5,6 +5,7 @@ import NewsFeedHero from './_components/NewsFeedHero';
 import NewsCategoryFilter from './_components/NewsCategoryFilter';
 import NewsFeedList from './_components/NewsFeedList';
 import NewsViewSwitcher from './_components/NewsViewSwitcher';
+import SectionFooter from './_components/SectionFooter';
 
 export const revalidate = 300;
 
@@ -67,6 +68,7 @@ export default async function NewsFeedPage() {
           />
         </Suspense>
       </main>
+      <SectionFooter />
     </>
   );
 }

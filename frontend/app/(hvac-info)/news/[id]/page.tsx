@@ -9,6 +9,7 @@ import NewsArticleHero from './_components/NewsArticleHero';
 import NewsArticleBody from './_components/NewsArticleBody';
 import NewsMentionedModelCard from './_components/NewsMentionedModelCard';
 import NewsPrevNextNav from './_components/NewsPrevNextNav';
+import SectionFooter from '../../_components/SectionFooter';
 import {
   getNewsCategoryLabel,
   getNewsLede,
@@ -165,6 +166,8 @@ export default async function NewsDetailPage({ params }: Props) {
           </Link>
         </div>
       </article>
+
+      <SectionFooter />
 
       <style>{`
         @media (max-width: 1023px) {

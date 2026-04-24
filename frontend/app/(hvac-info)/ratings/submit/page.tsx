@@ -4,7 +4,7 @@ import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getRatingBrands, getRatingMethodology } from '@/lib/api/services/rating';
 import type { RatingMethodology } from '@/lib/api/types/rating';
 import BackToRating from '../_components/BackToRating';
-import SectionFooter from '../_components/SectionFooter';
+import SectionFooter from '../../_components/SectionFooter';
 
 import SubmitForm from './SubmitForm';
 
