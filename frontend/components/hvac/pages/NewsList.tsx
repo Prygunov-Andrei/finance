@@ -4,6 +4,7 @@ import { Link } from '@/hooks/erp-router';
 import { useHvacLanguage as useLanguage } from '../hooks/useHvacLanguage';
 import { useHvacAuth as useAuth } from '../hooks/useHvacAuth';
 import newsService, { News } from '../services/newsService';
+import newsCategoriesService, { NewsCategoryItem } from '../services/newsCategoriesService';
 import TranslationBadge from '../components/TranslationBadge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,11 @@ export default function NewsList() {
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [starFilter, setStarFilter] = useState<number[]>([]);
   const [retryingTranslationId, setRetryingTranslationId] = useState<number | null>(null);
+  const [categories, setCategories] = useState<NewsCategoryItem[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [showBulkMoveDialog, setShowBulkMoveDialog] = useState(false);
+  const [bulkMoveSlug, setBulkMoveSlug] = useState<string>('');
+  const [isBulkMoving, setIsBulkMoving] = useState(false);
 
   const isAdmin = user?.is_staff === true;
 
@@ -53,6 +59,42 @@ export default function NewsList() {
     setStarFilter(prev =>
       prev.includes(star) ? prev.filter(s => s !== star) : [...prev, star]
     );
+  };
+
+  const toggleCategoryFilter = (slug: string) => {
+    setCategoryFilter(prev =>
+      prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]
+    );
+  };
+
+  // Загрузка списка разделов один раз — для фильтра и bulk-action.
+  useEffect(() => {
+    if (!isAdmin) return;
+    newsCategoriesService.getNewsCategories()
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, [isAdmin]);
+
+  const activeCategories = categories.filter(c => c.is_active);
+
+  const handleBulkMove = async () => {
+    if (!bulkMoveSlug || selectedIds.length === 0) return;
+    setIsBulkMoving(true);
+    try {
+      const result = await newsCategoriesService.bulkUpdateNewsCategory(
+        selectedIds,
+        bulkMoveSlug,
+      );
+      toast.success(`Перенесено: ${result.updated}`);
+      setShowBulkMoveDialog(false);
+      setBulkMoveSlug('');
+      setSelectedIds([]);
+      loadNews(1, true);
+    } catch {
+      toast.error('Не удалось перенести новости');
+    } finally {
+      setIsBulkMoving(false);
+    }
   };
 
   const [editingRatingId, setEditingRatingId] = useState<number | null>(null);
@@ -137,7 +179,7 @@ export default function NewsList() {
     setCurrentPage(1);
     setSelectedIds([]);
     loadNews(1, true);
-  }, [language, statusFilter, starFilter]);
+  }, [language, statusFilter, starFilter, categoryFilter]);
 
   // Polling пока есть новости с активным переводом. 12 сек — перевод обычно 30-60 сек.
   useEffect(() => {
@@ -185,6 +227,12 @@ export default function NewsList() {
       }
       if (statusFilter !== 'all') {
         pageNews = pageNews.filter(item => item.status === statusFilter);
+      }
+      if (categoryFilter.length > 0) {
+        pageNews = pageNews.filter(item => {
+          const slug = item.category_object?.slug ?? item.category;
+          return slug ? categoryFilter.includes(slug) : false;
+        });
       }
 
       setNews(prev => reset ? pageNews : [...prev, ...pageNews]);
@@ -353,6 +401,18 @@ export default function NewsList() {
             <h1>{t('news.title')}</h1>
             
             <div className="flex items-center gap-3">
+              {/* Bulk-action: перенести в раздел */}
+              {isAdmin && selectedIds.length > 0 && activeCategories.length > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => { setBulkMoveSlug(''); setShowBulkMoveDialog(true); }}
+                  disabled={isBulkMoving}
+                  data-testid="bulk-move-btn"
+                >
+                  Перенести в раздел ({selectedIds.length})
+                </Button>
+              )}
+
               {/* Кнопка массового удаления */}
               {isAdmin && selectedIds.length > 0 && (
                 <Button
@@ -420,6 +480,38 @@ export default function NewsList() {
             </div>
           )}
 
+          {/* Фильтр по категориям — только для админов */}
+          {isAdmin && activeCategories.length > 0 && (
+            <div className="mb-4 flex items-center gap-2 flex-wrap" data-testid="category-filter">
+              <span className="text-sm text-muted-foreground mr-1">Категории:</span>
+              {activeCategories.map(c => {
+                const active = categoryFilter.includes(c.slug);
+                return (
+                  <button
+                    key={c.slug}
+                    onClick={() => toggleCategoryFilter(c.slug)}
+                    data-testid={`category-chip-${c.slug}`}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      active
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background text-muted-foreground border-border hover:bg-accent'
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                );
+              })}
+              {categoryFilter.length > 0 && (
+                <button
+                  onClick={() => setCategoryFilter([])}
+                  className="text-xs text-muted-foreground hover:text-foreground underline ml-2"
+                >
+                  Сбросить
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Шапка "Выбрать все" — только для админов */}
           {isAdmin && news.length > 0 && (
             <div className="mb-4 flex items-center gap-3 px-4 py-3 bg-muted/50 rounded-lg">
@@ -477,9 +569,18 @@ export default function NewsList() {
                               {item.is_no_news_found && <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />}
                               <h3 className="flex-1">{title}</h3>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 flex-wrap">
                               {item.is_no_news_found && (
                                 <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">Не найдено</Badge>
+                              )}
+                              {(item.category_object?.name || item.category) && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-primary/40 text-primary"
+                                  data-testid={`category-badge-${item.id}`}
+                                >
+                                  {item.category_object?.name || item.category}
+                                </Badge>
                               )}
                               {getStatusBadge(item)}
                               <TranslationBadge
@@ -654,6 +755,42 @@ export default function NewsList() {
           )}
         </div>
       </div>
+
+      {/* Диалог bulk-move «Перенести в раздел» */}
+      <AlertDialog open={showBulkMoveDialog} onOpenChange={setShowBulkMoveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Перенести в раздел</AlertDialogTitle>
+            <AlertDialogDescription>
+              Выбрано: {selectedIds.length}. Выберите целевой раздел.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Select value={bulkMoveSlug} onValueChange={setBulkMoveSlug}>
+              <SelectTrigger data-testid="bulk-move-select">
+                <SelectValue placeholder="Выберите раздел" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeCategories.map(c => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkMoving}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkMove}
+              disabled={isBulkMoving || !bulkMoveSlug}
+              data-testid="bulk-move-confirm"
+            >
+              {isBulkMoving ? 'Перенос...' : 'Перенести'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Диалог массового удаления */}
       <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
