@@ -461,3 +461,23 @@ export const CAMPAIGN_STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400',
   cancelled: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400',
 };
+
+// ==================== HVAC НОВОСТИ (M5) ====================
+
+/**
+ * Категории HVAC-новостей (M5).
+ * Синхронизировано с backend/news/models.py → NewsPost.Category (TextChoices).
+ * При изменении enum на бэке — обновить этот массив.
+ */
+export const NEWS_CATEGORIES = [
+  { value: 'business', label: 'Деловые' },
+  { value: 'industry', label: 'Индустрия' },
+  { value: 'market', label: 'Рынок' },
+  { value: 'regulation', label: 'Регулирование' },
+  { value: 'review', label: 'Обзор' },
+  { value: 'guide', label: 'Гайд' },
+  { value: 'brands', label: 'Бренды' },
+  { value: 'other', label: 'Прочее' },
+] as const;
+
+export type NewsCategoryValue = (typeof NEWS_CATEGORIES)[number]['value'];

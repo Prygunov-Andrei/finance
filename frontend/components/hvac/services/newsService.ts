@@ -3,12 +3,25 @@ import apiClient from './apiClient';
 import type {
   HvacNews as News,
   HvacNewsAuthor as NewsAuthor,
+  HvacNewsCategory,
   HvacNewsMedia as NewsMedia,
   HvacPaginatedResponse as PaginatedResponse,
   HvacSourceLanguage,
 } from '@/lib/api/types/hvac';
+import type { RatingModelListItem } from '@/lib/api/types/rating';
 
 export type { News, NewsAuthor, NewsMedia, PaginatedResponse };
+
+/**
+ * Shape автора-«редактора» для публичной подписи новости (M5).
+ * Соответствует NewsAuthorLiteSerializer из backend/news/serializers.py.
+ */
+export interface EditorialAuthor {
+  id: number;
+  name: string;
+  role: string;
+  avatar_url: string;
+}
 
 export interface NewsCreateData {
   title: string;
@@ -18,6 +31,11 @@ export interface NewsCreateData {
   source_language: HvacSourceLanguage;
   auto_translate?: boolean;
   source_url?: string;
+  // M5 — публичные editorial-поля (опциональны, backend имеет defaults):
+  category?: HvacNewsCategory;
+  lede?: string;
+  editorial_author?: number | null;
+  mentioned_ac_models?: number[];
 }
 
 export interface NewsUpdateData {
@@ -28,6 +46,11 @@ export interface NewsUpdateData {
   source_language?: HvacSourceLanguage;
   auto_translate?: boolean;
   source_url?: string;
+  // M5 — публичные editorial-поля:
+  category?: HvacNewsCategory;
+  lede?: string;
+  editorial_author?: number | null;
+  mentioned_ac_models?: number[];
 }
 
 export interface MediaUpload {
@@ -196,6 +219,41 @@ const newsService = {
   // Удалить медиафайл (только для админов)
   deleteMedia: async (id: number): Promise<void> => {
     await apiClient.delete(`/media/${id}/`);
+  },
+
+  /**
+   * M5: список редакторов-авторов для picker'а в форме новости.
+   *
+   * Endpoint реализует Петя в backup-ветке (task Ф7C-backend). До мержа
+   * его изменений будет вернуться 404 — вызывающая сторона должна
+   * ловить исключение и рисовать graceful empty state.
+   *
+   * TODO(Ф7C-backend): убрать этот комментарий после мержа
+   * ac-rating/backup-and-authors-api.
+   */
+  getEditorialAuthors: async (): Promise<EditorialAuthor[]> => {
+    const response = await apiClient.get('/news-authors/');
+    const data = response.data;
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.results)) return data.results;
+    return [];
+  },
+
+  /**
+   * M5: список AC-моделей для multi-select'а «Упомянутые модели».
+   *
+   * Используем публичный endpoint `/api/public/v1/rating/models/` — он
+   * возвращает plain array ~27 моделей, фильтрация client-side.
+   * Идёт напрямую через fetch (минуя apiClient с hvac-admin префиксом).
+   */
+  getACModelsForSelector: async (): Promise<RatingModelListItem[]> => {
+    const base =
+      typeof window !== 'undefined' ? window.location.origin : '';
+    const response = await fetch(`${base}/api/public/v1/rating/models/`);
+    if (!response.ok) {
+      throw new Error(`Rating API ${response.status}`);
+    }
+    return response.json() as Promise<RatingModelListItem[]>;
   },
 };
 

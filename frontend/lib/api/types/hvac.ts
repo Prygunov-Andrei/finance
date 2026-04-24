@@ -3,6 +3,16 @@ import type { PaginatedResponse } from './common';
 export type HvacNewsStatus = 'draft' | 'scheduled' | 'published';
 export type HvacSourceLanguage = 'ru' | 'en' | 'de' | 'pt';
 export type HvacTranslationStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+/** Категории новостей (M5) — синхронизировано с backend/news/models.py NewsPost.Category. */
+export type HvacNewsCategory =
+  | 'business'
+  | 'industry'
+  | 'market'
+  | 'regulation'
+  | 'review'
+  | 'guide'
+  | 'brands'
+  | 'other';
 
 export interface HvacNewsMedia {
   id: number;
@@ -74,7 +84,7 @@ export interface HvacNews {
   translation_error?: string | null;
   // M5 (редизайн ленты, Ф7A). Могут приходить пустыми до мержа M5 —
   // фронт строит graceful fallback.
-  category?: string;
+  category?: HvacNewsCategory;
   category_display?: string;
   lede?: string;
   reading_time_minutes?: number | null;
