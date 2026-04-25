@@ -29,10 +29,14 @@
 | [E18-1-recognition-llm-profile-headers-petya.md](./E18-1-recognition-llm-profile-headers-petya.md) | Петя | 🟡 **DRAFT** (E18 LLM-профили + cost) — старт после захода 4/10 | (pending) |
 | [E18-2-backend-llm-profile-model-petya.md](./E18-2-backend-llm-profile-model-petya.md) | Петя | 🟡 **DRAFT** — старт после E18-1 в main | (pending) |
 | [E18-3-frontend-llm-profile-ui-fedya.md](./E18-3-frontend-llm-profile-ui-fedya.md) | Федя | 🟡 **DRAFT** — старт после E18-1+E18-2 в main | (pending) |
+| [E19-1-recognition-async-callbacks-petya.md](./E19-1-recognition-async-callbacks-petya.md) | Петя | 🟡 **DRAFT** (E19 background jobs) — старт после E18 | (pending) |
+| [E19-2-backend-recognition-jobs-petya.md](./E19-2-backend-recognition-jobs-petya.md) | Петя | 🟡 **DRAFT** — старт после E19-1 в main | (pending) |
+| [E19-3-frontend-jobs-panel-fedya.md](./E19-3-frontend-jobs-panel-fedya.md) | Федя | 🟡 **DRAFT** — старт после E19-1+E19-2 в main | (pending) |
 
 **Примечание:**
 - E17 в draft — scope проектировался до обсуждения с PO. Workflow КП в ERP — отдельная продуктовая тема (см. `ismeta/docs/OPEN-QUESTIONS-procurement-ux.md`). Backend-расширение Recognition полезно само по себе, но запускаем только по явному согласию.
 - **E18** — фича переключения LLM-моделей через UI + отображение стоимости каждого распознавания. Master spec: [`ismeta/specs/16-llm-profiles.md`](../specs/16-llm-profiles.md). Декомпозирован на 3 sequential task'а (E18-1 → E18-2 → E18-3). Старт строго после захода 4/10 цикла QA.
+- **E19** — background jobs: сметчик загружает PDF и продолжает работать, прогресс в шапке, toast при готовности. Master spec: [`ismeta/specs/17-background-recognition-jobs.md`](../specs/17-background-recognition-jobs.md). Декомпозиция: E19-1 → E19-2 → E19-3. Зависимость: E18 в main (для интеграции `LLMProfile` в `RecognitionJob`). Старт после явного go PO.
 
 ## Выполнено
 

@@ -15,8 +15,10 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# sync timeout with parse_timeout_seconds on the server (300s) + network slack.
-DEFAULT_TIMEOUT_SECONDS = 310.0
+# Sync timeout with PARSE_TIMEOUT_SECONDS on the server (default 300, overridable
+# via env). DeepSeek V4-Pro thinking high может занять 10-15 мин на большой PDF —
+# поднимаем до 1800 (30 мин) чтобы backend не отдал 502 раньше recognition.
+DEFAULT_TIMEOUT_SECONDS = 1800.0
 
 
 class RecognitionClientError(Exception):
