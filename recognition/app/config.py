@@ -6,6 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     recognition_api_key: str = "dev-recognition-key-change-me"
     openai_api_key: str = ""
+    # OpenAI-compatible API base URL. Default = OpenAI; override на DeepSeek
+    # («https://api.deepseek.com») или другой OpenAI-совместимый endpoint.
+    openai_api_base: str = "https://api.openai.com"
     log_level: str = "INFO"
     max_file_size_mb: int = 50
     parse_timeout_seconds: int = 300

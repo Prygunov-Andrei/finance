@@ -21,7 +21,16 @@ from .base import BaseLLMProvider, TextCompletion
 
 logger = logging.getLogger(__name__)
 
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+def _api_base() -> str:
+    return settings.openai_api_base.rstrip("/")
+
+
+def _chat_url() -> str:
+    return f"{_api_base()}/v1/chat/completions"
+
+
+def _models_url() -> str:
+    return f"{_api_base()}/v1/models"
 
 
 def _apply_max_tokens(payload: dict, max_tokens: int) -> None:
@@ -74,7 +83,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         """
         try:
             resp = await self._client.get(
-                "https://api.openai.com/v1/models",
+                _models_url(),
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 timeout=10.0,
             )
@@ -235,7 +244,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
-                resp = await self._client.post(OPENAI_URL, headers=headers, json=payload)
+                resp = await self._client.post(_chat_url(), headers=headers, json=payload)
             except httpx.HTTPError as e:
                 last_exc = e
                 logger.warning(
