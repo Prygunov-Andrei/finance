@@ -13,6 +13,7 @@ from .models import (
     NewsPost, NewsAuthor, NewsCategory, Comment, MediaUpload, SearchConfiguration,
     NewsDiscoveryRun, DiscoveryAPICall,
     RatingCriterion, RatingConfiguration, RatingRun,
+    FeaturedNewsSettings,
 )
 from .serializers import (
     NewsPostSerializer, NewsPostWriteSerializer, CommentSerializer, MediaUploadSerializer,
@@ -68,6 +69,46 @@ class NewsPagination(PageNumberPagination):
     page_size = 12
     page_size_query_param = 'page_size'
     max_page_size = 100
+
+
+class FeaturedNewsView(APIView):
+    """GET /featured-news/ — latest published новость для hero-блока главной hvac-info.
+
+    Берёт singleton ``FeaturedNewsSettings`` (pk=1). Если в нём задана
+    ``category`` — фильтрует по ней, иначе возвращает latest published
+    из всех категорий. Дополнительно скрывает is_deleted, is_no_news_found
+    и записи с будущей pub_date (по тому же принципу, что публичный список
+    новостей).
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        featured = FeaturedNewsSettings.get()
+
+        qs = (
+            NewsPost.objects
+            .select_related('author', 'editorial_author', 'category_ref')
+            .prefetch_related('media', 'mentioned_ac_models__brand')
+            .filter(
+                status='published',
+                pub_date__lte=timezone.now(),
+                is_no_news_found=False,
+                is_deleted=False,
+            )
+        )
+        if featured.category_id is not None:
+            qs = qs.filter(category_ref_id=featured.category_id)
+
+        post = qs.order_by('-pub_date').first()
+
+        if post is None:
+            return Response({"post": None, "category": featured.category_id})
+
+        return Response({
+            "post": NewsPostSerializer(post, context={"request": request}).data,
+            "category": featured.category_id,
+        })
 
 
 class NewsPostViewSet(viewsets.ModelViewSet):
