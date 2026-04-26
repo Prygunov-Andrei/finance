@@ -13,8 +13,8 @@ import { useRatingFilters } from './useRatingFilters';
 import CustomRatingTab from './CustomRatingTab';
 import StickyCollapseHero from './StickyCollapseHero';
 import {
-  AD_BADGE_BACKGROUND,
-  AD_ROW_BACKGROUND,
+  AD_BADGE_CLASS,
+  AD_ROW_CLASS,
   applyAdPositioning,
   type WithDisplayRank,
 } from './ratingDisplay';
@@ -161,9 +161,8 @@ function ModelRow({
         color: 'hsl(var(--rt-ink))',
         textDecoration: 'none',
         transition: 'background 0.15s',
-        background: isAd ? AD_ROW_BACKGROUND : undefined,
       }}
-      className="rt-row"
+      className={`rt-row${isAd ? ' ' + AD_ROW_CLASS : ''}`}
     >
       <div
         style={{
@@ -227,14 +226,13 @@ function ModelRow({
 function AdBadge() {
   return (
     <span
+      className={AD_BADGE_CLASS}
       style={{
         fontSize: 10,
         fontFamily: 'var(--rt-font-mono)',
         textTransform: 'uppercase',
         letterSpacing: 1,
-        color: 'hsl(var(--rt-ink-60))',
         padding: '2px 6px',
-        background: AD_BADGE_BACKGROUND,
         borderRadius: 2,
       }}
     >

@@ -58,5 +58,12 @@ export function applyAdPositioning<T>(
   return result;
 }
 
+/* CSS-классы для рекламной строки. Стили объявлены в tokens.css с
+ * dark-вариантом, чтобы амбер-фон не «горел» белым пятном на тёмной теме. */
+export const AD_ROW_CLASS = 'rt-ad-row';
+export const AD_BADGE_CLASS = 'rt-ad-badge';
+
+/** @deprecated Используй AD_ROW_CLASS / AD_BADGE_CLASS — они учитывают dark-тему. */
 export const AD_ROW_BACKGROUND = 'hsl(40 100% 96% / 1)';
+/** @deprecated См. AD_BADGE_CLASS. */
 export const AD_BADGE_BACKGROUND = 'hsl(40 90% 55% / 0.2)';

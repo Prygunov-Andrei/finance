@@ -65,6 +65,24 @@
   --rt-accent-bg: 181 56% 52% / 0.18;
 }
 
+/* Рекламная строка в листинге рейтинга. Светлая тема — мягкий амбер,
+ * тёмная — тонкий тёплый оттенок поверх ink-фона (не «горит» белым пятном). */
+.rt-ad-row {
+  background: hsl(40 100% 96% / 1);
+}
+.dark .rt-ad-row {
+  background: hsl(40 60% 55% / 0.10);
+}
+
+.rt-ad-badge {
+  background: hsl(40 90% 55% / 0.2);
+  color: hsl(40 60% 30%);
+}
+.dark .rt-ad-badge {
+  background: hsl(40 90% 55% / 0.18);
+  color: hsl(40 80% 75%);
+}
+
 /* Brand-логотипы: переключение light/dark версий.
    - <BrandLogo srcDark={...}/> рендерит оба <img>, CSS скрывает не-активный.
    - Если у бренда нет dark-версии, BrandLogo рендерит один <img class="rt-brand-logo-single">

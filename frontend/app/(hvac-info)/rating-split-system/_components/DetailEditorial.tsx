@@ -164,15 +164,7 @@ function PointsCard({
         padding: '14px 16px 14px 18px',
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: 10,
-        }}
-      >
-        <PointGlyph kind={kind} accent={accent} />
+      <div style={{ marginBottom: 10 }}>
         <span
           style={{
             fontFamily: 'var(--rt-font-mono)',
@@ -205,7 +197,9 @@ function PointsCard({
               alignItems: 'flex-start',
             }}
           >
-            <PointGlyph kind={kind} accent={accent} small />
+            <span style={{ marginTop: 2, flexShrink: 0 }}>
+              <PointGlyph kind={kind} accent={accent} small />
+            </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <T size={12} weight={600} style={{ lineHeight: 1.35 }}>
                 {p.title}

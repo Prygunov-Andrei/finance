@@ -14,8 +14,8 @@ import {
 } from './useRatingFilters';
 import CustomRatingTab from './CustomRatingTab';
 import {
-  AD_BADGE_BACKGROUND,
-  AD_ROW_BACKGROUND,
+  AD_BADGE_CLASS,
+  AD_ROW_CLASS,
   applyAdPositioning,
 } from './ratingDisplay';
 
@@ -251,9 +251,9 @@ function MobileRows({
             <div
               key={m.id}
               data-ad={isAd ? 'true' : undefined}
+              className={isAd ? AD_ROW_CLASS : undefined}
               style={{
                 borderBottom: '1px solid hsl(var(--rt-border-subtle))',
-                background: isAd ? AD_ROW_BACKGROUND : undefined,
                 marginInline: isAd ? -18 : 0,
                 paddingInline: isAd ? 18 : 0,
               }}
@@ -417,14 +417,13 @@ function MobileRows({
 function AdBadge() {
   return (
     <span
+      className={AD_BADGE_CLASS}
       style={{
         fontSize: 10,
         fontFamily: 'var(--rt-font-mono)',
         textTransform: 'uppercase',
         letterSpacing: 1,
-        color: 'hsl(var(--rt-ink-60))',
         padding: '2px 6px',
-        background: AD_BADGE_BACKGROUND,
         borderRadius: 2,
       }}
     >

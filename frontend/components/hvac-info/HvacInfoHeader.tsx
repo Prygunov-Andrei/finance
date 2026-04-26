@@ -46,6 +46,8 @@ export default function HvacInfoHeader() {
           alignItems: 'center',
           height: 72,
           gap: 28,
+          maxWidth: 1280,
+          margin: '0 auto',
         }}
       >
         <Link

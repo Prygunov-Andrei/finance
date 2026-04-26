@@ -15,8 +15,8 @@ import type {
 import { BrandLogo, Eyebrow, Meter, T, formatPrice } from './primitives';
 import { useFlip } from './useFlip';
 import {
-  AD_BADGE_BACKGROUND,
-  AD_ROW_BACKGROUND,
+  AD_BADGE_CLASS,
+  AD_ROW_CLASS,
   applyAdPositioning,
   type WithDisplayRank,
 } from './ratingDisplay';
@@ -672,6 +672,7 @@ function DesktopCustomRow({
       ref={(el) => register(model.id, el as HTMLElement | null)}
       href={`/rating-split-system/${model.slug}/`}
       data-ad={isAd ? 'true' : undefined}
+      className={isAd ? AD_ROW_CLASS : undefined}
       style={{
         display: 'grid',
         gridTemplateColumns: TABLE_GRID,
@@ -681,7 +682,6 @@ function DesktopCustomRow({
         color: 'hsl(var(--rt-ink))',
         textDecoration: 'none',
         willChange: 'transform',
-        background: isAd ? AD_ROW_BACKGROUND : undefined,
       }}
     >
       <span
@@ -790,11 +790,10 @@ function AdBadge() {
         fontFamily: 'var(--rt-font-mono)',
         textTransform: 'uppercase',
         letterSpacing: 1,
-        color: 'hsl(var(--rt-ink-60))',
         padding: '2px 6px',
-        background: AD_BADGE_BACKGROUND,
         borderRadius: 2,
       }}
+      className={AD_BADGE_CLASS}
     >
       Реклама
     </span>
@@ -848,10 +847,10 @@ function MobileCustomList({
               key={r.model.id}
               ref={(el) => register(r.model.id, el)}
               data-ad={isAd ? 'true' : undefined}
+              className={isAd ? AD_ROW_CLASS : undefined}
               style={{
                 borderBottom: '1px solid hsl(var(--rt-border-subtle))',
                 willChange: 'transform',
-                background: isAd ? AD_ROW_BACKGROUND : undefined,
                 marginInline: isAd ? -18 : 0,
                 paddingInline: isAd ? 18 : 0,
               }}

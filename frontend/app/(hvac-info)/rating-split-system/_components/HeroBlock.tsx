@@ -294,7 +294,7 @@ export function HeroBlockCollapsed({ stats }: { stats: RatingMethodologyStats })
                   whiteSpace: 'nowrap',
                 }}
               >
-                {name.split(' ')[0]}
+                {name}
               </span>
             </div>
           ))}
