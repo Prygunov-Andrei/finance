@@ -546,17 +546,6 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
           </Row>
           <Row cols="1fr 1fr 1fr">
             <Field
-              label="Модель компрессора"
-              required
-              error={errors.compressor_model?.[0]}
-            >
-              <TextInput
-                value={state.compressor_model}
-                onChange={(v) => setField('compressor_model', v)}
-                placeholder="Например: QXC-19K"
-              />
-            </Field>
-            <Field
               label="Холодопроизводительность"
               required
               error={errors.nominal_capacity_watt?.[0]}
@@ -568,6 +557,17 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
                 unit="Вт"
                 type="number"
                 inputMode="numeric"
+              />
+            </Field>
+            <Field
+              label="Модель компрессора"
+              required
+              error={errors.compressor_model?.[0]}
+            >
+              <TextInput
+                value={state.compressor_model}
+                onChange={(v) => setField('compressor_model', v)}
+                placeholder="Например: QXC-19K"
               />
             </Field>
             <Field label="Цена" error={errors.price?.[0]}>
