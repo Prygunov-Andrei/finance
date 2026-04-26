@@ -240,7 +240,20 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // 11. ПЕРЕПИСКА
+  // 11. HVAC-РЕЙТИНГ (рейтинг кондиционеров для портала hvac-info.com)
+  {
+    id: 'hvac-rating',
+    label: 'HVAC-Рейтинг',
+    icon: <BarChart3 className="w-5 h-5" />,
+    path: '/hvac-rating',
+    section: 'dashboard',
+    children: [
+      { id: 'hvac-rating-models', label: 'Модели', icon: <Package className="w-4 h-4" />, path: '/hvac-rating/models', section: 'dashboard' },
+      { id: 'hvac-rating-brands', label: 'Бренды', icon: <Building2 className="w-4 h-4" />, path: '/hvac-rating/brands', section: 'dashboard' },
+    ],
+  },
+
+  // 12. ПЕРЕПИСКА
   {
     id: 'communications',
     label: 'Переписка',
@@ -348,6 +361,12 @@ const pageTitles: Record<string, string> = {
   'work-sections': 'Разделы работ',
   'worker-grades': 'Разряды монтажников',
   'worker-grade-skills': 'Навыки разрядов',
+  // HVAC-Рейтинг
+  'hvac-rating': 'HVAC-Рейтинг',
+  'hvac-rating/models': 'Модели (рейтинг)',
+  'hvac-rating/models/create': 'Новая модель',
+  'hvac-rating/brands': 'Бренды (рейтинг)',
+  'hvac-rating/brands/create': 'Новый бренд',
   // 11. Справочники и Настройки
   'references/work-conditions': 'Фронт работ и монтажные условия',
   personnel: 'Персонал',
@@ -411,6 +430,14 @@ pathToParent['hvac/rating-settings'] = { label: 'HVAC-новости', path: '/h
 pathToParent['hvac/rating-criteria'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/instructions'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/analytics'] = { label: 'HVAC-новости', path: '/hvac/news' };
+
+// HVAC-Рейтинг breadcrumbs
+pathToParent['hvac-rating/models'] = { label: 'HVAC-Рейтинг', path: '/hvac-rating/models' };
+pathToParent['hvac-rating/models/create'] = { label: 'Модели', path: '/hvac-rating/models' };
+pathToParent['hvac-rating/models/edit'] = { label: 'Модели', path: '/hvac-rating/models' };
+pathToParent['hvac-rating/brands'] = { label: 'HVAC-Рейтинг', path: '/hvac-rating/brands' };
+pathToParent['hvac-rating/brands/create'] = { label: 'Бренды', path: '/hvac-rating/brands' };
+pathToParent['hvac-rating/brands/edit'] = { label: 'Бренды', path: '/hvac-rating/brands' };
 
 export function Layout({ children, onLogout, user }: LayoutProps) {
   const { hasAccess } = usePermissions();
