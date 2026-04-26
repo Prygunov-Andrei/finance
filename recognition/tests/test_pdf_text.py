@@ -416,20 +416,29 @@ def test_extract_lines_filters_empty():
 # ---------------------------------------------------------------------------
 
 
-def _build_synthetic_page(rows: list[list[tuple[float, str]]], rotation: int = 0):
+def _build_synthetic_page(
+    rows: list[list[tuple[float, str]]],
+    rotation: int = 0,
+    row_y_step: float = 21.0,
+    cluster_gap: float | None = None,
+):
     """Создать fitz-страницу с реальным text layer.
 
     rows = list of «row»; каждый row = список (display_x, text), для одной y.
-    Строки идут построчно (12pt спейсинг). Рисуем горизонтальный текст в
-    портретной странице (rotation=0) — derotation = identity.
+    `row_y_step` — расстояние между rows (по умолчанию 21pt — discrete clusters).
+    `cluster_gap` — если задан, после каждых 3 rows вставляется большой gap
+    `cluster_gap`pt — позволяет создавать несколько отдельных visual clusters.
     """
     doc = fitz.open()
     page = doc.new_page(width=1191, height=842)
     y = 50.0
-    for row in rows:
+    for idx, row in enumerate(rows):
         for x, text in row:
             page.insert_text((x, y + 8), text, fontsize=10, fontname="helv")
-        y += 21.0
+        if cluster_gap is not None and (idx + 1) % 3 == 0 and idx + 1 < len(rows):
+            y += cluster_gap
+        else:
+            y += row_y_step
     if rotation:
         page.set_rotation(rotation)
     return doc, page
@@ -537,23 +546,165 @@ class TestExtractStructuredRows:
         finally:
             doc.close()
 
-    def test_multiline_name_splits_into_two_rows(self):
-        # Многострочное имя в name-колонке: bbox-парсер вернёт ДВЕ row'ки
-        # (одна с name+model+unit+qty, вторая с name только) — LLM-нормализация
-        # склеит. Здесь проверяем именно что обе row'ки представлены raw.
+    def test_multiline_name_absorbed_into_main(self):
+        # E20-1 Class E (cluster-merge): multi-line name continuation absorb-ится
+        # в main row если Δy между rows ≤ _CLUSTER_Y_GAP_THRESHOLD (visual
+        # cluster). До E20-1 эти rows оставались split, LLM склеивала post-process;
+        # теперь склейка делается pre-LLM, чтобы LLM получала чистую row на item.
         doc, page = _build_synthetic_page(
             [
                 [(200.0, "Header A"), (665.0, "M1"), (937.0, "sht"), (985.0, "1")],
-                [(200.0, "tail line 2")],  # продолжение name
-            ]
+                [(200.0, "tail line 2")],  # продолжение name (Δy ~14pt)
+            ],
+            row_y_step=14.0,  # внутри _CLUSTER_Y_GAP_THRESHOLD
         )
         try:
             rows = extract_structured_rows(page)
             data_rows = [r for r in rows if not r.is_section_heading]
-            assert len(data_rows) >= 2
+            # Cluster-merge склеил multi-line name в один row.
+            assert len(data_rows) == 1
             assert data_rows[0].cells.get("model") == "M1"
-            # Вторая row — только name
-            assert "tail line 2" in (data_rows[1].cells.get("name") or "")
+            assert "Header A" in (data_rows[0].cells.get("name") or "")
+            assert "tail line 2" in (data_rows[0].cells.get("name") or "")
+        finally:
+            doc.close()
+
+
+class TestE201Fixes:
+    """E20-1: Spec-4 pre-LLM pipeline fixes (Class E + Class B+F)."""
+
+    def test_merge_multiline_model_codes_smesitelnyj_uzel(self):
+        """Class E: модель «MUB.L.04.04.B.CP.TM.NS.\\n159485.1» на 2 PDF-строках
+        (Spec-4 стр 83 «Смесительный узел для П2В2») склеивается в один row.
+
+        Pre-fix: 3 row pre-LLM (model-prefix, main, model-suffix) → +2 phantom после LLM.
+        Post-fix: 1 row с model = «MUB.L.04.04.B.CP.TM.NS. 159485.1».
+        """
+        doc, page = _build_synthetic_page(
+            [
+                # Model-prefix row (orphan: только model, без name/qty).
+                [(665.0, "MUB.L.04.04.B.CP.TM.NS.")],
+                # Main row (name + qty + unit).
+                [(200.0, "Smesitelnyj uzel dlya P2V2"), (937.0, "kompl"), (985.0, "1")],
+                # Model-suffix row (orphan: только model).
+                [(665.0, "159485.1")],
+            ],
+            row_y_step=12.0,  # внутри _CLUSTER_Y_GAP_THRESHOLD (15pt)
+        )
+        try:
+            rows = extract_structured_rows(page)
+            data_rows = [r for r in rows if not r.is_section_heading]
+            assert len(data_rows) == 1, f"expected 1 row after merge, got {len(data_rows)}: {[r.cells for r in data_rows]}"
+            r = data_rows[0]
+            assert "Smesitelnyj uzel" in (r.cells.get("name") or "")
+            model = r.cells.get("model") or ""
+            assert "MUB.L.04.04" in model
+            assert "159485.1" in model
+            assert (r.cells.get("qty") or "") == "1"
+        finally:
+            doc.close()
+
+    def test_merge_klop_two_row_pattern_three_rows(self):
+        """Class B+F (page 15): КЛОП на 3 visual row (name+model + orphan-main qty/unit/mfr +
+        name-tail+model-tail) → склеивается в один main row без phantom rows.
+
+        Используем `brand` column для mfr (synthetic page без header — fallback на
+        _DEFAULT_COLUMN_BOUNDS, где «manufacturer» не выделена отдельно от «brand»).
+        Логика _absorb_into_main одинакова для placeholder в любой колонке.
+        """
+        doc, page = _build_synthetic_page(
+            [
+                # row 0: name + model (КЛОП-prefix), placeholder mfr.
+                [(200.0, "Klapan protivopozharnyj kanalnyj, normalno otkrytyj"),
+                 (665.0, "KLOP-2(90)-NO-300x300"),
+                 (870.0, "-")],
+                # row 1: orphan_main (только qty/unit/mfr).
+                [(870.0, "VINGS-M"), (937.0, "sht"), (985.0, "1")],
+                # row 2: name-tail + model-tail (КЛОП-suffix).
+                [(200.0, "(NO), privod klapana snaruzhi"),
+                 (665.0, "MV/S(220)-K")],
+            ],
+            row_y_step=12.0,  # внутри _CLUSTER_Y_GAP_THRESHOLD
+        )
+        try:
+            rows = extract_structured_rows(page)
+            data_rows = [r for r in rows if not r.is_section_heading]
+            assert len(data_rows) == 1, f"expected 1 row after merge, got {len(data_rows)}: {[r.cells for r in data_rows]}"
+            r = data_rows[0]
+            name = r.cells.get("name") or ""
+            assert "Klapan protivopozharnyj" in name
+            assert "(NO)" in name
+            model = r.cells.get("model") or ""
+            assert "KLOP-2" in model
+            assert "MV/S" in model
+            # placeholder mfr «-» в row 0 заменён реальным «VINGS-M» из orphan_main row.
+            assert "VINGS-M" in (r.cells.get("brand") or "")
+            assert (r.cells.get("qty") or "") == "1"
+            assert (r.cells.get("unit") or "") == "sht"
+        finally:
+            doc.close()
+
+    def test_klop_clusters_dont_merge_across_visual_gap(self):
+        """Защита от over-merge: два разных КЛОП-item с большим Δy между кластерами
+        НЕ должны склеиться в один row.
+        """
+        doc, page = _build_synthetic_page(
+            [
+                # КЛОП #1 (cluster 1, y=100-115)
+                [(200.0, "Klapan protivopozharnyj kanalnyj, normalno otkrytyj"),
+                 (665.0, "KLOP-2(90)-NO-300x300"), (870.0, "-")],
+                [(870.0, "VINGS-M"), (937.0, "sht"), (985.0, "1")],
+                [(200.0, "(NO), privod klapana"), (665.0, "MV/S(220)-K")],
+                # КЛОП #2 (cluster 2, y отстоит >20pt от cluster 1 — явный визуальный разрыв)
+                [(200.0, "Klapan protivopozharnyj kanalnyj, normalno otkrytyj"),
+                 (665.0, "KLOP-2(90)-NO-400x400"), (870.0, "-")],
+                [(870.0, "VINGS-M"), (937.0, "sht"), (985.0, "2")],
+                [(200.0, "(NO), privod klapana"), (665.0, "MV/S(220)-K")],
+            ],
+            row_y_step=14.0,  # внутри cluster
+            cluster_gap=40.0,  # между КЛОП #1 и КЛОП #2 — явный визуальный разрыв
+        )
+        try:
+            rows = extract_structured_rows(page)
+            data_rows = [r for r in rows if not r.is_section_heading]
+            assert len(data_rows) == 2, f"expected 2 КЛОП rows, got {len(data_rows)}: {[r.cells for r in data_rows]}"
+            assert "300x300" in (data_rows[0].cells.get("model") or "")
+            assert "400x400" in (data_rows[1].cells.get("model") or "")
+        finally:
+            doc.close()
+
+    def test_bbox_column_alignment_preserves_correct_qty(self):
+        """Class L (BBOX_COLUMN_BLEED, аудит-tracker стр 7 item #103): bbox-extractor
+        корректно ассигнирует qty/unit к row с правильным name. Тест воспроизводит
+        ситуацию «Фасонные изделия (30%) qty=60», «То же 1200х800 qty=13» —
+        каждая qty должна остаться на своей row, без bleed на соседнюю.
+
+        Pre-LLM rows на реальной Spec-4 page 7 — корректные. Class L (qty=13 на row
+        Фасонных вместо qty=60) — это bug LLM-нормализации, а не bbox extraction.
+        Этот тест документирует контракт pre-LLM stage.
+        """
+        doc, page = _build_synthetic_page(
+            [
+                # «То же 1200х800 δ=0,9мм» — qty=9
+                [(200.0, "Toze 1200x800"), (665.0, "GOST 14918-80"),
+                 (937.0, "p.m."), (985.0, "9")],
+                # «То же 1200х600 δ=0,9мм» — qty=13
+                [(200.0, "Toze 1200x600"), (665.0, "GOST 14918-80"),
+                 (937.0, "p.m."), (985.0, "13")],
+                # «Фасонные изделия (30%)» — qty=60
+                [(200.0, "Fasonnye izdeliya (30%)"), (937.0, "m2"), (985.0, "60")],
+            ],
+            row_y_step=23.0,  # большой gap → разные cluster, не merge.
+        )
+        try:
+            rows = extract_structured_rows(page)
+            data_rows = [r for r in rows if not r.is_section_heading]
+            assert len(data_rows) == 3
+            assert (data_rows[0].cells.get("qty") or "") == "9"
+            assert (data_rows[1].cells.get("qty") or "") == "13"
+            assert (data_rows[2].cells.get("qty") or "") == "60"
+            # Фасонные имеют unit=м², НЕ п.м. от соседней row.
+            assert "m2" in (data_rows[2].cells.get("unit") or "")
         finally:
             doc.close()
 

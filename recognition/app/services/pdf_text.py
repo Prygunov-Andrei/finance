@@ -1157,6 +1157,8 @@ def extract_structured_rows(page: object) -> list[TableRow]:
     rows = _merge_multiline_section_headings(rows)
     rows = _merge_continuation_rows(rows)
     rows = _merge_series_parent_into_children(rows)
+    rows = _merge_multiline_model_codes(rows)
+    rows = _merge_klop_two_row_pattern(rows)
     return rows
 
 
@@ -1370,6 +1372,429 @@ def _is_bare_name_row(row: TableRow) -> bool:
         return False
     # Допускаем pos (системный префикс), но больше ничего.
     return filled.issubset({"name", "pos"}) and not row.is_section_heading
+
+
+# E20-1 Class E (MULTI_LINE_MODEL_SPLIT) — Spec-4 worst page 83 (+20 phantom),
+# а также повсеместно по Spec-4 (стр 76, 79-82 и др.) В ОВиК-чертежах модель
+# одного PDF item часто занимает 2-3 визуальные строки в bbox (например
+# `MUB.L.04.04.B.CP.TM.NS.\n159485.1`). bbox-extractor создаёт отдельный
+# row для каждой строки → main row с name/qty/unit «зажат» между orphan
+# rows которые содержат только model/comments/manufacturer (без name и qty).
+# LLM видит это как N отдельных items + догадывается частично, плодя phantom.
+#
+# Cluster-merge: rows с Δy между соседями ≤ _CLUSTER_Y_GAP_THRESHOLD идут в
+# один visual cluster. Если в кластере ровно ОДИН main row (name+qty/unit/pos)
+# — orphan rows absorbed: их model/comments/mfr добавляются в main row через
+# dash-rule склейку. Pos-only rows внутри cluster не трогаем (они уже идут
+# через _merge_continuation_rows).
+_CLUSTER_Y_GAP_THRESHOLD = 15.0
+_MAIN_ROW_ANCHOR_KEYS = ("qty", "unit", "pos")
+_ORPHAN_ALLOWED_KEYS = {"model", "mass", "comments", "manufacturer", "brand"}
+
+# КЛОП-suffix continuation: если model_part_2 начинается с «МВ/S», «МBE/S» и т.п.,
+# в реальном PDF между ним и предыдущей частью стоит дефис; bbox extractor
+# разносит части на 2 row'а через y-bucketing и иногда теряет визуальный
+# дефис, который физически лежит на первой строке. Склеиваем через `-`.
+_MODEL_DASH_CONTINUATION_RE = re.compile(
+    r"^(?:М[ВB]/S|MB[EВ]/S|MV/S|МВ/К|МBE/K|MB/K)",
+    re.IGNORECASE,
+)
+# Дефис-перенос в name (continuation на след строке): «каширо-» + «ванный»
+# → «кашированный». Re-используем существующий `_DASH_SPACE_MERGE_RE`
+# (определён выше для series-merge).
+# placeholder mfr/manufacturer: некоторые PDF в шапке блока КЛОП ставят `-`
+# (или em-dash) как visual separator вместо реальной mfr; mfr живёт на
+# orphan-row с qty/unit. При absorb-е placeholder вытесняется реальным mfr.
+_PLACEHOLDER_VALUES = {"-", "—", "–", "−", ""}
+
+
+def _merge_model_parts(parts: list[str]) -> str:
+    """Склеить multi-line фрагменты model code с dash-rule.
+
+    Правила:
+    - prev оканчивается на `-` → склеить без пробела (dash inline).
+    - next начинается с `-` → склеить без пробела.
+    - next matches КЛОП-suffix pattern (МВ/S и др.) → склеить через `-`.
+    - иначе → склеить через пробел.
+    """
+    cleaned = [p.strip() for p in parts if p and p.strip()]
+    if not cleaned:
+        return ""
+    result = cleaned[0]
+    for nxt in cleaned[1:]:
+        if result.endswith("-"):
+            result = result + nxt
+        elif nxt.startswith("-"):
+            result = result + nxt
+        elif _MODEL_DASH_CONTINUATION_RE.match(nxt):
+            result = result + "-" + nxt
+        else:
+            result = result + " " + nxt
+    return result
+
+
+def _merge_name_parts(parts: list[str]) -> str:
+    """Склеить multi-line фрагменты name с word-break dash-rule.
+
+    «каширо-» + «ванный» → «кашированный». Применяем _DASH_SPACE_MERGE_RE
+    (тот же regex, что для series-parent merge).
+    """
+    cleaned = [p.strip() for p in parts if p and p.strip()]
+    if not cleaned:
+        return ""
+    joined = " ".join(cleaned)
+    # Dash-rule: lowercase + '-' + space + lowercase → склеить без дефиса.
+    return _DASH_SPACE_MERGE_RE.sub(r"\1\2", joined)
+
+
+def _merge_comments_parts(parts: list[str]) -> str:
+    """Склеить multi-line comments с word-break dash-rule.
+
+    «Уточнить на мон-» + «таже» → «Уточнить на монтаже».
+    """
+    cleaned = [p.strip() for p in parts if p and p.strip()]
+    if not cleaned:
+        return ""
+    joined = " ".join(cleaned)
+    return _DASH_SPACE_MERGE_RE.sub(r"\1\2", joined)
+
+
+def _is_main_row(row: TableRow) -> bool:
+    """Row представляющий самостоятельный item: anchor (qty/unit/pos) + descriptor (name или model).
+
+    Допускаем pos+model+qty без name (типичный «ПД15 Установка...» где name
+    лежит на отдельной visual row выше — будет absorb в cluster-merge).
+    """
+    if row.is_section_heading:
+        return False
+    cells = row.cells
+    has_anchor = any((cells.get(k) or "").strip() for k in _MAIN_ROW_ANCHOR_KEYS)
+    has_descriptor = bool((cells.get("name") or "").strip()) or bool(
+        (cells.get("model") or "").strip()
+    )
+    return has_anchor and has_descriptor
+
+
+def _is_orphan_row(row: TableRow) -> bool:
+    """Row БЕЗ name, БЕЗ qty/unit/pos — содержит только model/mass/comments/mfr/brand."""
+    if row.is_section_heading:
+        return False
+    cells = row.cells
+    if (cells.get("name") or "").strip():
+        return False
+    # Должен иметь хотя бы один из orphan-allowed cols.
+    if any((cells.get(k) or "").strip() for k in _MAIN_ROW_ANCHOR_KEYS):
+        return False
+    return any((cells.get(k) or "").strip() for k in _ORPHAN_ALLOWED_KEYS)
+
+
+def _is_orphan_main(row: TableRow) -> bool:
+    """Row БЕЗ name И БЕЗ model, но С qty/unit/mfr — типичный КЛОП split,
+    где qty/unit/mfr живут на отдельной y-полосе между двумя name+model rows."""
+    if row.is_section_heading:
+        return False
+    cells = row.cells
+    if (cells.get("name") or "").strip():
+        return False
+    if (cells.get("model") or "").strip():
+        return False
+    return any((cells.get(k) or "").strip() for k in ("qty", "unit", "mass"))
+
+
+def _is_bare_name_continuation(row: TableRow) -> bool:
+    """Row только с name, без model/qty/unit/mfr — multi-line name continuation."""
+    if row.is_section_heading:
+        return False
+    cells = row.cells
+    if not (cells.get("name") or "").strip():
+        return False
+    if any((cells.get(k) or "").strip() for k in _MAIN_ROW_ANCHOR_KEYS):
+        return False
+    if (cells.get("model") or "").strip():
+        return False
+    if (cells.get("manufacturer") or "").strip():
+        return False
+    if (cells.get("brand") or "").strip():
+        return False
+    return True
+
+
+def _is_absorb_candidate(row: TableRow) -> bool:
+    """Row является absorb-кандидатом — фрагмент item, не самостоятельная позиция.
+
+    Критерий: НЕ section_heading И НЕ имеет qty/unit/pos (anchor-маркеры
+    самостоятельной позиции). Включает все типы фрагментов:
+    - orphan (только model/mass/comments/mfr/brand, без name)
+    - bare-name (только name)
+    - name+model fragment (name + model, без qty/unit/pos — типично для
+      КЛОП split на стр 76, где модель идёт на 2 строки и name на 2 строки).
+    """
+    if row.is_section_heading:
+        return False
+    cells = row.cells
+    if any((cells.get(k) or "").strip() for k in _MAIN_ROW_ANCHOR_KEYS):
+        return False
+    # Защита: row должен иметь хоть какие-то полезные cells (иначе нечего absorb).
+    return any(
+        (cells.get(k) or "").strip()
+        for k in ("name", "model", "comments", "mass", "manufacturer", "brand")
+    )
+
+
+def _detect_visual_clusters(rows: list[TableRow]) -> list[list[int]]:
+    """Сгруппировать rows в visual clusters по y_mid: Δy <= _CLUSTER_Y_GAP_THRESHOLD
+    между соседними. Возвращает list of index-groups."""
+    clusters: list[list[int]] = []
+    current: list[int] = []
+    prev_y: float | None = None
+    for i, row in enumerate(rows):
+        if row.is_section_heading:
+            if current:
+                clusters.append(current)
+                current = []
+            clusters.append([i])
+            prev_y = None
+            continue
+        if prev_y is None or (row.y_mid - prev_y) <= _CLUSTER_Y_GAP_THRESHOLD:
+            current.append(i)
+        else:
+            if current:
+                clusters.append(current)
+            current = [i]
+        prev_y = row.y_mid
+    if current:
+        clusters.append(current)
+    return clusters
+
+
+def _merge_multiline_model_codes(rows: list[TableRow]) -> list[TableRow]:
+    """E20-1 Class E (Spec-4 worst pages 83, 76, 79-82 и др.).
+
+    Сгруппировать consecutive rows в visual clusters (Δy ≤ 15pt между соседями).
+    Для cluster с РОВНО одним main row (name+qty/unit/pos) absorb orphan rows:
+
+    - orphan = no name, no qty/unit/pos (только model/mass/comments/mfr/brand)
+    - orphan_main = no name, no model, но есть qty/unit/mfr (КЛОП split:
+      qty/unit/mfr живут на отдельной y-полосе между name+model rows)
+    - bare-name = name-only continuation (multi-line name)
+
+    Безопасно: cluster с 0 или ≥2 main rows не трогаем (риск over-merge).
+    """
+    clusters = _detect_visual_clusters(rows)
+    keep = [True] * len(rows)
+    for cluster in clusters:
+        if len(cluster) < 2:
+            continue
+        main_indices = [i for i in cluster if _is_main_row(rows[i])]
+        # Case A: ровно один main row → absorb остальных.
+        if len(main_indices) == 1:
+            main_idx = main_indices[0]
+        elif len(main_indices) == 0:
+            # Case B (Spec-4 page 76 КЛОП и др.): main row вообще нет
+            # (name+model на 2-3 row + qty/unit/mfr на отдельной row).
+            # Если есть РОВНО ОДИН orphan_main (qty/unit/mfr без name/model)
+            # — он становится «proxy main»: после absorb других rows у него
+            # появляются name+model, и cluster схлопывается в 1 row.
+            orphan_main_indices = [
+                i for i in cluster if _is_orphan_main(rows[i])
+            ]
+            if len(orphan_main_indices) != 1:
+                continue
+            main_idx = orphan_main_indices[0]
+        else:
+            # 2+ main rows в кластере — не трогаем (риск over-merge).
+            continue
+        main = rows[main_idx]
+        for j in cluster:
+            if j == main_idx:
+                continue
+            other = rows[j]
+            # Все absorb-кандидаты (фрагменты без qty/unit/pos) сливаются в main.
+            # Случай orphan_main (qty/unit/mfr без name/model) — сам main_idx
+            # в case B; в case A он тоже absorb (есть anchor-маркеры).
+            if _is_absorb_candidate(other) or _is_orphan_main(other):
+                _absorb_into_main(main, other, position=j - main_idx)
+                keep[j] = False
+            # Иначе оставляем (например, pos-only rows _merge_continuation_rows
+            # уже обработал; если что-то ещё попало — не рискуем).
+    return [r for r, k in zip(rows, keep) if k]
+
+
+def _absorb_into_main(main: TableRow, other: TableRow, *, position: int) -> None:
+    """Влить orphan/continuation row в main: model/name/comments через dash-rule,
+    qty/unit/mfr — override placeholder.
+
+    `position` — относительное положение other vs main (отрицательное = выше,
+    положительное = ниже). Используется для правильного порядка склейки.
+    """
+    main_cells = main.cells
+    other_cells = other.cells
+
+    # name: склеить main.name с other.name по позиции.
+    other_name = (other_cells.get("name") or "").strip()
+    if other_name:
+        main_name = (main_cells.get("name") or "").strip()
+        if not main_name:
+            main_cells["name"] = other_name
+        elif position < 0:
+            main_cells["name"] = _merge_name_parts([other_name, main_name])
+        else:
+            main_cells["name"] = _merge_name_parts([main_name, other_name])
+
+    # model: склеить с dash-rule.
+    other_model = (other_cells.get("model") or "").strip()
+    if other_model:
+        main_model = (main_cells.get("model") or "").strip()
+        if not main_model:
+            main_cells["model"] = other_model
+        elif position < 0:
+            main_cells["model"] = _merge_model_parts([other_model, main_model])
+        else:
+            main_cells["model"] = _merge_model_parts([main_model, other_model])
+
+    # comments: склеить с dash-rule.
+    other_comments = (other_cells.get("comments") or "").strip()
+    if other_comments:
+        main_comments = (main_cells.get("comments") or "").strip()
+        if not main_comments:
+            main_cells["comments"] = other_comments
+        elif position < 0:
+            main_cells["comments"] = _merge_comments_parts([other_comments, main_comments])
+        else:
+            main_cells["comments"] = _merge_comments_parts([main_comments, other_comments])
+
+    # qty/unit/mfr/brand/mass: override placeholder if main is empty or '-'.
+    for col in ("qty", "unit", "manufacturer", "brand", "mass"):
+        other_val = (other_cells.get(col) or "").strip()
+        if not other_val:
+            continue
+        main_val = (main_cells.get(col) or "").strip()
+        if main_val in _PLACEHOLDER_VALUES:
+            main_cells[col] = other_val
+        # Иначе main выигрывает — не трогаем (защита от конфликтов).
+
+    # raw_blocks для трассировки.
+    main.raw_blocks.extend(other.raw_blocks)
+
+
+# E20-1 Class B+F (Spec-4 КЛОП-2 phantom rows на стр 7, 8, 15, 19, 20, 26, 28,
+# 32, 40, 45, 50, 62, 76, 87 = ~+44 phantom). КЛОП split на 2-3 row:
+#  rowN:   name=«Клапан противопожарный...», model=«КЛОП-...», mfr=«-»
+#  rowN+1: mfr=«ВИНГС-М», unit=«шт.», qty=N (orphan main)
+#  rowN+2: name=«(НО), привод клапана снаружи», model=«МВ/S(220)-К»
+#
+# Если cluster-merge выше уже захватил cluster — этот fix не сработает (idempotent).
+# Если cluster по какой-то причине разошёлся (Δy>15pt) или main rows >=2 —
+# этот fallback ловит специфичный КЛОП-pattern из 3 row'ов независимо от Δy.
+_KLOP_NAME_RE = re.compile(r"клапан\s+противопожарн", re.IGNORECASE)
+_KLOP_MODEL_PREFIX_RE = re.compile(r"^\s*КЛОП[-\s]?\d", re.IGNORECASE)
+_KLOP_NAME_TAIL_RE = re.compile(r"\(НО\)|\(НЗ\)|привод\s+клапана", re.IGNORECASE)
+_KLOP_MODEL_TAIL_RE = re.compile(
+    r"^(?:М[ВB]/S|MB[EВ]/S|MV/S|МВ/К|МBE/K)",
+    re.IGNORECASE,
+)
+
+
+def _merge_klop_two_row_pattern(rows: list[TableRow]) -> list[TableRow]:
+    """E20-1 Class B+F fallback: КЛОП split на 2-3 row'а.
+
+    Pattern A (3 rows подряд):
+      [N]   name=«Клапан противопожарный...», model=«КЛОП-...»
+      [N+1] qty/unit/mfr-only (no name, no model)
+      [N+2] name=«(НО), привод клапана снаружи»|name DUP с N, model=«МВ/S...»
+
+    Pattern B (2 rows подряд):
+      [N]   name=«Клапан противопожарный...», model=«КЛОП-...», qty/unit/mfr
+      [N+1] name=«(НО)...» либо name DUP, model=«МВ/S...»
+
+    Срабатывает только когда _merge_multiline_model_codes не покрыл (например,
+    cluster не образовался из-за гэпа Δy>15pt между rows).
+    """
+    keep = [True] * len(rows)
+    i = 0
+    while i < len(rows):
+        if not keep[i]:
+            i += 1
+            continue
+        row = rows[i]
+        if row.is_section_heading:
+            i += 1
+            continue
+        cells = row.cells
+        name = (cells.get("name") or "").strip()
+        model = (cells.get("model") or "").strip()
+        if not (_KLOP_NAME_RE.search(name) and _KLOP_MODEL_PREFIX_RE.match(model)):
+            i += 1
+            continue
+
+        # Pattern A: row N+1 = orphan_main, row N+2 = name+model continuation.
+        merged = False
+        if i + 2 < len(rows) and keep[i + 1] and keep[i + 2]:
+            r1 = rows[i + 1]
+            r2 = rows[i + 2]
+            if (
+                _is_orphan_main(r1)
+                and not r2.is_section_heading
+                and _klop_continuation_row(r2, name)
+            ):
+                _absorb_into_main(row, r1, position=1)
+                _absorb_into_main(row, r2, position=2)
+                keep[i + 1] = False
+                keep[i + 2] = False
+                merged = True
+                i += 3
+                continue
+
+        # Pattern B: row N уже main, row N+1 — name-tail+model-tail continuation.
+        if not merged and i + 1 < len(rows) and keep[i + 1]:
+            r1 = rows[i + 1]
+            if (
+                not r1.is_section_heading
+                and _klop_continuation_row(r1, name)
+                and _is_main_row(row)
+            ):
+                _absorb_into_main(row, r1, position=1)
+                keep[i + 1] = False
+                i += 2
+                continue
+
+        i += 1
+    return [r for r, k in zip(rows, keep) if k]
+
+
+def _klop_continuation_row(row: TableRow, prev_name: str) -> bool:
+    """Row является КЛОП-continuation: name — short tail («(НО), привод клапана…»
+    или «термоизоляцией» и т.п., НЕ полная фраза с «Клапан противопожарн»);
+    model — КЛОП-suffix-fragment («МВ/S...» или начинается с size/«-»).
+
+    Защита от ложного матча на следующий КЛОП-item: name НЕ должен содержать
+    «Клапан противопожарн» (это full name, а не tail).
+    """
+    cells = row.cells
+    name = (cells.get("name") or "").strip()
+    model = (cells.get("model") or "").strip()
+    if not name:
+        return False
+    # Защита: если name содержит «Клапан противопожарн» — это полный name
+    # следующего item, не continuation.
+    if _KLOP_NAME_RE.search(name):
+        return False
+    name_match = (
+        _KLOP_NAME_TAIL_RE.search(name) is not None
+        or name == prev_name
+    )
+    if not name_match:
+        return False
+    # Если model пустой — допустимо (continuation без model).
+    if not model:
+        return True
+    # model должен начинаться с КЛОП-suffix (МВ/S и т.п.) или с дефиса/числа
+    # (typical "700х700-MBE/S(220)-ВН" continuation на стр 76).
+    return (
+        _KLOP_MODEL_TAIL_RE.match(model) is not None
+        or model.startswith("-")
+        or bool(re.match(r"^\d+[xх×]\d+", model))
+    )
 
 
 def _join_column_spans_with_gap(spans: list[_Span], baseline_size: float) -> str:
