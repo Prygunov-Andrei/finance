@@ -6,7 +6,7 @@ type NavItem =
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Новости', href: '/news' },
-  { label: 'Рейтинг', href: '/ratings', active: true },
+  { label: 'Рейтинг', href: '/rating-split-system', active: true },
   { label: 'ISmeta', href: '/smeta' },
   { label: 'Мешок Монтажников', muted: true },
   { label: 'Анализ проектов', muted: true },

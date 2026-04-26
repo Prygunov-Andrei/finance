@@ -229,7 +229,7 @@ export default function SearchDialog({ open, onClose }: Props) {
               {filteredModels.map((m) => (
                 <Link
                   key={m.id}
-                  href={`/ratings/${m.slug}/`}
+                  href={`/rating-split-system/${m.slug}/`}
                   onClick={onClose}
                   style={resultLinkStyle}
                   data-testid="search-model-result"

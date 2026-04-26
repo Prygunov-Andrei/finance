@@ -38,8 +38,8 @@ describe('HvacInfoHeader active-state', () => {
     );
   });
 
-  it('/ratings/abc: «Рейтинг» active', () => {
-    pathnameMock.mockReturnValue('/ratings/abc');
+  it('/rating-split-system/abc: «Рейтинг» active', () => {
+    pathnameMock.mockReturnValue('/rating-split-system/abc');
     render(<HvacInfoHeader />);
     expect(screen.getByRole('link', { hidden: true, name: 'Рейтинг' })).toHaveAttribute(
       'aria-current',

@@ -1,11 +1,11 @@
 import type { CSSProperties, ReactNode } from 'react';
 import Link from 'next/link';
-import { Eyebrow, T } from '../ratings/_components/primitives';
+import { Eyebrow, T } from '../rating-split-system/_components/primitives';
 
 const RATING_LINKS: Array<[string, string]> = [
-  ['Как мы считаем', '/ratings/methodology/'],
-  ['Архив моделей', '/ratings/archive/'],
-  ['Добавить модель', '/ratings/submit/'],
+  ['Как мы считаем', '/rating-split-system/methodology/'],
+  ['Архив моделей', '/rating-split-system/archive/'],
+  ['Добавить модель', '/rating-split-system/submit/'],
 ];
 
 const NEWS_STUBS = ['Прислать новость'];

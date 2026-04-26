@@ -36,13 +36,13 @@ describe('SectionFooter', () => {
     render(<SectionFooter />);
     expect(
       screen.getByRole('link', { name: /Как мы считаем/i }),
-    ).toHaveAttribute('href', '/ratings/methodology/');
+    ).toHaveAttribute('href', '/rating-split-system/methodology/');
     expect(
       screen.getByRole('link', { name: /Архив моделей/i }),
-    ).toHaveAttribute('href', '/ratings/archive/');
+    ).toHaveAttribute('href', '/rating-split-system/archive/');
     expect(
       screen.getByRole('link', { name: /Добавить модель/i }),
-    ).toHaveAttribute('href', '/ratings/submit/');
+    ).toHaveAttribute('href', '/rating-split-system/submit/');
   });
 
   it('заглушки «Прислать новость», «Контакты», «Нашли ошибку?» — не-ссылки с cursor:default, title=Скоро и aria-disabled', () => {

@@ -3,9 +3,9 @@ import type { RatingMethodologyStats } from '@/lib/api/types/rating';
 import { Eyebrow, H, T } from './primitives';
 
 const ABOUT_LINKS: Array<{ label: string; href: string; primary?: boolean }> = [
-  { label: 'Как мы считаем', href: '/ratings/methodology/', primary: true },
-  { label: 'Архив моделей', href: '/ratings/archive/' },
-  { label: 'Добавить модель', href: '/ratings/submit/' },
+  { label: 'Как мы считаем', href: '/rating-split-system/methodology/', primary: true },
+  { label: 'Архив моделей', href: '/rating-split-system/archive/' },
+  { label: 'Добавить модель', href: '/rating-split-system/submit/' },
 ];
 
 const AUTHORS: Array<{ name: string; role: string; photo: string }> = [

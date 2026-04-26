@@ -5,6 +5,15 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
 
+  async redirects() {
+    // SEO: старые URL рейтинга /ratings/* → /rating-split-system/*
+    // permanent: true = HTTP 301, поисковик переиндексирует и передаст вес.
+    return [
+      { source: '/ratings', destination: '/rating-split-system', permanent: true },
+      { source: '/ratings/:path*', destination: '/rating-split-system/:path*', permanent: true },
+    ];
+  },
+
   async rewrites() {
     const backendUrl = process.env.BACKEND_API_URL || 'http://backend:8000';
     const minioUrl = process.env.MINIO_URL || 'http://minio:9000';

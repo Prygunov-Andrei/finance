@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, Source_Serif_4, JetBrains_Mono } from 'next/font/google';
-import './ratings/_styles/tokens.css';
+import './rating-split-system/_styles/tokens.css';
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],

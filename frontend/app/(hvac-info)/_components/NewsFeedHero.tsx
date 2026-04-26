@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { HvacNews as NewsItem } from '@/lib/api/types/hvac';
-import { Eyebrow, H, Pill, T } from '../ratings/_components/primitives';
+import { Eyebrow, H, Pill, T } from '../rating-split-system/_components/primitives';
 import {
   formatNewsDate,
   formatNewsDateShort,

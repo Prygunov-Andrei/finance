@@ -106,7 +106,7 @@ export function PublicLayout({ children }: PublicLayoutProps) {
               </div>
 
               {/* Рейтинг кондиционеров */}
-              <Link href="/ratings" className={navLinkClass(isActive('/ratings'))}>
+              <Link href="/rating-split-system" className={navLinkClass(isActive('/rating-split-system'))}>
                 {language === 'ru' ? 'Рейтинг кондиционеров' : language === 'en' ? 'AC Ratings' : language === 'de' ? 'Klimaanlagen-Rating' : 'Classificação AC'}
               </Link>
 

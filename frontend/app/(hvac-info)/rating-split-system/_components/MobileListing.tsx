@@ -348,7 +348,7 @@ function MobileRows({
                     </span>
                   </T>
                   <Link
-                    href={`/ratings/${m.slug}/`}
+                    href={`/rating-split-system/${m.slug}/`}
                     style={{
                       display: 'inline-flex',
                       justifyContent: 'center',

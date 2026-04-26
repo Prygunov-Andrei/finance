@@ -76,13 +76,13 @@ describe('POST /api/revalidate', () => {
     process.env.REVALIDATE_SECRET = 'topsecret';
 
     const res = await POST(
-      mkReq('http://localhost/api/revalidate?secret=topsecret&path=/ratings/'),
+      mkReq('http://localhost/api/revalidate?secret=topsecret&path=/rating-split-system/'),
     );
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.path).toBe('/ratings/');
-    expect(revalidatePathMock).toHaveBeenCalledWith('/ratings/');
+    expect(body.path).toBe('/rating-split-system/');
+    expect(revalidatePathMock).toHaveBeenCalledWith('/rating-split-system/');
   });
 
   it('без path — по умолчанию "/"', async () => {
