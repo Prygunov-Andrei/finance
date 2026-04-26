@@ -18,6 +18,7 @@ import DetailIndexViz from '../_components/DetailIndexViz';
 import DetailSpecs from '../_components/DetailSpecs';
 import DetailBuy from '../_components/DetailBuy';
 import DetailReviews from '../_components/DetailReviews';
+import ModelJsonLd from '../_components/ModelJsonLd';
 import SectionFooter from '../../_components/SectionFooter';
 import { fallbackLede } from '../_components/detailHelpers';
 
@@ -95,6 +96,7 @@ export default async function RatingDetailPage({ params }: Props) {
 
   return (
     <>
+      <ModelJsonLd detail={detail} />
       <HvacInfoHeader />
       <main className="hvac-content">
         <BackToRating />
