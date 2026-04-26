@@ -13,6 +13,11 @@ import {
   type CapacityBucket,
 } from './useRatingFilters';
 import CustomRatingTab from './CustomRatingTab';
+import {
+  AD_BADGE_BACKGROUND,
+  AD_ROW_BACKGROUND,
+  applyAdPositioning,
+} from './ratingDisplay';
 
 const PAGE_SIZE = 20;
 
@@ -188,17 +193,27 @@ function MobileRows({
 }) {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [openIdx, setOpenIdx] = useState<number | null>(0);
-  const sorted = useMemo(() => {
-    if (mode === 'silence') {
-      // Все модели в рейтинг, без замера — в конце.
-      return models.slice().sort((a, b) => (b.noise_score ?? 0) - (a.noise_score ?? 0));
-    }
-    return models.slice().sort((a, b) => b.total_index - a.total_index);
-  }, [models, mode]);
-  const rows = sorted.slice(0, visible);
-  const remaining = sorted.length - visible;
+  const positioned = useMemo(
+    () =>
+      applyAdPositioning(models, {
+        getId: (m) => m.id,
+        getIsAd: (m) => m.is_ad,
+        getAdPosition: (m) => m.ad_position,
+        sortRegular: (xs) => {
+          if (mode === 'silence') {
+            return xs
+              .slice()
+              .sort((a, b) => (b.noise_score ?? 0) - (a.noise_score ?? 0));
+          }
+          return xs.slice().sort((a, b) => b.total_index - a.total_index);
+        },
+      }),
+    [models, mode],
+  );
+  const rows = positioned.slice(0, visible);
+  const remaining = positioned.length - visible;
 
-  if (sorted.length === 0) {
+  if (positioned.length === 0) {
     return (
       <div style={{ padding: '40px 18px', textAlign: 'center' }}>
         <T size={13} color="hsl(var(--rt-ink-60))">
@@ -212,14 +227,21 @@ function MobileRows({
     <>
       <div style={{ padding: '4px 18px 0' }}>
         {rows.map((m, i) => {
-          const rk = i + 1;
-          const podium = rk <= 3;
+          const isAd = m._displayRank === null;
+          const rk = m._displayRank ?? 0;
+          const podium = !isAd && rk <= 3;
           const open = i === openIdx;
           const value = mode === 'silence' ? m.noise_score ?? 0 : m.total_index;
           return (
             <div
               key={m.id}
-              style={{ borderBottom: '1px solid hsl(var(--rt-border-subtle))' }}
+              data-ad={isAd ? 'true' : undefined}
+              style={{
+                borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+                background: isAd ? AD_ROW_BACKGROUND : undefined,
+                marginInline: isAd ? -18 : 0,
+                paddingInline: isAd ? 18 : 0,
+              }}
             >
               <button
                 type="button"
@@ -250,7 +272,7 @@ function MobileRows({
                     lineHeight: 1,
                   }}
                 >
-                  {rk}
+                  {isAd ? <AdBadge /> : rk}
                 </span>
                 <span style={{ minWidth: 0, display: 'block' }}>
                   <span style={{ marginBottom: 3, display: 'block' }}>
@@ -374,6 +396,25 @@ function MobileRows({
         </div>
       )}
     </>
+  );
+}
+
+function AdBadge() {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontFamily: 'var(--rt-font-mono)',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        color: 'hsl(var(--rt-ink-60))',
+        padding: '2px 6px',
+        background: AD_BADGE_BACKGROUND,
+        borderRadius: 2,
+      }}
+    >
+      Реклама
+    </span>
   );
 }
 

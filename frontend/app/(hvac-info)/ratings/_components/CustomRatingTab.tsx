@@ -14,6 +14,12 @@ import type {
 } from '@/lib/api/types/rating';
 import { BrandLogo, Eyebrow, Meter, T, formatPrice } from './primitives';
 import { useFlip } from './useFlip';
+import {
+  AD_BADGE_BACKGROUND,
+  AD_ROW_BACKGROUND,
+  applyAdPositioning,
+  type WithDisplayRank,
+} from './ratingDisplay';
 
 const PAGE_SIZE = 20;
 const TABLE_GRID = '56px 180px 40px 160px 1fr 120px 130px 160px';
@@ -567,21 +573,25 @@ interface RankedRow {
   base: number;
 }
 
-function useRankedRows(
+function useDisplayRows(
   models: RatingModelListItem[],
   criteria: RatingMethodologyCriterion[],
   active: Set<string>,
-  allCodes: string[]
-): RankedRow[] {
+  allCodes: string[],
+): WithDisplayRank<RankedRow>[] {
   return useMemo(() => {
     const allSet = new Set(allCodes);
-    return models
-      .map((m) => ({
-        model: m,
-        score: computeIndex(m, active, criteria),
-        base: computeIndex(m, allSet, criteria),
-      }))
-      .sort((a, b) => b.score - a.score);
+    const rows: RankedRow[] = models.map((m) => ({
+      model: m,
+      score: computeIndex(m, active, criteria),
+      base: computeIndex(m, allSet, criteria),
+    }));
+    return applyAdPositioning(rows, {
+      getId: (r) => r.model.id,
+      getIsAd: (r) => r.model.is_ad,
+      getAdPosition: (r) => r.model.ad_position,
+      sortRegular: (xs) => xs.slice().sort((a, b) => b.score - a.score),
+    });
   }, [models, active, criteria, allCodes]);
 }
 
@@ -597,7 +607,7 @@ function DesktopCustomTable({
   models: RatingModelListItem[];
 }) {
   const [visible, setVisible] = useState(PAGE_SIZE);
-  const rows = useRankedRows(models, criteria, active, allCodes);
+  const rows = useDisplayRows(models, criteria, active, allCodes);
   const orderKey = active.size === 0 ? 'empty' : rows.map((r) => r.model.id).join(',');
   const register = useFlip(orderKey);
   const shown = rows.slice(0, visible);
@@ -607,13 +617,8 @@ function DesktopCustomTable({
 
   return (
     <div style={{ padding: '8px 40px 8px' }}>
-      {shown.map((r, idx) => (
-        <DesktopCustomRow
-          key={r.model.id}
-          row={r}
-          position={idx + 1}
-          register={register}
-        />
+      {shown.map((r) => (
+        <DesktopCustomRow key={r.model.id} row={r} register={register} />
       ))}
       {remaining > 0 && (
         <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
@@ -644,14 +649,13 @@ const loadMoreStyle: CSSProperties = {
 
 function DesktopCustomRow({
   row,
-  position,
   register,
 }: {
-  row: RankedRow;
-  position: number;
+  row: WithDisplayRank<RankedRow>;
   register: (key: number, el: HTMLElement | null) => void;
 }) {
   const { model, score, base } = row;
+  const isAd = row._displayRank === null;
   const delta = score - base;
   const deltaAbs = Math.abs(delta);
   const deltaDir = delta > 0.2 ? 'up' : delta < -0.2 ? 'down' : 'same';
@@ -659,6 +663,7 @@ function DesktopCustomRow({
     <Link
       ref={(el) => register(model.id, el as HTMLElement | null)}
       href={`/ratings/${model.slug}/`}
+      data-ad={isAd ? 'true' : undefined}
       style={{
         display: 'grid',
         gridTemplateColumns: TABLE_GRID,
@@ -668,6 +673,7 @@ function DesktopCustomRow({
         color: 'hsl(var(--rt-ink))',
         textDecoration: 'none',
         willChange: 'transform',
+        background: isAd ? AD_ROW_BACKGROUND : undefined,
       }}
     >
       <span
@@ -677,9 +683,10 @@ function DesktopCustomRow({
           color: 'hsl(var(--rt-ink-40))',
           fontWeight: 500,
           letterSpacing: -0.5,
+          paddingLeft: isAd ? 4 : 0,
         }}
       >
-        {position}
+        {isAd ? <AdBadge /> : row._displayRank}
       </span>
       <span
         style={{
@@ -767,6 +774,25 @@ function DesktopCustomRow({
   );
 }
 
+function AdBadge() {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontFamily: 'var(--rt-font-mono)',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        color: 'hsl(var(--rt-ink-60))',
+        padding: '2px 6px',
+        background: AD_BADGE_BACKGROUND,
+        borderRadius: 2,
+      }}
+    >
+      Реклама
+    </span>
+  );
+}
+
 function EmptyCustom() {
   return (
     <div style={{ padding: '60px 40px', textAlign: 'center' }}>
@@ -791,7 +817,7 @@ function MobileCustomList({
   models: RatingModelListItem[];
 }) {
   const [visible, setVisible] = useState(PAGE_SIZE);
-  const rows = useRankedRows(models, criteria, active, allCodes);
+  const rows = useDisplayRows(models, criteria, active, allCodes);
   const orderKey = active.size === 0 ? 'empty' : rows.map((r) => r.model.id).join(',');
   const register = useFlip(orderKey);
   const shown = rows.slice(0, visible);
@@ -802,9 +828,10 @@ function MobileCustomList({
   return (
     <>
       <div style={{ padding: '4px 18px 0' }}>
-        {shown.map((r, i) => {
-          const rk = i + 1;
-          const podium = rk <= 3;
+        {shown.map((r) => {
+          const isAd = r._displayRank === null;
+          const rk = r._displayRank ?? 0;
+          const podium = !isAd && rk <= 3;
           const delta = r.score - r.base;
           const deltaAbs = Math.abs(delta);
           const deltaDir = delta > 0.2 ? 'up' : delta < -0.2 ? 'down' : 'same';
@@ -812,9 +839,13 @@ function MobileCustomList({
             <div
               key={r.model.id}
               ref={(el) => register(r.model.id, el)}
+              data-ad={isAd ? 'true' : undefined}
               style={{
                 borderBottom: '1px solid hsl(var(--rt-border-subtle))',
                 willChange: 'transform',
+                background: isAd ? AD_ROW_BACKGROUND : undefined,
+                marginInline: isAd ? -18 : 0,
+                paddingInline: isAd ? 18 : 0,
               }}
             >
               <Link
@@ -839,7 +870,7 @@ function MobileCustomList({
                     lineHeight: 1,
                   }}
                 >
-                  {rk}
+                  {isAd ? <AdBadge /> : rk}
                 </span>
                 <span style={{ minWidth: 0, display: 'block' }}>
                   <span style={{ marginBottom: 3, display: 'block' }}>
