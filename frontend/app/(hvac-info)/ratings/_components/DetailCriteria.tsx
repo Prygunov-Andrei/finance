@@ -45,7 +45,18 @@ export function pluralParam(n: number): string {
 type EnrichedScore = RatingParameterScore & {
   description_ru: string;
   is_key_measurement: boolean;
+  is_active: boolean;
 };
+
+// Капитализация первой буквы значения — «да» → «Да», «есть через…» → «Есть через…».
+// Числовые / уже капитализированные / пустые значения возвращаются как есть.
+export function capitalizeFirst(s: string): string {
+  if (!s) return s;
+  const first = s.charAt(0);
+  const upper = first.toUpperCase();
+  if (first === upper) return s;
+  return upper + s.slice(1);
+}
 
 export default function DetailCriteria({
   detail,
@@ -61,22 +72,44 @@ export default function DetailCriteria({
     }
     return detail.parameter_scores.map((s) => {
       const crit = byCode.get(s.criterion_code);
+      // is_key_measurement: для активных берём из methodology (она содержит только
+      // is_active=True); для inactive — fallback на поле parameter_score, если backend
+      // его дотащит. Сейчас для inactive в production будет false до правки backend.
+      const isKey = crit?.is_key_measurement ?? s.is_key_measurement ?? false;
       return {
         ...s,
         description_ru: crit?.description_ru ?? '',
-        is_key_measurement: Boolean(crit?.is_key_measurement),
+        is_key_measurement: Boolean(isKey),
+        is_active: s.is_active ?? true,
       };
     });
   }, [detail.parameter_scores, methodology]);
 
-  // Ключевые замеры — первыми. Внутри каждой группы — сортировка по вкладу в индекс.
+  // Ключевые замеры — первыми. Внутри keyMeasurements: активные с весом по убыванию,
+  // далее inactive-key с непустым raw_value (Polish-4 п.4.6 — Максим хочет видеть их
+  // даже когда параметр не участвует в индексе). Регулярные — после.
   const sortedScores = useMemo(() => {
     const sorted = [...enrichedScores].sort(
       (a, b) => b.weighted_score - a.weighted_score,
     );
-    const key = sorted.filter((s) => s.is_key_measurement);
-    const rest = sorted.filter((s) => !s.is_key_measurement);
-    return [...key, ...rest];
+    const keyActive = sorted.filter(
+      (s) => s.is_active && s.is_key_measurement,
+    );
+    const keyInactiveWithValue = sorted.filter(
+      (s) =>
+        !s.is_active
+        && s.is_key_measurement
+        && s.raw_value != null
+        && String(s.raw_value).trim() !== '',
+    );
+    // rest: всё кроме ключевых. inactive-key без raw_value полностью скрываем
+    // (Polish-4 п.4.6: «при условии того, что он заполнен»).
+    const rest = sorted.filter((s) => {
+      if (s.is_key_measurement && s.is_active) return false;
+      if (s.is_key_measurement && !s.is_active) return false;
+      return true;
+    });
+    return [...keyActive, ...keyInactiveWithValue, ...rest];
   }, [enrichedScores]);
 
   return (
@@ -223,13 +256,13 @@ function ListView({ scores }: { scores: EnrichedScore[] }) {
 }
 
 function ListRow({ score }: { score: EnrichedScore }) {
-  const tickerText = score.above_reference
-    ? 'выше эталона'
+  const tickerKind: 'above' | 'below' | null = score.above_reference
+    ? 'above'
     : score.normalized_score < 40
-      ? 'ниже эталона'
+      ? 'below'
       : null;
-  const tickerColor = score.above_reference ? '#1f8f4c' : '#b24a3b';
-  const chipValue = [score.raw_value, score.unit].filter(Boolean).join(' ').trim() || '—';
+  const chipValue =
+    [capitalizeFirst(score.raw_value || ''), score.unit].filter(Boolean).join(' ').trim() || '—';
 
   return (
     <div
@@ -267,19 +300,7 @@ function ListRow({ score }: { score: EnrichedScore }) {
         </span>
         <CriterionTooltip description={score.description_ru} />
         <div style={{ flex: 1 }} />
-        {tickerText && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: tickerColor,
-              fontFamily: 'var(--rt-font-mono)',
-              letterSpacing: 0.2,
-            }}
-          >
-            {tickerText}
-          </span>
-        )}
+        <ReferenceMarker kind={tickerKind} />
       </div>
       <div style={{ marginTop: 10 }}>
         <Meter value={score.normalized_score} width="100%" height={4} />
@@ -320,15 +341,34 @@ function ListRow({ score }: { score: EnrichedScore }) {
   );
 }
 
+function ReferenceMarker({ kind }: { kind: 'above' | 'below' | null }) {
+  if (!kind) return null;
+  const color = kind === 'above' ? '#1f8f4c' : '#b24a3b';
+  const label = kind === 'above' ? 'Выше медианы класса' : 'Ниже медианы класса';
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      style={{
+        fontSize: 12,
+        color,
+        fontFamily: 'var(--rt-font-mono)',
+        lineHeight: 1,
+      }}
+    >
+      {kind === 'above' ? '▲' : '▼'}
+    </span>
+  );
+}
+
 function KeyMeasurementRow({ score }: { score: EnrichedScore }) {
-  const tickerText = score.above_reference
-    ? 'выше эталона'
+  const tickerKind: 'above' | 'below' | null = score.above_reference
+    ? 'above'
     : score.normalized_score < 40
-      ? 'ниже эталона'
+      ? 'below'
       : null;
-  const tickerColor = score.above_reference ? '#1f8f4c' : '#b24a3b';
   const chipValue =
-    [score.raw_value, score.unit].filter(Boolean).join(' ').trim() || '—';
+    [capitalizeFirst(score.raw_value || ''), score.unit].filter(Boolean).join(' ').trim() || '—';
 
   return (
     <div
@@ -384,19 +424,7 @@ function KeyMeasurementRow({ score }: { score: EnrichedScore }) {
         </span>
         <CriterionTooltip description={score.description_ru} />
         <div style={{ flex: 1 }} />
-        {tickerText && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: tickerColor,
-              fontFamily: 'var(--rt-font-mono)',
-              letterSpacing: 0.2,
-            }}
-          >
-            {tickerText}
-          </span>
-        )}
+        <ReferenceMarker kind={tickerKind} />
       </div>
       <div style={{ marginTop: 10 }}>
         <Meter value={score.normalized_score} width="100%" height={4} />

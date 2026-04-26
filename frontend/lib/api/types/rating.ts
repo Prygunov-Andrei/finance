@@ -32,6 +32,14 @@ export interface RatingParameterScore {
   normalized_score: number;
   weighted_score: number;
   above_reference: boolean;
+  /** Бекенд (ACModelDetailSerializer.get_parameter_scores) добавляет inactive-критерии
+   *  с непустым raw_value в payload c `is_active=false`. Опционально, потому что
+   *  старые ответы могут не содержать поле. Default — true. */
+  is_active?: boolean;
+  /** Дублирует criterion.is_key_measurement из методики. Нужно для inactive-критериев,
+   *  которых нет в `methodology.criteria` (тот фильтрует is_active=True). Опционально —
+   *  до мержа backend PR на parameter_scores поле может отсутствовать. */
+  is_key_measurement?: boolean;
 }
 
 export interface RatingRawValue {
