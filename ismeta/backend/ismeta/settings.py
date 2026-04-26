@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "apps.llm",
     "apps.agent",
     "apps.integration",
+    "apps.recognition_jobs",
 ]
 
 MIDDLEWARE = [
@@ -165,6 +166,16 @@ ISMETA_KNOWLEDGE_MD_ROOT = config("KNOWLEDGE_MD_ROOT", default=str(BASE_DIR / "d
 # standalone PDF-parsing microservice (recognition/)
 RECOGNITION_URL = config("RECOGNITION_URL", default="http://recognition:8003")
 RECOGNITION_API_KEY = config("RECOGNITION_API_KEY", default="")
+
+# ==== Recognition jobs (E19-2) ====
+# Куда recognition POST'ит callbacks. Внутри docker network = http://ismeta-backend:8000.
+BACKEND_INTERNAL_URL = config("BACKEND_INTERNAL_URL", default="http://ismeta-backend:8000")
+# Сколько одновременных recognition job'ов запускает worker.
+RECOGNITION_MAX_PARALLEL_JOBS = config("RECOGNITION_MAX_PARALLEL_JOBS", default=2, cast=int)
+# Пауза между опросами очереди queued job'ов (секунды).
+RECOGNITION_WORKER_POLL_INTERVAL = config(
+    "RECOGNITION_WORKER_POLL_INTERVAL", default=2.0, cast=float
+)
 
 # ==== Logging ====
 LOG_LEVEL = config("LOG_LEVEL", default="INFO")

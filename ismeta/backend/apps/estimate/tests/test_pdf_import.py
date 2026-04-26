@@ -203,7 +203,10 @@ class TestApplyParsedItems:
 
 @pytest.mark.django_db
 class TestPDFImportEndpoint:
-    URL = "/api/v1/estimates/{}/import/pdf/"
+    # E19-2: default = async (создаёт RecognitionJob, 202). Эти тесты проверяют
+    # старый sync-flow → используем явный ?async=false. Async-flow тесты —
+    # apps/estimate/tests/test_pdf_import_async.py.
+    URL = "/api/v1/estimates/{}/import/pdf/?async=false"
 
     def _pdf_file(self):
         return SimpleUploadedFile("spec.pdf", b"%PDF-fake", content_type="application/pdf")

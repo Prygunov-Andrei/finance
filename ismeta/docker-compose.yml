@@ -79,6 +79,49 @@ services:
       - ./backend:/app
     command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
+  # E19-2: sidecar воркер RecognitionJob — пулит queued jobs через Postgres
+  # SELECT FOR UPDATE SKIP LOCKED, POST'ит на recognition с callback URL.
+  # Тот же образ что ismeta-backend, общий код apps/. После добавления job'а
+  # POST'ом в /import/pdf/?async=true backend ничего сам не дёргает —
+  # воркер забирает из таблицы и dispatch'ит. Recognition потом шлёт
+  # callbacks обратно в ismeta-backend на /api/v1/recognition-jobs/{id}/callback/.
+  recognition-worker:
+    build:
+      context: ./backend
+      target: development
+    container_name: ismeta-recognition-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      recognition:
+        condition: service_healthy
+      ismeta-backend:
+        condition: service_started
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
+      DEBUG: ${DEBUG:-1}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,ismeta-backend}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-ismeta}
+      DB_USER: ${POSTGRES_USER:-ismeta}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-ismeta}
+      CELERY_BROKER_URL: redis://redis:6379/3
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+      REDIS_URL: redis://redis:6379/2
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      RECOGNITION_URL: ${RECOGNITION_URL:-http://recognition:8003}
+      RECOGNITION_API_KEY: ${RECOGNITION_API_KEY:-dev-recognition-key}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://ismeta-backend:8000}
+      RECOGNITION_MAX_PARALLEL_JOBS: ${RECOGNITION_MAX_PARALLEL_JOBS:-2}
+      RECOGNITION_WORKER_POLL_INTERVAL: ${RECOGNITION_WORKER_POLL_INTERVAL:-2.0}
+    volumes:
+      - ./backend:/app
+    command: ["python", "manage.py", "recognition_worker"]
+
   ismeta-frontend:
     build:
       context: ./frontend
