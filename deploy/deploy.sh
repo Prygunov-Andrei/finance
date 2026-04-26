@@ -171,7 +171,36 @@ if [ -z "$REVALIDATE_SECRET_VALUE" ] && [ -f ".env" ]; then
     REVALIDATE_SECRET_VALUE=$(grep -E '^REVALIDATE_SECRET=' .env | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
 fi
 if [ -n "$REVALIDATE_SECRET_VALUE" ]; then
-    for path in "/" "/ratings/"; do
+    # Список путей под revalidate. Включает:
+    #   - корень и старый /ratings/ (редирект → но revalidate безопасен);
+    #   - переехавший рейтинг /rating-split-system/* (главная + methodology/archive/submit);
+    #   - короткий SEO-URL /quiet и ценовые лендинги /price/do-XX000-rub;
+    #   - пресет-страницы /rating-split-system/preset/<slug> (5 захардкоженных
+    #     slug'ов из ac_methodology/migrations/0005_seed_initial_presets;
+    #     TODO: fetch'ить динамически через API methodology — сейчас рискуем
+    #     рассинхроном при добавлении пресета через Django Admin).
+    REVALIDATE_PATHS=(
+        "/"
+        "/ratings/"
+        "/rating-split-system/"
+        "/rating-split-system/methodology/"
+        "/rating-split-system/archive/"
+        "/rating-split-system/submit/"
+        "/quiet"
+        "/price/do-20000-rub"
+        "/price/do-25000-rub"
+        "/price/do-30000-rub"
+        "/price/do-35000-rub"
+        "/price/do-40000-rub"
+        "/price/do-50000-rub"
+        "/price/do-60000-rub"
+        "/rating-split-system/preset/silence"
+        "/rating-split-system/preset/cold"
+        "/rating-split-system/preset/budget"
+        "/rating-split-system/preset/house"
+        "/rating-split-system/preset/allergy"
+    )
+    for path in "${REVALIDATE_PATHS[@]}"; do
         encoded_path=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$path")
         if curl -fsS -X POST "http://127.0.0.1:3000/api/revalidate?path=${encoded_path}&secret=${REVALIDATE_SECRET_VALUE}" -o /dev/null 2>&1; then
             echo -e "${GREEN}  revalidated: ${path}${NC}"
