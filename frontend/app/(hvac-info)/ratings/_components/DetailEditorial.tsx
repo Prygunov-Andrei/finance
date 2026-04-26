@@ -7,8 +7,8 @@ type Props = {
 };
 
 const EDITORS: Array<{ name: string; avatar: string }> = [
-  { name: 'Савинов Максим', avatar: '/rating-authors/savinov.jpg' },
-  { name: 'Прыгунов Андрей', avatar: '/rating-authors/prygunov.jpg' },
+  { name: 'М. Савинов', avatar: '/rating-authors/savinov.jpg' },
+  { name: 'А. Прыгунов', avatar: '/rating-authors/prygunov.jpg' },
 ];
 
 const DATE_LABEL = 'редакция · апрель 2026';
@@ -63,10 +63,19 @@ export default function DetailEditorial({ detail }: Props) {
         </div>
       )}
 
-      {pros.length > 0 && <PointsColumn kind="pros" items={pros} />}
-      {cons.length > 0 && <PointsColumn kind="cons" items={cons} />}
+      {(pros.length > 0 || cons.length > 0) && (
+        <div className="rt-proscons-grid">
+          {pros.length > 0 && <PointsCard kind="pros" items={pros} />}
+          {cons.length > 0 && <PointsCard kind="cons" items={cons} />}
+        </div>
+      )}
 
       <style>{`
+        .rt-proscons-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
         @media (max-width: 1023px) {
           .rt-detail-editorial { position: static !important; top: auto !important; }
         }
@@ -131,34 +140,39 @@ function EditorsRow() {
   );
 }
 
-function PointsColumn({
+function PointsCard({
   kind,
   items,
 }: {
   kind: 'pros' | 'cons';
   items: ProsConsPoint[];
 }) {
-  const color = kind === 'pros' ? '#1f8f4c' : '#b24a3b';
-  const label = kind === 'pros' ? `Плюсы · ${items.length}` : `Минусы · ${items.length}`;
+  const isPros = kind === 'pros';
+  const accent = isPros ? '#1f8f4c' : '#b24a3b';
+  const softBg = isPros ? 'hsl(140 50% 96%)' : 'hsl(8 60% 96%)';
+  const label = isPros ? `Плюсы · ${items.length}` : `Минусы · ${items.length}`;
+
   return (
-    <div>
+    <div
+      data-testid={isPros ? 'pros-card' : 'cons-card'}
+      data-pros={isPros ? 'true' : undefined}
+      data-cons={!isPros ? 'true' : undefined}
+      style={{
+        background: softBg,
+        borderLeft: `4px solid ${accent}`,
+        borderRadius: 4,
+        padding: '14px 16px 14px 18px',
+      }}
+    >
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          marginBottom: 12,
+          marginBottom: 10,
         }}
       >
-        <span
-          aria-hidden
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: color,
-          }}
-        />
+        <PointGlyph kind={kind} accent={accent} />
         <span
           style={{
             fontFamily: 'var(--rt-font-mono)',
@@ -166,30 +180,95 @@ function PointsColumn({
             textTransform: 'uppercase',
             letterSpacing: 1.2,
             fontWeight: 700,
-            color,
+            color: accent,
           }}
         >
           {label}
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ul
+        style={{
+          listStyle: 'none',
+          margin: 0,
+          padding: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}
+      >
         {items.map((p, i) => (
-          <div key={i}>
-            <T size={12} weight={600} style={{ lineHeight: 1.35 }}>
-              {p.title}
-            </T>
-            {p.body && (
-              <T
-                size={11}
-                color="hsl(var(--rt-ink-60))"
-                style={{ marginTop: 3, lineHeight: 1.4, display: 'block' }}
-              >
-                {p.body}
+          <li
+            key={i}
+            style={{
+              display: 'flex',
+              gap: 9,
+              alignItems: 'flex-start',
+            }}
+          >
+            <PointGlyph kind={kind} accent={accent} small />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <T size={12} weight={600} style={{ lineHeight: 1.35 }}>
+                {p.title}
               </T>
-            )}
-          </div>
+              {p.body && (
+                <T
+                  size={11}
+                  color="hsl(var(--rt-ink-60))"
+                  style={{ marginTop: 3, lineHeight: 1.4, display: 'block' }}
+                >
+                  {p.body}
+                </T>
+              )}
+            </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
+  );
+}
+
+function PointGlyph({
+  kind,
+  accent,
+  small = false,
+}: {
+  kind: 'pros' | 'cons';
+  accent: string;
+  small?: boolean;
+}) {
+  const size = small ? 14 : 16;
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: accent,
+        color: '#fff',
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: small ? 1 : 0,
+      }}
+    >
+      <svg
+        width={small ? 8 : 10}
+        height={small ? 8 : 10}
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {kind === 'pros' ? (
+          <path d="M2.5 6.2 L5 8.5 L9.5 3.8" />
+        ) : (
+          <path d="M3 6 L9 6" />
+        )}
+      </svg>
+    </span>
   );
 }

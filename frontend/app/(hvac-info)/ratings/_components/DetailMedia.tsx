@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
-import { Eyebrow, T } from './primitives';
+import { T } from './primitives';
 import {
   parseRutubeId,
   parseVkVideo,
@@ -13,21 +13,17 @@ type Props = {
   detail: RatingModelDetail;
 };
 
-type VideoEmbed =
-  | { platform: 'youtube'; url: string; embed: string }
-  | { platform: 'rutube'; url: string; embed: string }
-  | { platform: 'vk'; url: string; embed: string };
+type VideoPlatform = 'youtube' | 'rutube' | 'vk';
 
-type VideoLink = {
-  platform: 'youtube' | 'rutube' | 'vk';
+type VideoEmbed = {
+  platform: VideoPlatform;
   url: string;
+  embed: string;
 };
 
 export default function DetailMedia({ detail }: Props) {
   const photos = detail.photos ?? [];
   const videos = collectVideos(detail);
-  const primary = videos[0];
-  const extra = videos.slice(1);
 
   return (
     <section
@@ -46,7 +42,7 @@ export default function DetailMedia({ detail }: Props) {
         }}
       >
         <PhotoBlock photos={photos} modelName={detail.inner_unit} />
-        <VideoBlock primary={primary} extra={extra} />
+        <VideoBlock videos={videos} />
       </div>
 
       <style>{`
@@ -229,20 +225,19 @@ function NavButton({
   );
 }
 
-function VideoBlock({
-  primary,
-  extra,
-}: {
-  primary: VideoEmbed | null;
-  extra: VideoLink[];
-}) {
-  if (!primary) {
+function VideoBlock({ videos }: { videos: VideoEmbed[] }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  if (videos.length === 0) {
     return (
       <div>
         <Placeholder label="Видеообзор скоро" aspect="16 / 9" />
       </div>
     );
   }
+
+  const safeIdx = Math.min(activeIdx, videos.length - 1);
+  const active = videos[safeIdx];
 
   return (
     <div>
@@ -257,8 +252,9 @@ function VideoBlock({
         }}
       >
         <iframe
-          src={primary.embed}
-          title={`Видео ${primary.platform}`}
+          key={active.url}
+          src={active.embed}
+          title={`Видео ${active.platform}`}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           style={{
@@ -271,70 +267,67 @@ function VideoBlock({
         />
       </div>
 
-      {extra.length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          <Eyebrow style={{ display: 'block', marginBottom: 10 }}>
-            Смотреть на платформах
-          </Eyebrow>
-          <div
+      {videos.length > 1 && (
+        <div style={{ marginTop: 12 }}>
+          <T
+            size={10}
+            color="hsl(var(--rt-ink-60))"
+            mono
             style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr',
-              gap: 10,
+              display: 'block',
+              marginBottom: 8,
+              textTransform: 'uppercase',
+              letterSpacing: 1.2,
             }}
-            className="rt-video-extras"
           >
-            {extra.map((v) => (
-              <a
-                key={v.url}
-                href={v.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '12px 14px',
-                  border: '1px solid hsl(var(--rt-border-subtle))',
-                  borderRadius: 6,
-                  background: 'hsl(var(--rt-paper))',
-                  textDecoration: 'none',
-                  color: 'hsl(var(--rt-ink))',
-                }}
-              >
-                <VideoMark platform={v.platform} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <T size={13} weight={600}>
-                    {platformLabel(v.platform)}
-                  </T>
-                  <T
-                    size={11}
-                    color="hsl(var(--rt-ink-60))"
-                    style={{ marginTop: 2, display: 'block' }}
-                  >
-                    открыть на платформе
-                  </T>
-                </div>
-                <svg
-                  width={11}
-                  height={11}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="hsl(var(--rt-ink-40))"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
+            Смотреть на:
+          </T>
+          <div
+            role="tablist"
+            aria-label="Платформа видео"
+            style={{
+              display: 'inline-flex',
+              gap: 6,
+              flexWrap: 'wrap',
+            }}
+          >
+            {videos.map((v, i) => {
+              const isActive = i === safeIdx;
+              return (
+                <button
+                  key={v.url}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  data-platform={v.platform}
+                  onClick={() => setActiveIdx(i)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '7px 12px',
+                    border: '1px solid '
+                      + (isActive
+                        ? 'hsl(var(--rt-accent))'
+                        : 'hsl(var(--rt-border-subtle))'),
+                    borderRadius: 6,
+                    background: isActive
+                      ? 'hsl(var(--rt-accent-bg))'
+                      : 'hsl(var(--rt-paper))',
+                    color: isActive
+                      ? 'hsl(var(--rt-accent))'
+                      : 'hsl(var(--rt-ink))',
+                    fontSize: 12,
+                    fontWeight: isActive ? 700 : 500,
+                    fontFamily: 'var(--rt-font-sans)',
+                    cursor: 'pointer',
+                  }}
                 >
-                  <path d="M9 6 L15 12 L9 18" />
-                </svg>
-              </a>
-            ))}
-            <style>{`
-              @media (min-width: 900px) {
-                .rt-video-extras { grid-template-columns: 1fr 1fr !important; }
-              }
-            `}</style>
+                  <VideoMark platform={v.platform} active={isActive} />
+                  <span>{platformLabel(v.platform)}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -342,36 +335,44 @@ function VideoBlock({
   );
 }
 
-function VideoMark({ platform }: { platform: VideoLink['platform'] }) {
-  const labels: Record<VideoLink['platform'], string> = {
+function VideoMark({
+  platform,
+  active,
+}: {
+  platform: VideoPlatform;
+  active: boolean;
+}) {
+  const labels: Record<VideoPlatform, string> = {
     youtube: 'YT',
     rutube: 'RU',
     vk: 'ВК',
   };
   return (
-    <div
+    <span
       style={{
-        width: 32,
-        height: 32,
-        borderRadius: 6,
-        background: 'hsl(var(--rt-chip))',
-        display: 'flex',
+        width: 22,
+        height: 18,
+        borderRadius: 3,
+        background: active
+          ? 'hsl(var(--rt-accent))'
+          : 'hsl(var(--rt-chip))',
+        color: active ? 'hsl(var(--rt-paper))' : 'hsl(var(--rt-ink-60))',
+        display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontFamily: 'var(--rt-font-mono)',
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: 700,
-        color: 'hsl(var(--rt-ink-60))',
         flexShrink: 0,
       }}
       aria-hidden
     >
       {labels[platform]}
-    </div>
+    </span>
   );
 }
 
-function platformLabel(platform: VideoLink['platform']): string {
+function platformLabel(platform: VideoPlatform): string {
   switch (platform) {
     case 'youtube':
       return 'YouTube';

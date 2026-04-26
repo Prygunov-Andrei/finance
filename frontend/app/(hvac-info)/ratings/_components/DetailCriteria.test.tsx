@@ -5,7 +5,27 @@ import type {
   RatingModelDetail,
   RatingParameterScore,
 } from '@/lib/api/types/rating';
-import DetailCriteria, { pluralParam } from './DetailCriteria';
+import DetailCriteria, { capitalizeFirst, pluralParam } from './DetailCriteria';
+
+const baseCriterion = (
+  code: string,
+  over: Partial<RatingMethodology['criteria'][number]> = {},
+): RatingMethodology['criteria'][number] => ({
+  code,
+  name_ru: code,
+  description_ru: '',
+  weight: 1,
+  unit: '',
+  value_type: 'numeric',
+  scoring_type: 'min_median_max',
+  group: 'climate',
+  group_display: 'Климат',
+  display_order: 0,
+  min_value: null,
+  median_value: null,
+  max_value: null,
+  ...over,
+});
 
 const mkScore = (code: string, over: Partial<RatingParameterScore> = {}): RatingParameterScore => ({
   criterion_code: code,
@@ -274,8 +294,209 @@ describe('DetailCriteria', () => {
     expect(screen.getByText(/вердикт редакции/i)).toBeTruthy();
     expect(screen.getByText(/Плюсы · 2/)).toBeTruthy();
     expect(screen.getByText(/Минусы · 1/)).toBeTruthy();
-    // Хардкод авторов:
-    expect(screen.getByText(/Савинов Максим/)).toBeTruthy();
-    expect(screen.getByText(/Прыгунов Андрей/)).toBeTruthy();
+    // Хардкод авторов в формате «И. Фамилия»:
+    expect(screen.getByText(/М\. Савинов/)).toBeTruthy();
+    expect(screen.getByText(/А\. Прыгунов/)).toBeTruthy();
+  });
+});
+
+describe('capitalizeFirst', () => {
+  it('«да» → «Да»', () => {
+    expect(capitalizeFirst('да')).toBe('Да');
+  });
+  it('«Нет» → «Нет» (уже капитализировано — без изменений)', () => {
+    expect(capitalizeFirst('Нет')).toBe('Нет');
+  });
+  it('«2,5 кВт» → «2,5 кВт» (число — не трогаем)', () => {
+    expect(capitalizeFirst('2,5 кВт')).toBe('2,5 кВт');
+  });
+  it('«есть через сторонние сервисы» → «Есть через сторонние сервисы»', () => {
+    expect(capitalizeFirst('есть через сторонние сервисы')).toBe(
+      'Есть через сторонние сервисы',
+    );
+  });
+  it('пустая строка → пустая', () => {
+    expect(capitalizeFirst('')).toBe('');
+  });
+});
+
+describe('DetailCriteria — 4.6 inactive ключевой замер', () => {
+  it('inactive-крит с is_key_measurement=true и raw_value рендерится первым (badge «КЛЮЧЕВОЙ ЗАМЕР»)', () => {
+    const detail = baseDetail([
+      mkScore('active_normal', { weighted_score: 10 }),
+      // inactive-крит, is_key_measurement дотащен бекендом на parameter_score:
+      mkScore('inactive_key', {
+        weighted_score: 0,
+        raw_value: '21',
+        is_active: false,
+        is_key_measurement: true,
+      }),
+    ]);
+    // methodology содержит только активные — inactive_key туда не попадает.
+    const methodology = mkMethodology([
+      baseCriterion('active_normal', { is_key_measurement: false }),
+    ]);
+    const { container } = render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={1}
+        methodology={methodology}
+      />,
+    );
+    const keyRows = container.querySelectorAll('[data-testid="key-measurement-row"]');
+    expect(keyRows.length).toBe(1);
+    // Первый блок в ListView — именно key-measurement (раньше active_normal).
+    const listItems = container.querySelectorAll('.rt-criteria-main > div > div');
+    expect((listItems[0] as HTMLElement)?.getAttribute('data-testid')).toBe(
+      'key-measurement-row',
+    );
+  });
+
+  it('inactive-крит с is_key_measurement=true но без raw_value НЕ рендерится как key-measurement', () => {
+    const detail = baseDetail([
+      mkScore('active_normal', { weighted_score: 10 }),
+      mkScore('inactive_key_empty', {
+        weighted_score: 0,
+        raw_value: '',
+        is_active: false,
+        is_key_measurement: true,
+      }),
+    ]);
+    const methodology = mkMethodology([
+      baseCriterion('active_normal', { is_key_measurement: false }),
+    ]);
+    const { container } = render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={1}
+        methodology={methodology}
+      />,
+    );
+    expect(
+      container.querySelectorAll('[data-testid="key-measurement-row"]').length,
+    ).toBe(0);
+  });
+
+  it('активный is_key_measurement=true — рендерится первым (как раньше)', () => {
+    const detail = baseDetail([
+      mkScore('normal', { weighted_score: 10 }),
+      mkScore('key', { weighted_score: 5 }),
+    ]);
+    const methodology = mkMethodology([
+      baseCriterion('normal', { is_key_measurement: false }),
+      baseCriterion('key', { is_key_measurement: true }),
+    ]);
+    const { container } = render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={2}
+        methodology={methodology}
+      />,
+    );
+    const listItems = container.querySelectorAll('.rt-criteria-main > div > div');
+    expect((listItems[0] as HTMLElement)?.getAttribute('data-testid')).toBe(
+      'key-measurement-row',
+    );
+  });
+
+  it('regular-крит рендерится после ключевых', () => {
+    const detail = baseDetail([
+      mkScore('regular', { weighted_score: 10 }),
+      mkScore('key', { weighted_score: 5 }),
+    ]);
+    const methodology = mkMethodology([
+      baseCriterion('regular', { is_key_measurement: false }),
+      baseCriterion('key', { is_key_measurement: true }),
+    ]);
+    const { container } = render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={2}
+        methodology={methodology}
+      />,
+    );
+    const listItems = container.querySelectorAll('.rt-criteria-main > div > div');
+    // [0] = key-measurement-row, [1] = ListRow regular
+    expect((listItems[0] as HTMLElement)?.getAttribute('data-testid')).toBe(
+      'key-measurement-row',
+    );
+    expect((listItems[1] as HTMLElement)?.getAttribute('data-testid')).not.toBe(
+      'key-measurement-row',
+    );
+  });
+});
+
+describe('DetailCriteria — 4.7 капитализация значений', () => {
+  it('raw_value «да» рендерится в чипе как «Да»', () => {
+    const detail = baseDetail([mkScore('feat', { raw_value: 'да' })]);
+    const methodology = mkMethodology([baseCriterion('feat')]);
+    render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={1}
+        methodology={methodology}
+      />,
+    );
+    expect(screen.getByText('Да')).toBeTruthy();
+    expect(screen.queryByText(/^да$/)).toBeNull();
+  });
+
+  it('raw_value «есть через сторонние сервисы» → «Есть через сторонние сервисы»', () => {
+    const detail = baseDetail([
+      mkScore('feat', { raw_value: 'есть через сторонние сервисы' }),
+    ]);
+    const methodology = mkMethodology([baseCriterion('feat')]);
+    render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={1}
+        methodology={methodology}
+      />,
+    );
+    expect(screen.getByText('Есть через сторонние сервисы')).toBeTruthy();
+  });
+});
+
+describe('DetailCriteria — 4.8 убрать «выше/ниже эталона»', () => {
+  it('текстовых подписей «выше эталона» / «ниже эталона» больше нет', () => {
+    const detail = baseDetail([
+      mkScore('above', { above_reference: true, normalized_score: 90 }),
+      mkScore('below', { above_reference: false, normalized_score: 20 }),
+    ]);
+    const methodology = mkMethodology([
+      baseCriterion('above'),
+      baseCriterion('below'),
+    ]);
+    render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={2}
+        methodology={methodology}
+      />,
+    );
+    expect(screen.queryByText(/выше эталона/i)).toBeNull();
+    expect(screen.queryByText(/ниже эталона/i)).toBeNull();
+  });
+
+  it('цветовой акцент остался — ▲/▼ с aria-label', () => {
+    const detail = baseDetail([
+      mkScore('above', { above_reference: true, normalized_score: 90 }),
+      mkScore('below', { above_reference: false, normalized_score: 20 }),
+    ]);
+    const methodology = mkMethodology([
+      baseCriterion('above'),
+      baseCriterion('below'),
+    ]);
+    const { container } = render(
+      <DetailCriteria
+        detail={detail}
+        activeCriteriaCount={2}
+        methodology={methodology}
+      />,
+    );
+    const above = container.querySelector('[aria-label="Выше медианы класса"]');
+    const below = container.querySelector('[aria-label="Ниже медианы класса"]');
+    expect(above?.textContent).toBe('▲');
+    expect(below?.textContent).toBe('▼');
   });
 });
