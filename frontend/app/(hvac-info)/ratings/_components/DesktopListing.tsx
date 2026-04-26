@@ -12,6 +12,12 @@ import FilterBar from './FilterBar';
 import { useRatingFilters } from './useRatingFilters';
 import CustomRatingTab from './CustomRatingTab';
 import StickyCollapseHero from './StickyCollapseHero';
+import {
+  AD_BADGE_BACKGROUND,
+  AD_ROW_BACKGROUND,
+  applyAdPositioning,
+  type WithDisplayRank,
+} from './ratingDisplay';
 
 const PAGE_SIZE = 20;
 const GRID = '56px 180px 60px 160px 1fr 140px 160px';
@@ -78,15 +84,24 @@ function RankedTable({
   mode: 'index' | 'silence';
 }) {
   const [visible, setVisible] = useState(PAGE_SIZE);
-  const sorted = useMemo(() => sortModels(models, mode), [models, mode]);
-  const rows = sorted.slice(0, visible);
-  const remaining = sorted.length - visible;
+  const positioned = useMemo(
+    () =>
+      applyAdPositioning(models, {
+        getId: (m) => m.id,
+        getIsAd: (m) => m.is_ad,
+        getAdPosition: (m) => m.ad_position,
+        sortRegular: (xs) => sortModels(xs, mode),
+      }),
+    [models, mode],
+  );
+  const rows = positioned.slice(0, visible);
+  const remaining = positioned.length - visible;
 
   return (
     <div style={{ padding: '8px 40px 0' }}>
-      {sorted.length === 0 && <EmptyState />}
-      {rows.map((m, idx) => (
-        <ModelRow key={m.id} model={m} position={idx + 1} mode={mode} />
+      {positioned.length === 0 && <EmptyState />}
+      {rows.map((m) => (
+        <ModelRow key={m.id} model={m} mode={mode} />
       ))}
       {remaining > 0 && (
         <div style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
@@ -116,19 +131,18 @@ function RankedTable({
 
 function ModelRow({
   model,
-  position,
   mode,
 }: {
-  model: RatingModelListItem;
-  position: number;
+  model: WithDisplayRank<RatingModelListItem>;
   mode: 'index' | 'silence';
 }) {
-  const displayRank = mode === 'index' ? model.rank ?? position : position;
+  const isAd = model._displayRank === null;
   const displayValue = mode === 'silence' ? model.noise_score ?? 0 : model.total_index;
   const href = `/ratings/${model.slug}/`;
   return (
     <Link
       href={href}
+      data-ad={isAd ? 'true' : undefined}
       style={{
         display: 'grid',
         gridTemplateColumns: GRID,
@@ -138,6 +152,7 @@ function ModelRow({
         color: 'hsl(var(--rt-ink))',
         textDecoration: 'none',
         transition: 'background 0.15s',
+        background: isAd ? AD_ROW_BACKGROUND : undefined,
       }}
       className="rt-row"
     >
@@ -148,9 +163,10 @@ function ModelRow({
           color: 'hsl(var(--rt-ink-40))',
           fontWeight: 500,
           letterSpacing: -0.5,
+          paddingLeft: isAd ? 4 : 0,
         }}
       >
-        {displayRank}
+        {isAd ? <AdBadge /> : model._displayRank}
       </div>
       <div
         style={{
@@ -196,6 +212,25 @@ function ModelRow({
         </span>
       </div>
     </Link>
+  );
+}
+
+function AdBadge() {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontFamily: 'var(--rt-font-mono)',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        color: 'hsl(var(--rt-ink-60))',
+        padding: '2px 6px',
+        background: AD_BADGE_BACKGROUND,
+        borderRadius: 2,
+      }}
+    >
+      Реклама
+    </span>
   );
 }
 
