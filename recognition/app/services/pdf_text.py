@@ -1407,6 +1407,25 @@ _MODEL_DASH_CONTINUATION_RE = re.compile(
 # orphan-row с qty/unit. При absorb-е placeholder вытесняется реальным mfr.
 _PLACEHOLDER_VALUES = {"-", "—", "–", "−", ""}
 
+# E20-1 retrofit (PR #2 review): защита от over-merge cluster-merge.
+#
+# Известные continuation-маркеры на Spec-4 — фрагменты длинных описаний ОБМ-Вент
+# огнезащитного покрытия / Expert Standart / КЛОП name (tail rows multi-line
+# items), которые принадлежат item-у выше и НЕ должны absorb-иться к
+# соседнему cluster. Если main.name уже >80 chars (полное описание собрано),
+# orphan начинающийся с маленькой кириллической буквы или blacklist-pattern
+# — это явная continuation предыдущего item, skip.
+_NAME_CONTINUATION_BLACKLIST_RE = re.compile(
+    r"^(?:"
+    r"ванный\s|щего\s|супертонкого\s|каширо|ховодов\s|нестойкостью\s"
+    r"|в\s+комплекте\.?\s*$|по\s+тех\.?регламенту|\(коэффициент"
+    r")",
+    re.IGNORECASE,
+)
+# Длина main.name выше которой считаем main «complete» — orphan-continuation
+# уже не нужны (риск приклеить чужой continuation).
+_MAIN_NAME_COMPLETE_THRESHOLD = 80
+
 
 def _merge_model_parts(parts: list[str]) -> str:
     """Склеить multi-line фрагменты model code с dash-rule.
@@ -1579,6 +1598,12 @@ def _merge_multiline_model_codes(rows: list[TableRow]) -> list[TableRow]:
     - bare-name = name-only continuation (multi-line name)
 
     Безопасно: cluster с 0 или ≥2 main rows не трогаем (риск over-merge).
+
+    Retrofit (PR #2 review): склейка идёт строго в y-order (top-down), а не
+    по последовательности absorb-вызовов; добавлены защиты от over-merge:
+    - Если main.name (после частичного absorb) > 80 chars и orphan.name
+      начинается с lowercase Cyrillic / blacklist-pattern — это continuation
+      ПРЕДЫДУЩЕГО item (выше cluster), skip.
     """
     clusters = _detect_visual_clusters(rows)
     keep = [True] * len(rows)
@@ -1604,66 +1629,185 @@ def _merge_multiline_model_codes(rows: list[TableRow]) -> list[TableRow]:
         else:
             # 2+ main rows в кластере — не трогаем (риск over-merge).
             continue
-        main = rows[main_idx]
-        for j in cluster:
-            if j == main_idx:
-                continue
-            other = rows[j]
-            # Все absorb-кандидаты (фрагменты без qty/unit/pos) сливаются в main.
-            # Случай orphan_main (qty/unit/mfr без name/model) — сам main_idx
-            # в case B; в case A он тоже absorb (есть anchor-маркеры).
-            if _is_absorb_candidate(other) or _is_orphan_main(other):
-                _absorb_into_main(main, other, position=j - main_idx)
-                keep[j] = False
-            # Иначе оставляем (например, pos-only rows _merge_continuation_rows
-            # уже обработал; если что-то ещё попало — не рискуем).
+        # Cluster всегда отсортирован по индексу (consecutive из rows). Индекс
+        # совпадает с порядком y_mid. _merge_cluster_into_main собирает в
+        # y-order (top-down), не position-based.
+        absorbed = _merge_cluster_into_main(rows, cluster, main_idx)
+        for j in absorbed:
+            keep[j] = False
     return [r for r, k in zip(rows, keep) if k]
 
 
-def _absorb_into_main(main: TableRow, other: TableRow, *, position: int) -> None:
-    """Влить orphan/continuation row в main: model/name/comments через dash-rule,
-    qty/unit/mfr — override placeholder.
+def _is_continuation_of_neighbour(name: str) -> bool:
+    """Эвристика: name выглядит как continuation от ПРЕДЫДУЩЕГО item.
 
-    `position` — относительное положение other vs main (отрицательное = выше,
-    положительное = ниже). Используется для правильного порядка склейки.
+    Срабатывает на:
+    - blacklist специфических Spec-4 continuation-маркеров (ванный, щего,
+      супертонкого, каширо, ховодов, нестойкостью, в комплекте, по тех.регламенту,
+      (коэффициент);
+    - lowercase Cyrillic в начале (continuation на следующей строке).
+
+    Безопасно для page 76 КЛОП cluster: «розостойкое исполнение» начинается
+    с lowercase, но эта защита применяется ТОЛЬКО когда main.name уже > 80
+    chars (т.е. main complete). Для page 76 main изначально пуст, проверка
+    blacklist отдельно — «розостойкое» НЕ в blacklist (нужно absorb).
+    """
+    if not name:
+        return False
+    if _NAME_CONTINUATION_BLACKLIST_RE.match(name):
+        return True
+    # Lowercase Cyrillic в начале — типичный word-break/word-continuation.
+    first = name.lstrip()[:1]
+    return bool(first) and first.isalpha() and first.islower() and first.lower() != first.upper()
+
+
+def _merge_cluster_into_main(
+    rows: list[TableRow], cluster: list[int], main_idx: int
+) -> list[int]:
+    """Склеить cluster rows в main_idx, name/model/comments в y-order (top-down).
+
+    Возвращает list индексов absorbed rows (чтобы caller их пометил keep=False).
+
+    Логика:
+    1. Cluster уже отсортирован (consecutive). Идём по нему top-down.
+    2. Для каждой не-main row решаем — absorb или skip:
+       - skip если row не absorb-кандидат (имеет qty/unit/pos).
+       - skip если main.name уже > 80 chars И row.name начинается с lowercase
+         Cyrillic / blacklist-pattern (continuation ПРЕДЫДУЩЕГО item).
+    3. Все absorbed rows сливаются с main: name parts склеиваются в y-order
+       через dash-rule; model, comments аналогично; qty/unit/mfr/brand/mass —
+       первое не-placeholder значение в y-order (main приоритет).
+    """
+    main = rows[main_idx]
+    main_cells = main.cells
+    # Собираем absorbed indices в y-order. Cluster sorted by index = sorted by y.
+    absorb_idx_in_order: list[int] = []
+    for j in cluster:
+        if j == main_idx:
+            continue
+        other = rows[j]
+        if not (_is_absorb_candidate(other) or _is_orphan_main(other)):
+            continue
+        # Защита от over-merge применяется ТОЛЬКО для orphans ВЫШЕ main
+        # (j < main_idx). Orphans НИЖЕ main (j > main_idx) — это всегда
+        # continuation текущего main (если бы соседнее main row было ниже,
+        # cluster содержал бы 2 main и cluster-merge не сработал бы).
+        other_name = (other.cells.get("name") or "").strip()
+        if other_name and j < main_idx:
+            initial_main_name = (main_cells.get("name") or "").strip()
+            current_main_name = _build_running_name(rows, main_idx, absorb_idx_in_order)
+            looks_like_continuation = _is_continuation_of_neighbour(other_name)
+            # (a) main изначально имел name И orphan = continuation
+            #     → orphan от item ВЫШЕ cluster, не от main.
+            if initial_main_name and looks_like_continuation:
+                continue
+            # (b) main.name (running) уже complete > 80 chars И orphan = continuation
+            #     → multi-line name предыдущего item который накопился выше.
+            if (
+                len(current_main_name) > _MAIN_NAME_COMPLETE_THRESHOLD
+                and looks_like_continuation
+            ):
+                continue
+        absorb_idx_in_order.append(j)
+
+    # Финальная сборка name/model/comments в y-order.
+    # Включаем main.name на правильной позиции (по y_mid main_idx).
+    cluster_indices_to_merge = sorted([main_idx, *absorb_idx_in_order])
+
+    name_parts: list[str] = []
+    model_parts: list[str] = []
+    comments_parts: list[str] = []
+    for k in cluster_indices_to_merge:
+        c = rows[k].cells
+        n = (c.get("name") or "").strip()
+        m = (c.get("model") or "").strip()
+        cm = (c.get("comments") or "").strip()
+        if n:
+            name_parts.append(n)
+        if m:
+            model_parts.append(m)
+        if cm:
+            comments_parts.append(cm)
+
+    if name_parts:
+        main_cells["name"] = _merge_name_parts(name_parts)
+    if model_parts:
+        main_cells["model"] = _merge_model_parts(model_parts)
+    if comments_parts:
+        main_cells["comments"] = _merge_comments_parts(comments_parts)
+
+    # qty/unit/mfr/brand/mass: первое не-placeholder значение (priority main).
+    for col in ("qty", "unit", "manufacturer", "brand", "mass"):
+        if (main_cells.get(col) or "").strip() not in _PLACEHOLDER_VALUES:
+            continue
+        for k in cluster_indices_to_merge:
+            other_val = (rows[k].cells.get(col) or "").strip()
+            if other_val and other_val not in _PLACEHOLDER_VALUES:
+                main_cells[col] = other_val
+                break
+
+    # raw_blocks для трассировки.
+    for j in absorb_idx_in_order:
+        main.raw_blocks.extend(rows[j].raw_blocks)
+
+    return absorb_idx_in_order
+
+
+def _build_running_name(
+    rows: list[TableRow], main_idx: int, already_absorbed: list[int]
+) -> str:
+    """Текущая длина main.name с уже принятыми absorbed rows (для over-merge check).
+
+    Используем только индексы которые ВЫШЕ или РАВНЫ main_idx (мы идём top-down,
+    accumulated state).
+    """
+    indices = sorted([main_idx, *already_absorbed])
+    parts: list[str] = []
+    for k in indices:
+        n = (rows[k].cells.get("name") or "").strip()
+        if n:
+            parts.append(n)
+    return _merge_name_parts(parts)
+
+
+def _absorb_into_main(main: TableRow, other: TableRow) -> None:
+    """Backward-compat shim для _merge_klop_two_row_pattern.
+
+    Вместо position-based pattern используется y-order: caller передаёт
+    rows в порядке top-down (КЛОП main всегда первый, continuation после).
+    Слияние идёт через те же merge-функции что и cluster-merge.
     """
     main_cells = main.cells
     other_cells = other.cells
 
-    # name: склеить main.name с other.name по позиции.
+    # name (top-down: main + other).
     other_name = (other_cells.get("name") or "").strip()
     if other_name:
         main_name = (main_cells.get("name") or "").strip()
         if not main_name:
             main_cells["name"] = other_name
-        elif position < 0:
-            main_cells["name"] = _merge_name_parts([other_name, main_name])
         else:
             main_cells["name"] = _merge_name_parts([main_name, other_name])
 
-    # model: склеить с dash-rule.
+    # model.
     other_model = (other_cells.get("model") or "").strip()
     if other_model:
         main_model = (main_cells.get("model") or "").strip()
         if not main_model:
             main_cells["model"] = other_model
-        elif position < 0:
-            main_cells["model"] = _merge_model_parts([other_model, main_model])
         else:
             main_cells["model"] = _merge_model_parts([main_model, other_model])
 
-    # comments: склеить с dash-rule.
+    # comments.
     other_comments = (other_cells.get("comments") or "").strip()
     if other_comments:
         main_comments = (main_cells.get("comments") or "").strip()
         if not main_comments:
             main_cells["comments"] = other_comments
-        elif position < 0:
-            main_cells["comments"] = _merge_comments_parts([other_comments, main_comments])
         else:
             main_cells["comments"] = _merge_comments_parts([main_comments, other_comments])
 
-    # qty/unit/mfr/brand/mass: override placeholder if main is empty or '-'.
+    # qty/unit/mfr/brand/mass: override placeholder.
     for col in ("qty", "unit", "manufacturer", "brand", "mass"):
         other_val = (other_cells.get(col) or "").strip()
         if not other_val:
@@ -1671,9 +1815,7 @@ def _absorb_into_main(main: TableRow, other: TableRow, *, position: int) -> None
         main_val = (main_cells.get(col) or "").strip()
         if main_val in _PLACEHOLDER_VALUES:
             main_cells[col] = other_val
-        # Иначе main выигрывает — не трогаем (защита от конфликтов).
 
-    # raw_blocks для трассировки.
     main.raw_blocks.extend(other.raw_blocks)
 
 
@@ -1737,8 +1879,8 @@ def _merge_klop_two_row_pattern(rows: list[TableRow]) -> list[TableRow]:
                 and not r2.is_section_heading
                 and _klop_continuation_row(r2, name)
             ):
-                _absorb_into_main(row, r1, position=1)
-                _absorb_into_main(row, r2, position=2)
+                _absorb_into_main(row, r1)
+                _absorb_into_main(row, r2)
                 keep[i + 1] = False
                 keep[i + 2] = False
                 merged = True
@@ -1753,7 +1895,7 @@ def _merge_klop_two_row_pattern(rows: list[TableRow]) -> list[TableRow]:
                 and _klop_continuation_row(r1, name)
                 and _is_main_row(row)
             ):
-                _absorb_into_main(row, r1, position=1)
+                _absorb_into_main(row, r1)
                 keep[i + 1] = False
                 i += 2
                 continue

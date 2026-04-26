@@ -708,6 +708,146 @@ class TestE201Fixes:
         finally:
             doc.close()
 
+    def test_obm_vent_continuation_not_absorbed_into_neighbour(self):
+        """E20-1 retrofit (PR #2 review regression): длинное многострочное
+        описание ОБМ-Вент огнезащитного покрытия НЕ должно приклеиться к
+        соседнему main row (например Самоклеющая лента).
+
+        Прямой вызов _merge_cluster_into_main с TableRow в кириллице (fitz/helv
+        не рендерит кириллицу — тестируем функцию напрямую).
+        """
+        from app.services.pdf_text import TableRow, _merge_cluster_into_main
+        rows = [
+            TableRow(
+                page_number=1, y_mid=100.0, row_index=0,
+                cells={
+                    "name": "Самоклеющая лента ROCKWOOL для теплозащитного покрытия воздуховодов",
+                    "unit": "п.м.", "qty": "130",
+                },
+            ),
+            # continuation от ВЫШЕ-расположенного ОБМ-Вент item — должен SKIP
+            # (находится "ниже" main по индексу cluster, но симулирует случай
+            # когда orphan ВЫШЕ main, через позицию индекса в cluster).
+            TableRow(
+                page_number=1, y_mid=88.0, row_index=1,
+                cells={"name": "ванный обкладочным материалом из алюминиевой фольги"},
+            ),
+            TableRow(
+                page_number=1, y_mid=80.0, row_index=2,
+                cells={"name": "щего компонента в системах комплексной огнезащиты"},
+            ),
+        ]
+        # Cluster ordered by index. main_idx=0 (главный — Самоклеющая лента).
+        # j=1, j=2: оба «> main_idx» в индексе но физически ВЫШЕ по y_mid.
+        # Защита смотрит на индекс cluster — для этого теста используем
+        # обратный порядок rows.
+        rows_reversed = [rows[2], rows[1], rows[0]]
+        cluster = [0, 1, 2]
+        main_idx = 2  # main в конце cluster (orphan-rows ВЫШЕ)
+        absorbed = _merge_cluster_into_main(rows_reversed, cluster, main_idx)
+        # Защита должна skip continuation rows.
+        assert absorbed == [], f"continuation rows ВЫШЕ main с blacklist-pattern должны SKIP, got: {absorbed}"
+        # main.name остался без continuation.
+        name = rows_reversed[main_idx].cells.get("name", "")
+        assert "Самоклеющая лента" in name
+        assert "ванный обкладочным" not in name
+        assert "щего компонента" not in name
+
+    def test_klop_continuation_morozostoykoe_correct_y_order(self):
+        """E20-1 retrofit: КЛОП cluster на page 76 склеивается в y-order
+        даже когда фрагменты ВЫШЕ и НИЖЕ main — orphan_main (qty/unit/mfr).
+
+        Page 76 ПД14 КЛОП:
+          row 0: «Клапан противопожарный стеновой...» (bare-name)
+          row 1: «розостойкое исполнение...», model «КЛОП-4(120)-НЗ-МС-С-»
+          row 2: qty/unit/mfr (orphan_main proxy)
+          row 3: «нормально закрытый (НЗ)...», model «700х700-MBE/S(220)-ВН»
+          row 4: «термоизоляцией» (bare-name continuation)
+        Result: один row с name «Клапан … розостойкое … нормально закрытый … термоизоляцией».
+        """
+        from app.services.pdf_text import TableRow, _merge_cluster_into_main
+        rows = [
+            TableRow(
+                page_number=1, y_mid=178.0, row_index=0,
+                cells={"name": "Клапан противопожарный стеновой, без вылета заслонок, мо-"},
+            ),
+            TableRow(
+                page_number=1, y_mid=191.84, row_index=1,
+                cells={
+                    "name": "розостойкое исполнение  с огнестойкостью 120мин (EI120),",
+                    "model": "КЛОП-4(120)-НЗ-МС-С-",
+                },
+            ),
+            TableRow(
+                page_number=1, y_mid=198.77, row_index=2,
+                cells={"manufacturer": "ЗАО \"BИНГС-М\"", "unit": "шт.", "qty": "1"},
+            ),
+            TableRow(
+                page_number=1, y_mid=205.64, row_index=3,
+                cells={
+                    "name": "нормально закрытый (НЗ), привод клапана внутри, заслонки с",
+                    "model": "700х700-MBE/S(220)-ВН",
+                },
+            ),
+            TableRow(
+                page_number=1, y_mid=219.44, row_index=4,
+                cells={"name": "термоизоляцией"},
+            ),
+        ]
+        cluster = [0, 1, 2, 3, 4]
+        main_idx = 2  # orphan_main (qty/unit/mfr) — proxy main
+        absorbed = _merge_cluster_into_main(rows, cluster, main_idx)
+        # Все 4 не-main rows должны быть absorbed.
+        assert sorted(absorbed) == [0, 1, 3, 4], f"ожидаем absorb всех 4 rows, got: {absorbed}"
+        main = rows[main_idx]
+        name = main.cells.get("name", "")
+        idx_klapan = name.find("Клапан")
+        idx_rozost = name.find("розостойкое")
+        idx_normal = name.find("нормально закрытый")
+        idx_termo = name.find("термоизоляцией")
+        assert all(i != -1 for i in (idx_klapan, idx_rozost, idx_normal, idx_termo)), (
+            f"все 4 части name должны быть в результате, got: {name}"
+        )
+        assert idx_klapan < idx_rozost < idx_normal < idx_termo, (
+            f"name parts не в y-order: {name}"
+        )
+        # model склеена: «КЛОП-...» (ends '-') + «700х700-MBE/S(220)-ВН» = склейка inline.
+        model = main.cells.get("model", "")
+        assert "КЛОП-4" in model
+        assert "MBE/S" in model
+        # placeholder mfr/unit/qty взяты из orphan_main row (row 2).
+        assert main.cells.get("qty") == "1"
+        assert main.cells.get("unit") == "шт."
+
+    def test_running_name_threshold_blocks_below_threshold(self):
+        """Защита от over-merge: если main.name (running) > 80 chars и orphan
+        начинается с lowercase Cyrillic — skip (явная continuation предыдущего)."""
+        from app.services.pdf_text import (
+            TableRow, _merge_cluster_into_main, _MAIN_NAME_COMPLETE_THRESHOLD,
+        )
+        long_name_part = "Огнезащитное покрытие воздуховодов системы вентиляции с" \
+                         " теплоизоляцией базальтовой марки"
+        assert len(long_name_part) > _MAIN_NAME_COMPLETE_THRESHOLD
+        rows = [
+            TableRow(
+                page_number=1, y_mid=80.0, row_index=0,
+                cells={"name": long_name_part},  # accumulator above main
+            ),
+            TableRow(
+                page_number=1, y_mid=92.0, row_index=1,
+                cells={"name": "ванный обкладочным материалом"},  # blacklist + lowercase
+            ),
+            TableRow(
+                page_number=1, y_mid=104.0, row_index=2,
+                cells={"name": "Самоклеющая лента", "unit": "п.м.", "qty": "60"},
+            ),
+        ]
+        cluster = [0, 1, 2]
+        main_idx = 2
+        absorbed = _merge_cluster_into_main(rows, cluster, main_idx)
+        # row 1 (continuation) должен быть SKIPped: main running name >80, lowercase + blacklist.
+        assert 1 not in absorbed, f"continuation '{rows[1].cells['name']}' должна SKIP, got absorbed={absorbed}"
+
 
 class TestIsHeaderRow:
     def test_header_row_detected(self):
