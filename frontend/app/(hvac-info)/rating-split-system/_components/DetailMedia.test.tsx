@@ -103,3 +103,73 @@ describe('DetailMedia — переключатель видеоплатформ'
     expect(screen.getByText(/видеообзор скоро/i)).toBeTruthy();
   });
 });
+
+describe('DetailMedia — фото-лупа (4.3)', () => {
+  const withPhoto = (over: Partial<RatingModelDetail> = {}): RatingModelDetail =>
+    baseDetail({
+      photos: [
+        { id: 1, image_url: 'https://example.com/photo-1.jpg', alt: 'Фото 1' },
+      ],
+      ...over,
+    });
+
+  it('фото есть → рендерится photo-zoom trigger', () => {
+    render(<DetailMedia detail={withPhoto()} />);
+    const trigger = screen.getByTestId('photo-zoom');
+    expect(trigger).toBeTruthy();
+    expect(trigger.getAttribute('aria-label')).toBe('Увеличить фото');
+  });
+
+  it('photo-modal появляется только после клика по trigger', () => {
+    render(<DetailMedia detail={withPhoto()} />);
+    expect(screen.queryByTestId('photo-modal')).toBeNull();
+    fireEvent.click(screen.getByTestId('photo-zoom'));
+    const modal = screen.getByTestId('photo-modal');
+    expect(modal.getAttribute('role')).toBe('dialog');
+    // Внутри modal — фото с тем же src.
+    const img = modal.querySelector('img');
+    expect(img!.getAttribute('src')).toBe('https://example.com/photo-1.jpg');
+  });
+
+  it('клик по close-кнопке закрывает modal', () => {
+    render(<DetailMedia detail={withPhoto()} />);
+    fireEvent.click(screen.getByTestId('photo-zoom'));
+    expect(screen.queryByTestId('photo-modal')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('photo-modal-close'));
+    expect(screen.queryByTestId('photo-modal')).toBeNull();
+  });
+
+  it('фото нет → нет photo-zoom trigger (placeholder вместо галереи)', () => {
+    const detail = baseDetail({ photos: [] });
+    render(<DetailMedia detail={detail} />);
+    expect(screen.queryByTestId('photo-zoom')).toBeNull();
+    expect(screen.getByText(/фото скоро появятся/i)).toBeTruthy();
+  });
+
+  it('hover на trigger подключает lens-overlay (фон-картинка)', () => {
+    const { container } = render(<DetailMedia detail={withPhoto()} />);
+    const trigger = screen.getByTestId('photo-zoom');
+    expect(container.querySelector('.rt-photo-zoom-lens')).toBeNull();
+    fireEvent.mouseEnter(trigger);
+    const lens = container.querySelector('.rt-photo-zoom-lens') as HTMLElement;
+    expect(lens).toBeTruthy();
+    expect(lens.style.backgroundImage).toContain(
+      'https://example.com/photo-1.jpg',
+    );
+    fireEvent.mouseLeave(trigger);
+    expect(container.querySelector('.rt-photo-zoom-lens')).toBeNull();
+  });
+
+  it('навигация по фото не открывает modal (stopPropagation)', () => {
+    const detail = baseDetail({
+      photos: [
+        { id: 1, image_url: 'https://example.com/p1.jpg', alt: '1' },
+        { id: 2, image_url: 'https://example.com/p2.jpg', alt: '2' },
+      ],
+    });
+    render(<DetailMedia detail={detail} />);
+    const next = screen.getByLabelText('Следующее фото');
+    fireEvent.click(next);
+    expect(screen.queryByTestId('photo-modal')).toBeNull();
+  });
+});
