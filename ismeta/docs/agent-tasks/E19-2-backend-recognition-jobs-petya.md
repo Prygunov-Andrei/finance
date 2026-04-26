@@ -2,9 +2,15 @@
 
 **Команда:** IS-Петя.
 **Ветка:** `ismeta/e19-2-recognition-jobs`.
-**Worktree:** `ERP_Avgust_is_petya_e19_2`.
-**Приоритет:** 🟢 feature E19. Зависимость: **E19-1 в main**.
+**Worktree:** `ERP_Avgust_is_petya_e19_2` (создан от `origin/main` @ `fb59315`).
+**Приоритет:** 🟢 feature E19. Зависимость: **E19-1 в main** ✅ (`fb59315`).
 **Срок:** ~1.5 дня.
+
+> **ВАЖНО — независимость от E18 (как и в E19-1).** В мастер-спеке E19-2 модель `RecognitionJob` имеет `profile = ForeignKey(LLMProfile, ...)`. Однако E18 (LLM-профили) ещё **не запущен** — ты стартуешь без него. В этом ТЗ:
+> - **Поле `profile` сделать опциональным** через `null=True, blank=True` в модели + `models.SET_NULL`. На MVP проксирование `X-LLM-*` headers просто пропускается (пустые headers — recognition использует defaults из своего .env, как сейчас).
+> - **НЕ создавай** `apps/llm_profiles/` app — это задача E18-2.
+> - **НЕ импортируй** `LLMProfile` модель напрямую. Используй `models.ForeignKey("llm_profiles.LLMProfile", ...)` с null=True — Django примет такой FK даже если приложение не зарегистрировано (миграция применится). Когда E18-2 замержат, FK автоматически активируется. **Альтернатива (проще):** оставь `profile_id = IntegerField(null=True, blank=True)` без FK constraint вообще — позже E18-2 сможет добавить proper FK миграцией. Я бы выбрал альтернативу, чище.
+> - **Acceptance check:** `manage.py makemigrations llm_profiles` НЕ падает (т.к. app не существует), `manage.py migrate recognition_jobs` чисто применяется.
 
 ---
 
@@ -60,10 +66,9 @@ class RecognitionJob(models.Model):
     file_name = models.CharField(max_length=255)
     file_type = models.CharField(max_length=20)  # "pdf"/"excel"/"spec"/"invoice"
     file_blob = models.BinaryField()  # хранилище загруженного файла на время job'а
-    profile = models.ForeignKey(
-        "llm_profiles.LLMProfile", null=True, blank=True,
-        on_delete=models.SET_NULL,
-    )  # E18, опционально
+    profile_id = models.IntegerField(null=True, blank=True)
+    # E18 (LLM-профили) ещё не сделан — пока IntegerField без FK.
+    # После E18-2 будет миграция: profile_id → ForeignKey(LLMProfile, on_delete=SET_NULL).
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued")
     pages_total = models.IntegerField(null=True, blank=True)
     pages_done = models.IntegerField(default=0)
@@ -159,13 +164,9 @@ async def _dispatch_job(job: RecognitionJob):
         "X-Callback-Token": job.cancellation_token,
         "X-API-Key": settings.RECOGNITION_API_KEY,
     }
-    if job.profile:  # E18
-        headers.update({
-            "X-LLM-Base-URL": job.profile.base_url,
-            "X-LLM-API-Key": job.profile.get_api_key(),
-            "X-LLM-Extract-Model": job.profile.extract_model,
-            ...
-        })
+    # E18 (LLM-профили) ещё не сделан — X-LLM-* headers пока НЕ добавляем.
+    # Recognition использует свои defaults из .env (DeepSeek V4-Pro thinking high).
+    # После E18-2 здесь будет if job.profile_id: lookup → headers.update(...)
     files = {"file": (job.file_name, job.file_blob, "application/pdf")}
     async with httpx.AsyncClient(timeout=30.0) as client:
         await client.post(
@@ -294,15 +295,16 @@ def import_pdf(request, estimate_id):
     # новый async
     estimate = get_object_or_404(Estimate, pk=estimate_id)
     pdf_file = request.FILES["file"]
-    profile_id = request.POST.get("llm_profile_id")
-    profile = LLMProfile.objects.filter(id=profile_id).first() if profile_id else None
+    # E18 пока нет — profile_id просто валидируем как int если передано
+    profile_id_raw = request.POST.get("llm_profile_id", "")
+    profile_id = int(profile_id_raw) if profile_id_raw.isdigit() else None
     
     job = RecognitionJob.objects.create(
         estimate=estimate,
         file_name=pdf_file.name,
         file_type="pdf",
         file_blob=pdf_file.read(),
-        profile=profile,
+        profile_id=profile_id,
         cancellation_token=secrets.token_urlsafe(32),
         created_by=request.user if request.user.is_authenticated else None,
     )
@@ -361,7 +363,8 @@ RECOGNITION_MAX_PARALLEL_JOBS=2
 
 - **НЕ удалять** sync endpoint поведение — только добавить async flag.
 - **НЕ persistить** через recognition restart — known limit MVP.
-- **НЕ хранить** plain LLMProfile.api_key (берём через `profile.get_api_key()` decrypt).
+- ~~**НЕ хранить** plain LLMProfile.api_key~~ — отложено до E18-2 (LLMProfile ещё нет).
+- **НЕ создавать** `apps/llm_profiles/` app (это E18-2).
 
 ---
 
@@ -391,10 +394,24 @@ Worktree: /Users/andrei_prygunov/obsidian/avgust/ERP_Avgust_is_petya_e19_2
 
 Контекст: фича E19 — background jobs для recognition. Сметчик загружает
 PDF → диалог моментально закрывается → работает дальше. Шапка показывает
-индикатор. Toast при готовности. E19-1 (recognition async + callbacks)
-сделан. Твоя часть — Django модель RecognitionJob + worker (management
-command sidecar) + endpoints (create, list, cancel, callback) + интеграция
-с existing import-pdf flow.
+индикатор. Toast при готовности.
+
+E19-1 (recognition async + callbacks) уже в main (commit fb59315). Live
+acceptance прошёл — два параллельных job'а на real PDF (АОВ 29/29 + ov2
+153/153) корректно отрабатывают через mock-receiver. Твоя часть E19-2 —
+Django модель RecognitionJob + worker (management command sidecar) +
+endpoints (create, list, cancel, callback handler) + интеграция с
+existing import-pdf flow.
+
+ВАЖНО: E18 (LLM-профили) ещё НЕ сделан — мы стартуем E19 первым из-за
+срочности 87-страничного PDF. В ТЗ есть отдельный блок «ВАЖНО — независимость
+от E18» в самом начале. Используй profile_id IntegerField без FK,
+proxy headers X-LLM-* пока НЕ передавай — recognition использует .env defaults.
+
+ПАРАЛЛЕЛЬНО работает другая команда (AC Rating) на ветках ac-rating/* —
+НЕ заходи в backend/ac_*, frontend/app/ratings/, ac-rating/. Если планируешь
+править shared файлы (settings.py, urls.py, docker-compose.yml) — пинг
+Андрею ДО коммита.
 
 Работай строго по ТЗ. Push в свою ветку, отчёт по формату.
 ```
