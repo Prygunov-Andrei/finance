@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import { T } from './primitives';
 import {
@@ -88,16 +88,11 @@ function PhotoBlock({
           overflow: 'hidden',
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <PhotoZoom
           src={current.image_url}
           alt={current.alt || modelName}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
+          // key — чтобы при переключении фото state hover/modal сбрасывался
+          key={current.id}
         />
         <span
           style={{
@@ -112,6 +107,8 @@ function PhotoBlock({
             fontSize: 10,
             letterSpacing: 1,
             textTransform: 'uppercase',
+            pointerEvents: 'none',
+            zIndex: 3,
           }}
         >
           Фото · галерея
@@ -127,6 +124,8 @@ function PhotoBlock({
             borderRadius: 3,
             fontFamily: 'var(--rt-font-mono)',
             fontSize: 11,
+            pointerEvents: 'none',
+            zIndex: 3,
           }}
         >
           {idx + 1} / {photos.length}
@@ -189,6 +188,169 @@ function PhotoBlock({
   );
 }
 
+/**
+ * Inline hover-zoom для фото детальной страницы.
+ *
+ * Desktop (`@media (hover: hover)`): при наведении курсора показывает
+ * увеличенный фрагмент через background-image с background-position по
+ * курсору. На устройствах без hover (`@media (hover: none)`) лупа не
+ * рендерится через CSS-гейт — на мобильных тап открывает modal с
+ * полноразмерным фото.
+ *
+ * Клик по фото на любом устройстве открывает modal — это полезный
+ * fallback и для desktop (full-size без обрезки).
+ */
+function PhotoZoom({
+  src,
+  alt,
+}: {
+  src: string;
+  alt: string;
+}) {
+  const [hover, setHover] = useState(false);
+  const [pos, setPos] = useState({ x: 50, y: 50 });
+  const [modalOpen, setModalOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setModalOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [modalOpen]);
+
+  const onMouseMove = (e: MouseEvent<HTMLButtonElement>) => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setPos({
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+    });
+  };
+
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        }}
+      />
+      {hover ? (
+        <div
+          aria-hidden
+          className="rt-photo-zoom-lens"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: `url(${src})`,
+            backgroundSize: '200% 200%',
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: `${pos.x}% ${pos.y}%`,
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        />
+      ) : null}
+      <button
+        type="button"
+        ref={triggerRef}
+        data-testid="photo-zoom"
+        aria-label="Увеличить фото"
+        className="rt-photo-zoom-trigger"
+        onMouseMove={onMouseMove}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={() => setModalOpen(true)}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          padding: 0,
+          margin: 0,
+          background: 'transparent',
+          border: 0,
+          cursor: 'zoom-in',
+          zIndex: 2,
+        }}
+      />
+      {modalOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Просмотр фото"
+          data-testid="photo-modal"
+          onClick={() => setModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            cursor: 'zoom-out',
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={alt}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              display: 'block',
+              cursor: 'default',
+            }}
+          />
+          <button
+            type="button"
+            aria-label="Закрыть"
+            data-testid="photo-modal-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              setModalOpen(false);
+            }}
+            style={{
+              position: 'absolute',
+              top: 16,
+              right: 20,
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.92)',
+              border: 0,
+              fontSize: 20,
+              lineHeight: 1,
+              cursor: 'pointer',
+              color: 'hsl(var(--rt-ink))',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      <style>{`
+        @media (hover: none) {
+          .rt-photo-zoom-trigger { cursor: pointer !important; }
+          .rt-photo-zoom-lens { display: none !important; }
+        }
+      `}</style>
+    </>
+  );
+}
+
 function NavButton({
   position,
   onClick,
@@ -199,8 +361,13 @@ function NavButton({
   return (
     <button
       type="button"
-      onClick={onClick}
       aria-label={position === 'left' ? 'Предыдущее фото' : 'Следующее фото'}
+      onClick={(e) => {
+        // Останавливаем bubbling, чтобы клик по навигации не открывал
+        // photo-modal (PhotoZoom-trigger лежит под navbuttons).
+        e.stopPropagation();
+        onClick();
+      }}
       style={{
         position: 'absolute',
         [position === 'left' ? 'left' : 'right']: 10,
@@ -216,6 +383,7 @@ function NavButton({
         justifyContent: 'center',
         cursor: 'pointer',
         color: 'hsl(var(--rt-ink))',
+        zIndex: 3,
       }}
     >
       <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
