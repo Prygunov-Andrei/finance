@@ -27,8 +27,9 @@ def client():
 @pytest.mark.django_db
 def test_list_returns_only_approved(client):
     m = PublishedACModelFactory()
-    ReviewFactory(model=m, is_approved=True, author_name="Approved")
-    ReviewFactory(model=m, is_approved=False, author_name="Pending")
+    ReviewFactory(model=m, status=Review.Status.APPROVED, author_name="Approved")
+    ReviewFactory(model=m, status=Review.Status.PENDING, author_name="Pending")
+    ReviewFactory(model=m, status=Review.Status.REJECTED, author_name="Rejected")
 
     resp = client.get(f"/api/public/v1/rating/models/{m.pk}/reviews/")
     assert resp.status_code == 200
@@ -54,8 +55,10 @@ def test_create_review_201_and_unapproved_with_ip(client):
     )
     assert resp.status_code == 201
     review = Review.objects.latest("created_at")
-    assert review.is_approved is False
+    assert review.status == Review.Status.PENDING
     assert review.ip_address == "10.0.0.1"
+    # Фронт получает status в ответе, чтобы показать «На модерации».
+    assert resp.json()["status"] == "pending"
 
 
 @pytest.mark.django_db

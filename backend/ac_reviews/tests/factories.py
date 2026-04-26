@@ -15,4 +15,4 @@ class ReviewFactory(DjangoModelFactory):
     model = factory.SubFactory(ACModelFactory)
     author_name = factory.Sequence(lambda n: f"Reviewer-{n}")
     rating = 5
-    is_approved = False
+    status = Review.Status.PENDING

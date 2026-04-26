@@ -7,7 +7,12 @@ from core.models import TimestampedModel
 
 
 class Review(TimestampedModel):
-    """Пользовательский отзыв о модели кондиционера. Премодерация — is_approved."""
+    """Пользовательский отзыв о модели кондиционера. Премодерация — status."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "На модерации"
+        APPROVED = "approved", "Одобрен"
+        REJECTED = "rejected", "Отклонён"
 
     model = models.ForeignKey(
         "ac_catalog.ACModel",
@@ -23,8 +28,13 @@ class Review(TimestampedModel):
     pros = models.TextField(blank=True, default="", verbose_name="Достоинства")
     cons = models.TextField(blank=True, default="", verbose_name="Недостатки")
     comment = models.TextField(blank=True, default="", verbose_name="Комментарий")
-    is_approved = models.BooleanField(
-        default=False, db_index=True, verbose_name="Одобрен",
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        verbose_name="Статус модерации",
+        help_text="По умолчанию pending. Публично видны только approved.",
     )
     ip_address = models.GenericIPAddressField(
         null=True, blank=True, verbose_name="IP-адрес",

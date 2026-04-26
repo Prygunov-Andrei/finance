@@ -16,9 +16,12 @@ def test_review_str_format():
 
 
 @pytest.mark.django_db
-def test_review_default_unapproved():
+def test_review_default_pending():
+    """Новый отзыв создаётся в статусе pending — модерация требуется явно."""
+    from ac_reviews.models import Review
+
     review = ReviewFactory()
-    assert review.is_approved is False
+    assert review.status == Review.Status.PENDING
 
 
 @pytest.mark.django_db
