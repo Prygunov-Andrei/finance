@@ -11,6 +11,7 @@ from rest_framework.routers import DefaultRouter
 
 from ac_brands import admin_views as brand_admin_views
 from ac_methodology import admin_views as methodology_admin_views
+from ac_reviews import admin_views as review_admin_views
 
 from . import admin_views
 
@@ -40,6 +41,16 @@ router.register(
     r"methodologies",
     methodology_admin_views.MethodologyAdminViewSet,
     basename="methodology",
+)
+router.register(
+    r"presets",
+    methodology_admin_views.RatingPresetAdminViewSet,
+    basename="preset",
+)
+router.register(
+    r"reviews",
+    review_admin_views.ReviewAdminViewSet,
+    basename="review-admin",
 )
 
 urlpatterns = [
@@ -79,6 +90,13 @@ urlpatterns = [
         "models/<int:model_id>/photos/<int:pk>/",
         admin_views.ACModelPhotoDetailView.as_view(),
         name="model-photo-detail",
+    ),
+    # `reviews/bulk-update/` регистрируем ДО include(router.urls), иначе DRF
+    # поймает `bulk-update` как `<int:pk>` review-detail.
+    path(
+        "reviews/bulk-update/",
+        review_admin_views.ReviewBulkUpdateView.as_view(),
+        name="review-bulk-update",
     ),
     path("", include(router.urls)),
 ]
