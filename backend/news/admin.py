@@ -6,7 +6,7 @@ from django import forms
 from modeltranslation.admin import TranslationAdmin
 from .models import (
     NewsPost, NewsMedia, NewsAuthor, NewsCategory, Comment, NewsDiscoveryRun, NewsDiscoveryStatus,
-    SearchConfiguration, DiscoveryAPICall
+    SearchConfiguration, DiscoveryAPICall, FeaturedNewsSettings,
 )
 from .services import NewsImportService, publish_news_post, publish_multiple_news_posts
 
@@ -21,6 +21,27 @@ class NewsCategoryAdmin(admin.ModelAdmin):
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("order", "name")
+
+
+@admin.register(FeaturedNewsSettings)
+class FeaturedNewsSettingsAdmin(admin.ModelAdmin):
+    """Singleton-админка: одна запись (pk=1), нельзя добавить вторую и нельзя удалить.
+
+    Список всегда показывает существующую запись; форма редактирования —
+    единственное поле ``category`` (FK на NewsCategory). Если запись ещё не
+    создана (например, до применения data-migration), Django Admin позволит
+    создать единственную; после этого «Add»-кнопка скрывается.
+    """
+
+    list_display = ("__str__", "updated_at")
+    fields = ("category",)
+    readonly_fields = ()
+
+    def has_add_permission(self, request):
+        return not FeaturedNewsSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(NewsAuthor)

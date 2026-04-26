@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     NewsPostViewSet, CommentViewSet, MediaUploadViewSet, NewsAuthorViewSet,
-    NewsCategoryViewSet, NewsBulkCategoryView,
+    NewsCategoryViewSet, NewsBulkCategoryView, FeaturedNewsView,
     SearchConfigurationViewSet, NewsDiscoveryRunViewSet, DiscoveryAPICallViewSet,
     RatingCriterionViewSet, RatingConfigurationViewSet, RatingRunViewSet,
 )
@@ -22,5 +22,6 @@ router.register(r'rating-runs', RatingRunViewSet, basename='rating-runs')
 
 urlpatterns = [
     path('news/bulk-update-category/', NewsBulkCategoryView.as_view(), name='news-bulk-update-category'),
+    path('featured-news/', FeaturedNewsView.as_view(), name='featured-news'),
     path('', include(router.urls)),
 ]

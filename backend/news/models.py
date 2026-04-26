@@ -88,6 +88,72 @@ class NewsCategory(models.Model):
         return self.name
 
 
+class FeaturedNewsSettings(models.Model):
+    """Singleton-настройки блока «featured news» на главной hvac-info.
+
+    Содержит ровно одну запись (pk=1). Хранит выбранную категорию,
+    из которой главная страница берёт latest published новость для hero-блока.
+    Если ``category`` = NULL — берётся latest published из всех категорий
+    (текущее поведение по умолчанию).
+    """
+
+    category = models.ForeignKey(
+        "NewsCategory",
+        to_field="slug",
+        db_column="category_slug",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("Featured Category"),
+        help_text=_(
+            "Категория, из которой берётся latest published новость для "
+            "hero-блока на главной hvac-info. Если пусто — берётся latest "
+            "published из всех категорий (текущее поведение)."
+        ),
+    )
+
+    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Updated At"), auto_now=True)
+
+    class Meta:
+        verbose_name = _("Настройки главной (featured news)")
+        verbose_name_plural = _("Настройки главной (featured news)")
+
+    def save(self, *args, **kwargs):
+        # Singleton: всегда pk=1.
+        self.pk = 1
+        # objects.create() и подобные передают force_insert=True — для singleton'а
+        # это означало бы INSERT поверх существующей строки и UniqueViolation;
+        # снимаем флаг, чтобы Django пошёл по UPDATE-ветке если pk=1 уже занят.
+        kwargs.pop("force_insert", None)
+        # Если конструируется новый instance (через FeaturedNewsSettings(...))
+        # и в БД уже есть строка pk=1, Django сделает UPDATE — но auto_now_add
+        # не сработает повторно, и self.created_at останется None, что нарушит
+        # NOT NULL. Подтянем существующее значение, чтобы UPDATE не затирал его.
+        if self.created_at is None:
+            existing = type(self).objects.filter(pk=1).values_list(
+                "created_at", flat=True
+            ).first()
+            if existing is not None:
+                self.created_at = existing
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Запретить удаление singleton'а — просто игнорируем вызов.
+        return (0, {})
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        if self.category_id:
+            return f"Featured: {self.category_id}"
+        return "Featured: (latest from all)"
+
+
 class NewsPost(models.Model):
     STATUS_CHOICES = [
         ('draft', _('Draft')),
