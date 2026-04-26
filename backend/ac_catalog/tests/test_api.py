@@ -141,6 +141,73 @@ def test_list_invalid_capacity_param_returns_400(client, methodology):
     assert resp.status_code == 400
 
 
+# ── Эпик F: ?price_max= для SEO-страниц /price/do-X-rub ─────────────────
+#
+# Параметр приходит из URL SSG-страниц. Кейсы:
+#   • валидное значение фильтрует price <= max
+#   • пустое — без фильтра (как при отсутствии параметра)
+#   • невалидное — graceful fallback (200, без фильтра), чтобы кривой URL
+#     не ронял SEO-страницу
+#   • модели без цены (NULL) на price-страницах не показываем
+
+
+@pytest.fixture
+def models_with_price_spread(methodology):
+    """5 моделей с разным price + 1 без цены (NULL)."""
+    PublishedACModelFactory(brand=BrandFactory(name="P10"), price="10000")
+    PublishedACModelFactory(brand=BrandFactory(name="P20"), price="20000")
+    PublishedACModelFactory(brand=BrandFactory(name="P30"), price="30000")
+    PublishedACModelFactory(brand=BrandFactory(name="P50"), price="50000")
+    PublishedACModelFactory(brand=BrandFactory(name="P100"), price="100000")
+    PublishedACModelFactory(brand=BrandFactory(name="NoPrice"), price=None)
+
+
+@pytest.mark.django_db
+def test_list_price_max_filters_lte(client, models_with_price_spread):
+    resp = client.get("/api/public/v1/rating/models/?price_max=30000")
+    assert resp.status_code == 200
+    brands = sorted(it["brand"] for it in resp.json())
+    assert brands == ["P10", "P20", "P30"]
+
+
+@pytest.mark.django_db
+def test_list_price_max_excludes_models_without_price(
+    client, models_with_price_spread,
+):
+    resp = client.get("/api/public/v1/rating/models/?price_max=200000")
+    brands = {it["brand"] for it in resp.json()}
+    assert "NoPrice" not in brands
+    assert {"P10", "P20", "P30", "P50", "P100"} <= brands
+
+
+@pytest.mark.django_db
+def test_list_price_max_empty_value_does_not_filter(
+    client, models_with_price_spread,
+):
+    """`?price_max=` (пустая строка) → как без параметра: возвращает все 6."""
+    resp = client.get("/api/public/v1/rating/models/?price_max=")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 6
+
+
+@pytest.mark.django_db
+def test_list_price_max_invalid_value_falls_back_gracefully(
+    client, models_with_price_spread,
+):
+    """`?price_max=invalid` → 200, фильтр игнорируется (а не 400)."""
+    resp = client.get("/api/public/v1/rating/models/?price_max=not-a-number")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 6
+
+
+@pytest.mark.django_db
+def test_list_price_max_boundary_inclusive(client, models_with_price_spread):
+    """price_max включает равные значения (lte, не lt)."""
+    resp = client.get("/api/public/v1/rating/models/?price_max=20000")
+    brands = sorted(it["brand"] for it in resp.json())
+    assert brands == ["P10", "P20"]
+
+
 # ── Detail ─────────────────────────────────────────────────────────────
 
 

@@ -76,13 +76,21 @@ class ACModelListView(LangMixin, generics.ListAPIView):
         price_min = parse_float_param(
             self.request.query_params.get("price_min"), "price_min",
         )
-        price_max = parse_float_param(
-            self.request.query_params.get("price_max"), "price_max",
-        )
         if price_min is not None:
             qs = qs.filter(price__gte=price_min)
-        if price_max is not None:
-            qs = qs.filter(price__lte=price_max)
+
+        # price_max — параметр SEO-страниц /price/do-X-rub. Невалидное значение
+        # из URL не должно ронять SSG: при ошибке парсинга молча игнорируем
+        # фильтр (graceful fallback), а не возвращаем 400.
+        # Модели без цены (price IS NULL) на price-страницах не показываем.
+        price_max_raw = self.request.query_params.get("price_max")
+        if price_max_raw:
+            try:
+                price_max_value = float(price_max_raw)
+            except (ValueError, TypeError):
+                price_max_value = None
+            if price_max_value is not None:
+                qs = qs.filter(price__isnull=False, price__lte=price_max_value)
 
         return qs
 
