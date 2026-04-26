@@ -12,12 +12,12 @@ class ReviewAdmin(admin.ModelAdmin):
         "model",
         "author_name",
         "rating",
-        "is_approved",
+        "status",
         "created_at",
         "short_comment",
     )
-    list_filter = ("is_approved", "rating", "created_at")
-    list_editable = ("is_approved",)
+    list_filter = ("status", "rating", "created_at")
+    list_editable = ("status",)
     search_fields = (
         "author_name",
         "comment",
@@ -34,7 +34,7 @@ class ReviewAdmin(admin.ModelAdmin):
     fieldsets = (
         ("Связь", {"fields": ("model",)}),
         ("Содержание", {"fields": ("author_name", "rating", "pros", "cons", "comment")}),
-        ("Модерация", {"fields": ("is_approved",)}),
+        ("Модерация", {"fields": ("status",)}),
         ("Метаданные", {"fields": ("ip_address", "created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
@@ -45,10 +45,10 @@ class ReviewAdmin(admin.ModelAdmin):
 
     @admin.action(description="Одобрить выбранные отзывы")
     def approve_selected(self, request, queryset):
-        updated = queryset.update(is_approved=True)
+        updated = queryset.update(status=Review.Status.APPROVED)
         self.message_user(request, f"Одобрено: {updated}", level=messages.SUCCESS)
 
-    @admin.action(description="Отклонить (снять одобрение) выбранные")
+    @admin.action(description="Отклонить выбранные отзывы")
     def reject_selected(self, request, queryset):
-        updated = queryset.update(is_approved=False)
-        self.message_user(request, f"Снято одобрение: {updated}", level=messages.WARNING)
+        updated = queryset.update(status=Review.Status.REJECTED)
+        self.message_user(request, f"Отклонено: {updated}", level=messages.WARNING)
