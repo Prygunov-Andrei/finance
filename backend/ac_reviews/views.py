@@ -17,21 +17,28 @@ def _client_ip(request) -> str | None:
 
 
 class ReviewListView(generics.ListAPIView):
-    """Список одобренных отзывов для конкретной модели."""
+    """Список одобренных отзывов для конкретной модели.
+
+    Anonymous видят только status=approved; staff — все статусы (для дашборда модерации).
+    """
 
     serializer_class = ReviewSerializer
     pagination_class = None  # короткие списки — без пагинации
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        return Review.objects.filter(
-            model_id=self.kwargs["model_id"],
-            is_approved=True,
-        )
+        qs = Review.objects.filter(model_id=self.kwargs["model_id"])
+        user = self.request.user
+        if not (user.is_authenticated and user.is_staff):
+            qs = qs.filter(status=Review.Status.APPROVED)
+        return qs
 
 
 class ReviewCreateView(generics.CreateAPIView):
-    """Приём нового отзыва. Сохраняется как is_approved=False (премодерация)."""
+    """Приём нового отзыва. Сохраняется со status=pending (премодерация).
+
+    status read-only в сериализаторе — пользователь не может выставить approved.
+    """
 
     serializer_class = ReviewCreateSerializer
     queryset = Review.objects.all()
@@ -42,4 +49,6 @@ class ReviewCreateView(generics.CreateAPIView):
         return super().post(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        serializer.save(is_approved=False, ip_address=_client_ip(self.request))
+        # status default=pending в модели; явно не передаём, чтобы не было
+        # соблазна обойти модерацию через perform_create.
+        serializer.save(ip_address=_client_ip(self.request))

@@ -6,7 +6,10 @@ from .models import Review
 
 
 class ReviewSerializer(serializers.ModelSerializer):
-    """Публичный сериализатор для чтения одобренных отзывов."""
+    """Публичный сериализатор для чтения одобренных отзывов.
+
+    Поле `status` намеренно НЕ выводим публично — это внутренняя информация модерации.
+    """
 
     class Meta:
         model = Review
@@ -15,7 +18,10 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 
 class ReviewCreateSerializer(serializers.ModelSerializer):
-    """Принимает форму отзыва. Honeypot — поле `website` (должно остаться пустым)."""
+    """Принимает форму отзыва. Honeypot — поле `website` (должно остаться пустым).
+
+    `status` read-only: всегда pending после создания, фронт показывает «На модерации».
+    """
 
     website = serializers.CharField(
         required=False, allow_blank=True, write_only=True, default="",
@@ -23,7 +29,18 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ["model", "author_name", "rating", "pros", "cons", "comment", "website"]
+        fields = [
+            "id",
+            "model",
+            "author_name",
+            "rating",
+            "pros",
+            "cons",
+            "comment",
+            "status",
+            "website",
+        ]
+        read_only_fields = ["id", "status"]
 
     def validate_website(self, value: str) -> str:
         if value:
