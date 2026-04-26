@@ -392,16 +392,6 @@ export default function MethodologyTable({ criteria }: Props) {
                           Ед. изм.: {c.unit}
                         </p>
                       ) : null}
-                      <p
-                        style={{
-                          fontFamily: 'var(--rt-font-mono)',
-                          fontSize: 11,
-                          color: 'hsl(var(--rt-ink-60))',
-                          margin: '8px 0 0',
-                        }}
-                      >
-                        Группа: {c.group_display || '—'}
-                      </p>
                     </div>
                   </div>
                 )}
