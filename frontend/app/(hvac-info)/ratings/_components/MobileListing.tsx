@@ -259,6 +259,7 @@ function MobileRows({
                       srcDark={m.brand_logo_dark}
                       name={m.brand}
                       size={28}
+                      tooltip={m.brand}
                     />
                   </span>
                   <span

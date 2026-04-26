@@ -38,13 +38,16 @@ export function BrandLogo({
   srcDark,
   name,
   size = 28,
+  tooltip,
 }: {
   src: string;
   /** Dark-theme версия логотипа. Если не передана или пустая — используется
    *  CSS-фоллбек `filter: invert(1) hue-rotate(180deg)` на `src` в `.dark`. */
   srcDark?: string | null;
   name: string;
-  size?: 28 | 32;
+  size?: 28 | 32 | 44 | 64;
+  /** Native HTML tooltip (title=) — показывается на hover над логотипом. */
+  tooltip?: string;
 }) {
   if (src) {
     const imgStyle: CSSProperties = {
@@ -59,6 +62,7 @@ export function BrandLogo({
         <img
           src={src}
           alt={name}
+          title={tooltip}
           className="rt-brand-logo-single"
           style={{ ...imgStyle, display: 'block' }}
         />
@@ -70,6 +74,7 @@ export function BrandLogo({
         <img
           src={src}
           alt={name}
+          title={tooltip}
           className="rt-brand-logo-light"
           style={{ ...imgStyle, display: 'block' }}
         />
@@ -77,6 +82,7 @@ export function BrandLogo({
         <img
           src={srcDark as string}
           alt={name}
+          title={tooltip}
           aria-hidden="true"
           className="rt-brand-logo-dark"
           style={{ ...imgStyle, display: 'none' }}
@@ -88,6 +94,7 @@ export function BrandLogo({
   return (
     <div
       aria-label={name}
+      title={tooltip}
       style={{
         width: size,
         height: size,

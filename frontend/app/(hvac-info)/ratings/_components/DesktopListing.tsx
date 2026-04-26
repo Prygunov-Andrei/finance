@@ -165,6 +165,7 @@ function ModelRow({
           srcDark={model.brand_logo_dark}
           name={model.brand}
           size={28}
+          tooltip={model.brand}
         />
       </div>
       <div />

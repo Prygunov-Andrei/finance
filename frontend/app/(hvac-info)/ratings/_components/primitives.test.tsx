@@ -109,4 +109,38 @@ describe('BrandLogo', () => {
     expect(img!.getAttribute('aria-hidden')).toBeNull();
     expect(img!.getAttribute('alt')).toBe('Haier');
   });
+
+  it('tooltip prop — single-img: title= на <img>', () => {
+    render(<BrandLogo src="/l.png" name="Haier" tooltip="Haier" />);
+    const img = document.querySelector('img.rt-brand-logo-single');
+    expect(img).toBeTruthy();
+    expect(img!.getAttribute('title')).toBe('Haier');
+  });
+
+  it('tooltip prop — light/dark: title= на обоих <img>', () => {
+    render(
+      <BrandLogo
+        src="/l.png"
+        srcDark="/d.png"
+        name="Casarte"
+        tooltip="Casarte"
+      />,
+    );
+    const lightImg = document.querySelector('img.rt-brand-logo-light');
+    const darkImg = document.querySelector('img.rt-brand-logo-dark');
+    expect(lightImg!.getAttribute('title')).toBe('Casarte');
+    expect(darkImg!.getAttribute('title')).toBe('Casarte');
+  });
+
+  it('tooltip prop — fallback-letter: title= на контейнере', () => {
+    render(<BrandLogo src="" name="Haier" tooltip="Haier" />);
+    const placeholder = screen.getByLabelText('Haier');
+    expect(placeholder.getAttribute('title')).toBe('Haier');
+  });
+
+  it('без tooltip prop — title= не рендерится (atribuut отсутствует)', () => {
+    render(<BrandLogo src="/l.png" name="Haier" />);
+    const img = document.querySelector('img.rt-brand-logo-single');
+    expect(img!.hasAttribute('title')).toBe(false);
+  });
 });
