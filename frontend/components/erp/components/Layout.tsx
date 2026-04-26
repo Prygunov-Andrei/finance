@@ -8,7 +8,7 @@ import {
   Truck, CalendarClock, TrendingUp, BarChart3, ShoppingCart, Link2,
   ExternalLink, HardHat, Search, BookOpen, HelpCircle,
   Calendar, PieChart, Wallet, Scale, Megaphone, Calculator, Globe, Phone, MessageSquareText,
-  Info, Sliders
+  Info, Sliders, Layers, MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -252,6 +252,8 @@ const menuItems: MenuItem[] = [
       { id: 'hvac-rating-brands', label: 'Бренды', icon: <Building2 className="w-4 h-4" />, path: '/hvac-rating/brands', section: 'dashboard' },
       { id: 'hvac-rating-criteria', label: 'Критерии', icon: <Sliders className="w-4 h-4" />, path: '/hvac-rating/criteria', section: 'dashboard' },
       { id: 'hvac-rating-methodology', label: 'Методика', icon: <Scale className="w-4 h-4" />, path: '/hvac-rating/methodology', section: 'dashboard' },
+      { id: 'hvac-rating-presets', label: 'Пресеты «Свой рейтинг»', icon: <Layers className="w-4 h-4" />, path: '/hvac-rating/presets', section: 'dashboard' },
+      { id: 'hvac-rating-reviews', label: 'Отзывы (модерация)', icon: <MessageSquare className="w-4 h-4" />, path: '/hvac-rating/reviews', section: 'dashboard' },
     ],
   },
 
@@ -372,6 +374,9 @@ const pageTitles: Record<string, string> = {
   'hvac-rating/criteria': 'Критерии (рейтинг)',
   'hvac-rating/criteria/create': 'Новый критерий',
   'hvac-rating/methodology': 'Методика (рейтинг)',
+  'hvac-rating/presets': 'Пресеты «Свой рейтинг»',
+  'hvac-rating/presets/create': 'Новый пресет',
+  'hvac-rating/reviews': 'Отзывы (модерация)',
   // 11. Справочники и Настройки
   'references/work-conditions': 'Фронт работ и монтажные условия',
   personnel: 'Персонал',
@@ -447,6 +452,10 @@ pathToParent['hvac-rating/criteria'] = { label: 'HVAC-Рейтинг', path: '/h
 pathToParent['hvac-rating/criteria/create'] = { label: 'Критерии', path: '/hvac-rating/criteria' };
 pathToParent['hvac-rating/criteria/edit'] = { label: 'Критерии', path: '/hvac-rating/criteria' };
 pathToParent['hvac-rating/methodology'] = { label: 'HVAC-Рейтинг', path: '/hvac-rating/methodology' };
+pathToParent['hvac-rating/presets'] = { label: 'HVAC-Рейтинг', path: '/hvac-rating/presets' };
+pathToParent['hvac-rating/presets/create'] = { label: 'Пресеты', path: '/hvac-rating/presets' };
+pathToParent['hvac-rating/presets/edit'] = { label: 'Пресеты', path: '/hvac-rating/presets' };
+pathToParent['hvac-rating/reviews'] = { label: 'HVAC-Рейтинг', path: '/hvac-rating/reviews' };
 
 export function Layout({ children, onLogout, user }: LayoutProps) {
   const { hasAccess } = usePermissions();
