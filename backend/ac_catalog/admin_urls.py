@@ -1,7 +1,8 @@
 """Админский API рейтинга кондиционеров (/api/hvac/rating/).
 
 Ф8A: CRUD моделей и брендов для ERP-операторов.
-Ф8B/C: добавятся критерии, методики, отзывы, заявки.
+Ф8B-1: добавлены критерии (CRUD) + методика (read+activate) + AI-генератор pros/cons.
+Ф8B-2/C: добавятся пресеты, отзывы, заявки.
 """
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from ac_brands import admin_views as brand_admin_views
+from ac_methodology import admin_views as methodology_admin_views
 
 from . import admin_views
 
@@ -29,6 +31,16 @@ router.register(
     admin_views.ModelRegionAdminViewSet,
     basename="region",
 )
+router.register(
+    r"criteria",
+    methodology_admin_views.CriterionAdminViewSet,
+    basename="criterion",
+)
+router.register(
+    r"methodologies",
+    methodology_admin_views.MethodologyAdminViewSet,
+    basename="methodology",
+)
 
 urlpatterns = [
     # Action endpoint'ы регистрируем ДО include(router.urls): иначе
@@ -47,6 +59,11 @@ urlpatterns = [
         "models/<int:pk>/recalculate/",
         admin_views.ACModelRecalculateView.as_view(),
         name="model-recalculate",
+    ),
+    path(
+        "models/<int:pk>/generate-pros-cons/",
+        admin_views.GenerateProsConsView.as_view(),
+        name="model-generate-pros-cons",
     ),
     path(
         "models/<int:model_id>/photos/",
