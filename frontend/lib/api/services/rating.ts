@@ -21,8 +21,13 @@ async function ratingFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function getRatingModels(): Promise<RatingModelListItem[]> {
-  return ratingFetch<RatingModelListItem[]>('/models/');
+export function getRatingModels(opts?: {
+  priceMax?: number;
+}): Promise<RatingModelListItem[]> {
+  const params = new URLSearchParams();
+  if (opts?.priceMax != null) params.set('price_max', String(opts.priceMax));
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return ratingFetch<RatingModelListItem[]>(`/models/${query}`);
 }
 
 export function getRatingModelBySlug(slug: string): Promise<RatingModelDetail> {
