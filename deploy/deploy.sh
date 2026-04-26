@@ -184,6 +184,32 @@ else
     echo -e "${YELLOW}  (добавь REVALIDATE_SECRET=<random> в /opt/finans_assistant/.env)${NC}"
 fi
 
+echo -e "${GREEN}[9.3/9] Cloudflare cache purge...${NC}"
+# Сбрасываем edge-кэш CF чтобы новые деплои не подменялись stale-ответами.
+# Берём токен и Zone ID из .env или уже загруженного окружения.
+CF_API_TOKEN_VALUE="${CF_API_TOKEN:-}"
+CF_ZONE_ID_VALUE="${CF_ZONE_ID:-}"
+if [ -z "$CF_API_TOKEN_VALUE" ] && [ -f ".env" ]; then
+    CF_API_TOKEN_VALUE=$(grep -E '^CF_API_TOKEN=' .env | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+fi
+if [ -z "$CF_ZONE_ID_VALUE" ] && [ -f ".env" ]; then
+    CF_ZONE_ID_VALUE=$(grep -E '^CF_ZONE_ID=' .env | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+fi
+if [ -n "$CF_API_TOKEN_VALUE" ] && [ -n "$CF_ZONE_ID_VALUE" ]; then
+    if curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID_VALUE}/purge_cache" \
+        -H "Authorization: Bearer ${CF_API_TOKEN_VALUE}" \
+        -H "Content-Type: application/json" \
+        --data '{"purge_everything":true}' \
+        -o /dev/null 2>&1; then
+        echo -e "${GREEN}  Cloudflare cache purged (purge_everything)${NC}"
+    else
+        echo -e "${YELLOW}  Cloudflare purge failed (non-fatal)${NC}"
+    fi
+else
+    echo -e "${YELLOW}  CF_API_TOKEN или CF_ZONE_ID не заданы — skipping Cloudflare purge${NC}"
+    echo -e "${YELLOW}  (добавь CF_API_TOKEN и CF_ZONE_ID в /opt/finans_assistant/.env)${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}Deployment completed!${NC}"
 echo ""
