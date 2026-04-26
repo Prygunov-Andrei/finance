@@ -12,8 +12,12 @@ import type {
   ACPreset,
   ACPresetWritable,
   ACReview,
+  ACSubmissionDetail,
+  ACSubmissionListItem,
   BrandsListParams,
   BulkUpdateReviewsResponse,
+  BulkUpdateSubmissionsResponse,
+  ConvertSubmissionResponse,
   CriteriaListParams,
   EquipmentType,
   GenerateDarkLogosResponse,
@@ -27,6 +31,9 @@ import type {
   ReorderPhotosResponse,
   ReviewStatus,
   ReviewsListParams,
+  SubmissionPatchPayload,
+  SubmissionStatus,
+  SubmissionsListParams,
 } from './acRatingTypes';
 
 // Бэкенд возвращает либо DRF-paginated, либо plain list — нормализуем.
@@ -75,6 +82,18 @@ function buildPresetsParams(params?: PresetsListParams): URLSearchParams {
   if (!params) return sp;
   if (params.is_active) sp.set('is_active', params.is_active);
   if (params.is_all_selected) sp.set('is_all_selected', params.is_all_selected);
+  if (params.search) sp.set('search', params.search);
+  if (params.ordering) sp.set('ordering', params.ordering);
+  if (params.page) sp.set('page', String(params.page));
+  return sp;
+}
+
+function buildSubmissionsParams(params?: SubmissionsListParams): URLSearchParams {
+  const sp = new URLSearchParams();
+  if (!params) return sp;
+  if (params.status) sp.set('status', params.status);
+  if (params.brand !== undefined) sp.set('brand', String(params.brand));
+  if (params.has_brand) sp.set('has_brand', params.has_brand);
   if (params.search) sp.set('search', params.search);
   if (params.ordering) sp.set('ordering', params.ordering);
   if (params.page) sp.set('page', String(params.page));
@@ -484,6 +503,74 @@ const acRatingService = {
     const response = await acRatingApiClient.post<BulkUpdateReviewsResponse>(
       '/reviews/bulk-update/',
       { review_ids, status }
+    );
+    return response.data;
+  },
+
+  // ── Submissions (Ф8C) ─────────────────────────────────────────────
+  async getSubmissions(
+    params?: SubmissionsListParams
+  ): Promise<{
+    items: ACSubmissionListItem[];
+    next: string | null;
+    count: number | null;
+  }> {
+    const sp = buildSubmissionsParams(params);
+    const response = await acRatingApiClient.get<unknown>('/submissions/', {
+      params: sp,
+    });
+    const data = response.data;
+    if (Array.isArray(data)) {
+      return {
+        items: data as ACSubmissionListItem[],
+        next: null,
+        count: data.length,
+      };
+    }
+    const paginated = data as PaginatedResponse<ACSubmissionListItem>;
+    return {
+      items: paginated.results || [],
+      next: paginated.next ?? null,
+      count: paginated.count ?? null,
+    };
+  },
+
+  async getSubmission(id: number): Promise<ACSubmissionDetail> {
+    const response = await acRatingApiClient.get<ACSubmissionDetail>(
+      `/submissions/${id}/`
+    );
+    return response.data;
+  },
+
+  async updateSubmission(
+    id: number,
+    payload: SubmissionPatchPayload
+  ): Promise<ACSubmissionDetail> {
+    const response = await acRatingApiClient.patch<ACSubmissionDetail>(
+      `/submissions/${id}/`,
+      payload
+    );
+    return response.data;
+  },
+
+  async deleteSubmission(id: number): Promise<void> {
+    await acRatingApiClient.delete(`/submissions/${id}/`);
+  },
+
+  async bulkUpdateSubmissions(
+    submission_ids: number[],
+    status: SubmissionStatus
+  ): Promise<BulkUpdateSubmissionsResponse> {
+    const response = await acRatingApiClient.post<BulkUpdateSubmissionsResponse>(
+      '/submissions/bulk-update/',
+      { submission_ids, status }
+    );
+    return response.data;
+  },
+
+  async convertSubmission(id: number): Promise<ConvertSubmissionResponse> {
+    const response = await acRatingApiClient.post<ConvertSubmissionResponse>(
+      `/submissions/${id}/convert-to-acmodel/`
     );
     return response.data;
   },
