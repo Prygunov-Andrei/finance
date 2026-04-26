@@ -21,6 +21,7 @@ from .models import (
     Criterion,
     MethodologyCriterion,
     MethodologyVersion,
+    RatingPreset,
 )
 
 
@@ -166,6 +167,46 @@ class AdminMethodologyListSerializer(serializers.ModelSerializer):
                 s=Sum("weight"),
             )["s"]
         return round(float(annotated or 0.0), 2)
+
+
+class AdminRatingPresetSerializer(serializers.ModelSerializer):
+    """Writable сериализатор пресета таба «Свой рейтинг».
+
+    `criteria_ids` — write/read список id критериев (M2M `criteria`).
+    `criteria_count` — read-only маркер: при `is_all_selected=True` возвращает
+    -1 (фронт интерпретирует как «ВСЕ»), иначе фактическое число связанных
+    критериев. M2M синхронизируется через `instance.criteria.set(...)`.
+    """
+
+    criteria_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Criterion.objects.all(),
+        source="criteria",
+        required=False,
+    )
+    criteria_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RatingPreset
+        fields = (
+            "id",
+            "slug",
+            "label",
+            "order",
+            "is_active",
+            "description",
+            "is_all_selected",
+            "criteria_ids",
+            "criteria_count",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "criteria_count", "created_at", "updated_at")
+
+    def get_criteria_count(self, obj: RatingPreset) -> int:
+        if obj.is_all_selected:
+            return -1
+        return obj.criteria.count()
 
 
 class AdminMethodologyDetailSerializer(serializers.ModelSerializer):
