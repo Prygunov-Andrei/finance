@@ -142,7 +142,7 @@ describe('DetailReviews', () => {
     expect(screen.getByText(/спам/i)).toBeTruthy();
   });
 
-  it('submit 201 сбрасывает форму и показывает success', async () => {
+  it('submit 201 сбрасывает форму и показывает плашку «на модерации»', async () => {
     (global.fetch as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce(
         new Response(JSON.stringify([]), { status: 200 }),
@@ -157,6 +157,7 @@ describe('DetailReviews', () => {
             pros: '',
             cons: '',
             comment: 'Отличный кондиционер, стоит покупать',
+            status: 'pending',
           }),
           { status: 201 },
         ),
@@ -182,9 +183,16 @@ describe('DetailReviews', () => {
       fireEvent.submit(form);
     });
 
+    // Плашка «на модерации»
     await waitFor(() =>
-      expect(screen.getByText(/отправлен на модерацию/i)).toBeTruthy(),
+      expect(screen.getByTestId('review-pending-banner')).toBeTruthy(),
     );
+    const banner = screen.getByTestId('review-pending-banner');
+    expect(banner.textContent).toMatch(/Спасибо!/);
+    expect(banner.textContent).toMatch(
+      /отправлен и появится после проверки модератором/,
+    );
+
     const [, postCall] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
     expect(postCall[0]).toMatch(/\/api\/public\/v1\/rating\/reviews\/$/);
     const body = JSON.parse(postCall[1].body);
@@ -194,6 +202,65 @@ describe('DetailReviews', () => {
       rating: 5,
       website: '',
     });
+  });
+
+  it('после успешного submit — поля формы очищены', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([mkReview()]), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 99,
+            model: 42,
+            author_name: 'Иван',
+            rating: 5,
+            pros: '',
+            cons: '',
+            comment: 'Отличный кондиционер, стоит покупать',
+            status: 'pending',
+          }),
+          { status: 201 },
+        ),
+      );
+    const { container } = render(<DetailReviews detail={baseDetail} />);
+    // С существующим отзывом сначала видна вкладка «Читать», переключим на «Оставить свой»
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Оставить свой/ })).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Оставить свой/ }));
+
+    const nameInput = container.querySelector(
+      'input[type="text"]:not([name="website"])',
+    ) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'Иван' } });
+    fireEvent.click(container.querySelectorAll('[role="radio"]')[4]);
+    const textareas = container.querySelectorAll('textarea');
+    const commentArea = textareas[textareas.length - 1] as HTMLTextAreaElement;
+    fireEvent.change(commentArea, {
+      target: { value: 'Отличный кондиционер, стоит покупать' },
+    });
+    expect(nameInput.value).toBe('Иван');
+    expect(commentArea.value).toMatch(/Отличный/);
+
+    const form = container.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('review-pending-banner')).toBeTruthy(),
+    );
+    // После submit tab переключается на 'read'; вернёмся к форме и убедимся что поля пусты
+    fireEvent.click(screen.getByRole('tab', { name: /Оставить свой/ }));
+    const nameInput2 = container.querySelector(
+      'input[type="text"]:not([name="website"])',
+    ) as HTMLInputElement;
+    const textareas2 = container.querySelectorAll('textarea');
+    const commentArea2 = textareas2[textareas2.length - 1] as HTMLTextAreaElement;
+    expect(nameInput2.value).toBe('');
+    expect(commentArea2.value).toBe('');
   });
 
   it('submit 429 показывает ratelimit error', async () => {

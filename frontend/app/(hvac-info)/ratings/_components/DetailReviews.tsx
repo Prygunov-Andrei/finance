@@ -93,17 +93,20 @@ export default function DetailReviews({ detail }: Props) {
       {submittedAt != null && (
         <div
           role="status"
+          data-testid="review-pending-banner"
           style={{
-            padding: '12px 18px',
+            padding: '14px 18px',
             marginBottom: 20,
-            background: 'hsl(var(--rt-accent-bg))',
-            border: '1px solid hsl(var(--rt-accent))',
+            background: 'hsl(45 100% 96%)',
+            borderLeft: '3px solid hsl(45 90% 55%)',
             borderRadius: 4,
+            fontSize: 13,
+            lineHeight: 1.5,
+            color: 'hsl(var(--rt-ink-80))',
           }}
         >
-          <T size={12} color="hsl(var(--rt-accent))" weight={600}>
-            Отзыв отправлен на модерацию. После проверки он появится в списке.
-          </T>
+          <strong>Спасибо!</strong> Ваш отзыв отправлен и появится после проверки модератором.
+          Обычно это занимает несколько часов.
         </div>
       )}
 

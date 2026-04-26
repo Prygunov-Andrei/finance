@@ -31,6 +31,9 @@ const DRAIN_HEATER_CHOICES = ['Нет', 'Есть'];
 
 const MAX_PHOTOS = 20;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+// Cloudflare free tier режет загрузку >100 МБ раньше Django, поэтому оставляем
+// запас и блокируем submit на клиенте при превышении 80 МБ суммарно.
+const MAX_TOTAL_BYTES = 80 * 1024 * 1024;
 
 type FormState = {
   brand: string;
@@ -214,6 +217,17 @@ export function validatePhotos(files: File[]): string | null {
   return null;
 }
 
+// Отдельно от validatePhotos: проверка суммы делается на submit, чтобы
+// пользователь мог добавить фото и увидеть красный индикатор размера —
+// это понятнее, чем «файл не добавился непонятно почему».
+export function validateTotalSize(files: File[]): string | null {
+  const total = files.reduce((s, f) => s + f.size, 0);
+  if (total > MAX_TOTAL_BYTES) {
+    return `Суммарный размер фото ${(total / 1024 / 1024).toFixed(0)} МБ превышает 80 МБ. Уберите часть фото или сожмите изображения.`;
+  }
+  return null;
+}
+
 type Props = {
   brands: RatingBrandOption[];
   /** Методология рейтинга — используется для построения map code→description_ru
@@ -321,6 +335,11 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
         setClientError(photoErr);
         return;
       }
+      const sizeErr = validateTotalSize(photos);
+      if (sizeErr) {
+        setClientError(sizeErr);
+        return;
+      }
       if (!isFormReady(state, photos)) {
         setClientError('Заполните все обязательные поля.');
         return;
@@ -379,6 +398,10 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
           if (typeof window !== 'undefined') {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }
+        } else if (res.status === 413) {
+          setClientError(
+            'Файлы слишком большие — попробуйте уменьшить количество или сжать изображения. Максимум — 80 МБ суммарно.',
+          );
         } else if (res.status === 429) {
           setClientError(
             'Слишком много заявок с этого IP. Попробуйте через час.',
@@ -404,6 +427,8 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
           } else {
             setClientError('Проверьте форму.');
           }
+        } else if (res.status >= 500) {
+          setClientError('Сервер временно недоступен. Попробуйте через минуту.');
         } else {
           setClientError('Что-то пошло не так. Попробуйте позже.');
         }
@@ -417,6 +442,11 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
   );
 
   const ready = useMemo(() => isFormReady(state, photos), [state, photos]);
+
+  const totalBytes = useMemo(
+    () => photos.reduce((s, f) => s + f.size, 0),
+    [photos],
+  );
 
   // Map criterion.code → description_ru. Пересобираем только при смене methodology.
   // Пустые description отфильтровываем, чтобы Field не «мигал» disabled-значком
@@ -874,7 +904,7 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
                       color: 'hsl(var(--rt-ink-60))',
                     }}
                   >
-                    JPG, PNG до 10 МБ каждый · максимум {MAX_PHOTOS} файлов
+                    JPG, PNG до 10 МБ каждый · максимум {MAX_PHOTOS} файлов · суммарно до 80 МБ
                   </div>
                 </div>
               </label>
@@ -888,6 +918,23 @@ export default function SubmitForm({ brands, methodology = null }: Props) {
                 onChange={handlePhotoAdd}
                 style={{ display: 'none' }}
               />
+              {photos.length > 0 && (
+                <div
+                  data-testid="submit-photos-size"
+                  style={{
+                    fontSize: 12,
+                    marginTop: 10,
+                    color:
+                      totalBytes > MAX_TOTAL_BYTES
+                        ? 'hsl(var(--rt-bad))'
+                        : 'hsl(var(--rt-ink-60))',
+                  }}
+                >
+                  Суммарно: {(totalBytes / 1024 / 1024).toFixed(1)} МБ
+                  {totalBytes > MAX_TOTAL_BYTES &&
+                    ' — превышен лимит, уменьшите количество или размер'}
+                </div>
+              )}
               {photos.length > 0 && (
                 <div
                   style={{

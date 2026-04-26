@@ -10,6 +10,7 @@ import SubmitForm, {
   isFormReady,
   isSectionComplete,
   validatePhotos,
+  validateTotalSize,
 } from './SubmitForm';
 
 class NoopIO {
@@ -67,6 +68,25 @@ describe('validatePhotos', () => {
   });
   it('нормальный случай → null', () => {
     expect(validatePhotos([mkFile('ok.jpg')])).toBeNull();
+  });
+});
+
+describe('validateTotalSize', () => {
+  it('суммарный размер > 80 МБ → ошибка', () => {
+    // 10 файлов по 9 МБ = 90 МБ, каждый файл при этом ≤ 10 МБ
+    const files = Array.from({ length: 10 }, (_, i) =>
+      mkFile(`p${i}.jpg`, 9 * 1024 * 1024),
+    );
+    expect(validateTotalSize(files)).toMatch(/превышает 80 МБ/);
+  });
+  it('суммарный размер ровно 80 МБ → null', () => {
+    const files = Array.from({ length: 8 }, (_, i) =>
+      mkFile(`p${i}.jpg`, 10 * 1024 * 1024),
+    );
+    expect(validateTotalSize(files)).toBeNull();
+  });
+  it('пусто → null', () => {
+    expect(validateTotalSize([])).toBeNull();
   });
 });
 
@@ -367,6 +387,197 @@ describe('SubmitForm UI', () => {
     });
     // fetch не должен быть вызван, т.к. isFormReady=false
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+// Helper: заполняет всю форму валидными значениями. photos — массив File,
+// который будет загружен через input[type=file]. Не вызывает submit —
+// только готовит state, чтобы isFormReady=true.
+async function fillFormCompletely(
+  container: HTMLElement,
+  photos: File[],
+): Promise<void> {
+  // Brand select (первый <select> в DOM)
+  const selects = container.querySelectorAll('select');
+  fireEvent.change(selects[0], { target: { value: '1' } });
+  // ionizer_type, russian_remote, uv_lamp — выбираем 'Нет' в каждом
+  fireEvent.change(selects[1], { target: { value: 'Нет' } });
+  fireEvent.change(selects[2], { target: { value: 'Нет' } });
+  fireEvent.change(selects[3], { target: { value: 'Нет' } });
+
+  // Текстовые поля по placeholder
+  const setByPh = (ph: string, value: string, idx = 0) => {
+    const els = Array.from(
+      container.querySelectorAll<HTMLInputElement>(`input[placeholder="${ph}"]`),
+    );
+    fireEvent.change(els[idx], { target: { value } });
+  };
+  setByPh('Например: MSAG1-09HRN1', 'X');
+  setByPh('Например: MSAG1-09HRN1-O', 'Y');
+  setByPh('Например: QXC-19K', 'Z');
+  setByPh('2640', '2000');
+  setByPh('3', '3');
+  setByPh('780', '700');
+  setByPh('16', '10');
+  setByPh('7', '7', 0); // inner_he_tube_diameter_mm
+  setByPh('820', '800');
+  setByPh('22', '20');
+  setByPh('7', '7', 1); // outer_he_tube_diameter_mm
+  setByPh('28', '25');
+  setByPh('you@example.com', 'a@b.ru');
+
+  // Радио-группы: drain_pan_heater[0], erv[2]=false, fan_speed_outdoor[4]=false,
+  // remote_backlight[6]=false, fine_filters[8]='0'
+  const radios = container.querySelectorAll<HTMLButtonElement>(
+    'button[aria-pressed]',
+  );
+  fireEvent.click(radios[0]);
+  fireEvent.click(radios[2]);
+  fireEvent.click(radios[4]);
+  fireEvent.click(radios[6]);
+  fireEvent.click(radios[8]);
+
+  // Photos
+  const photoInput = container.querySelector(
+    '[data-testid="submit-photos"]',
+  ) as HTMLInputElement;
+  await act(async () => {
+    fireEvent.change(photoInput, { target: { files: photos } });
+  });
+
+  // Consent
+  const consent = container.querySelector(
+    '[data-testid="submit-consent"]',
+  ) as HTMLInputElement;
+  fireEvent.click(consent);
+}
+
+describe('SubmitForm — индикатор размера', () => {
+  it('текст dropzone содержит "до 80 МБ"', () => {
+    render(<SubmitForm brands={BRANDS} />);
+    expect(screen.getByText(/суммарно до 80 МБ/i)).toBeTruthy();
+  });
+
+  it('без фото индикатор размера не виден', () => {
+    render(<SubmitForm brands={BRANDS} />);
+    expect(screen.queryByTestId('submit-photos-size')).toBeNull();
+  });
+
+  it('после добавления фото индикатор показывает корректный размер', async () => {
+    const { container } = render(<SubmitForm brands={BRANDS} />);
+    const photoInput = container.querySelector(
+      '[data-testid="submit-photos"]',
+    ) as HTMLInputElement;
+    const file = mkFile('p.jpg', 1024 * 1024); // 1 MB
+    await act(async () => {
+      fireEvent.change(photoInput, { target: { files: [file] } });
+    });
+    const indicator = screen.getByTestId('submit-photos-size');
+    expect(indicator.textContent).toMatch(/Суммарно: 1\.0 МБ/);
+    expect(indicator.textContent).not.toMatch(/превышен лимит/);
+  });
+
+  it('при суммарном размере > 80 МБ индикатор красный и предупреждает', async () => {
+    const { container } = render(<SubmitForm brands={BRANDS} />);
+    const photoInput = container.querySelector(
+      '[data-testid="submit-photos"]',
+    ) as HTMLInputElement;
+    // 10 файлов по 9 МБ = 90 МБ — каждый ≤ 10 МБ, чтобы пройти validatePhotos
+    const files = Array.from({ length: 10 }, (_, i) =>
+      mkFile(`p${i}.jpg`, 9 * 1024 * 1024),
+    );
+    await act(async () => {
+      fireEvent.change(photoInput, { target: { files } });
+    });
+    const indicator = screen.getByTestId('submit-photos-size');
+    expect(indicator.textContent).toMatch(/превышен лимит/);
+  });
+});
+
+describe('SubmitForm — submit ветки 413/5xx/totalSize', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('суммарный размер > 80 МБ → submit показывает clientError, fetch не вызывается', async () => {
+    const mockFetch = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    const { container } = render(<SubmitForm brands={BRANDS} />);
+    // 10 файлов по 9 МБ = 90 МБ
+    const files = Array.from({ length: 10 }, (_, i) =>
+      mkFile(`p${i}.jpg`, 9 * 1024 * 1024),
+    );
+    await fillFormCompletely(container, files);
+
+    const form = container.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(screen.getByTestId('submit-error').textContent).toMatch(
+      /превышает 80 МБ/,
+    );
+  });
+
+  it('413 → «Файлы слишком большие»', async () => {
+    const mockFetch = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 413,
+      json: async () => ({}),
+    } as unknown as Response);
+    const { container } = render(<SubmitForm brands={BRANDS} />);
+    await fillFormCompletely(container, [mkFile('p.jpg', 1024)]);
+
+    const form = container.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+    expect(mockFetch).toHaveBeenCalled();
+    expect(screen.getByTestId('submit-error').textContent).toMatch(
+      /Файлы слишком большие/,
+    );
+  });
+
+  it('500 → «Сервер временно недоступен»', async () => {
+    const mockFetch = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+    } as unknown as Response);
+    const { container } = render(<SubmitForm brands={BRANDS} />);
+    await fillFormCompletely(container, [mkFile('p.jpg', 1024)]);
+
+    const form = container.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+    expect(mockFetch).toHaveBeenCalled();
+    expect(screen.getByTestId('submit-error').textContent).toMatch(
+      /Сервер временно недоступен/,
+    );
+  });
+
+  it('502 → «Сервер временно недоступен» (вся 5xx ветка)', async () => {
+    const mockFetch = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({}),
+    } as unknown as Response);
+    const { container } = render(<SubmitForm brands={BRANDS} />);
+    await fillFormCompletely(container, [mkFile('p.jpg', 1024)]);
+
+    const form = container.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+    expect(screen.getByTestId('submit-error').textContent).toMatch(
+      /Сервер временно недоступен/,
+    );
   });
 });
 
