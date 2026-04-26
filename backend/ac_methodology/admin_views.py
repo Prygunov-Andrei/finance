@@ -21,8 +21,9 @@ from .admin_serializers import (
     AdminCriterionSerializer,
     AdminMethodologyDetailSerializer,
     AdminMethodologyListSerializer,
+    AdminRatingPresetSerializer,
 )
-from .models import Criterion, MethodologyVersion
+from .models import Criterion, MethodologyVersion, RatingPreset
 
 
 class CriterionAdminViewSet(viewsets.ModelViewSet):
@@ -122,3 +123,33 @@ class MethodologyAdminViewSet(viewsets.ReadOnlyModelViewSet):
             version, context={"request": request},
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class RatingPresetAdminViewSet(viewsets.ModelViewSet):
+    """CRUD пресетов таба «Свой рейтинг». Поддерживает фильтры:
+      - `is_active=true|false`
+      - `is_all_selected=true|false`
+      - `search=<q>` — по `slug`, `label`
+      - `ordering=<field>` — `order`, `created_at`
+    """
+
+    permission_classes = [IsHvacAdminProxyAllowed]
+    serializer_class = AdminRatingPresetSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["slug", "label"]
+    ordering_fields = ["order", "created_at"]
+    ordering = ["order"]
+
+    def get_queryset(self):
+        qs = RatingPreset.objects.all().prefetch_related("criteria")
+        params = self.request.query_params
+
+        is_active = params.get("is_active")
+        if is_active in ("true", "false"):
+            qs = qs.filter(is_active=(is_active == "true"))
+
+        is_all_selected = params.get("is_all_selected")
+        if is_all_selected in ("true", "false"):
+            qs = qs.filter(is_all_selected=(is_all_selected == "true"))
+
+        return qs
