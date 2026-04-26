@@ -186,6 +186,36 @@ describe('CustomRatingTab — пресеты из API', () => {
     expect(screen.getByText(/^\s*3\s*$/)).toBeInTheDocument();
   });
 
+  it('initialPresetSlug — стартует с criteria_codes конкретного пресета', () => {
+    const methodology = mkMethodology(criteria, presets);
+    render(
+      <CustomRatingTab
+        models={[
+          mkModel(1, { noise_level: 80, inverter: 70, wifi: 50, heat_exchanger_inner: 60 }),
+        ]}
+        methodology={methodology}
+        variant="desktop"
+        initialPresetSlug="silence"
+      />,
+    );
+    // Пресет «Тишина» = 2 кода (noise_level, inverter).
+    expect(screen.getByText(/^\s*2\s*$/)).toBeInTheDocument();
+  });
+
+  it('initialPresetSlug на несуществующий слаг — fallback к «все критерии»', () => {
+    const methodology = mkMethodology(criteria, presets);
+    render(
+      <CustomRatingTab
+        models={[mkModel(1, { noise_level: 80 })]}
+        methodology={methodology}
+        variant="desktop"
+        initialPresetSlug="no-such-preset"
+      />,
+    );
+    // 4 критерия выбрано (allCodes.length).
+    expect(screen.getByText(/^\s*4\s*$/)).toBeInTheDocument();
+  });
+
   it('пустой presets → 0 preset-chips, grid всё равно работает', () => {
     const methodology = mkMethodology(criteria, []);
     render(

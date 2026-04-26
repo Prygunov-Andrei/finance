@@ -21,7 +21,21 @@ const AUTHORS: Array<{ name: string; role: string; photo: string }> = [
   },
 ];
 
-export default function HeroBlock({ stats }: { stats: RatingMethodologyStats }) {
+const DEFAULT_HERO_TITLE =
+  'Интегральный индекс «Август-климат» качества бытовых кондиционеров до 4,5 кВт на основе наших измерений и анализа параметров';
+const DEFAULT_HERO_EYEBROW = 'Независимый рейтинг · обновление 04.2026';
+
+export default function HeroBlock({
+  stats,
+  title = DEFAULT_HERO_TITLE,
+  eyebrow = DEFAULT_HERO_EYEBROW,
+  intro,
+}: {
+  stats: RatingMethodologyStats;
+  title?: string;
+  eyebrow?: string;
+  intro?: string;
+}) {
   const numbers: Array<[number | string, string]> = [
     [stats.total_models, 'моделей'],
     [stats.active_criteria_count, 'критериев'],
@@ -53,7 +67,7 @@ export default function HeroBlock({ stats }: { stats: RatingMethodologyStats }) 
           flexWrap: 'wrap',
         }}
       >
-        <Eyebrow>Независимый рейтинг · обновление 04.2026</Eyebrow>
+        <Eyebrow>{eyebrow}</Eyebrow>
         <div style={{ display: 'flex', gap: 28, alignItems: 'baseline', flexWrap: 'wrap' }}>
           {numbers.map(([n, l]) => (
             <div key={l} style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
@@ -76,9 +90,17 @@ export default function HeroBlock({ stats }: { stats: RatingMethodologyStats }) 
       <div className="rt-hero-grid">
         <div>
           <H size={34} serif as="h1" style={{ letterSpacing: -0.5, lineHeight: 1.2 }}>
-            Интегральный индекс «Август-климат» качества бытовых кондиционеров до 4,5 кВт на
-            основе наших измерений и анализа параметров
+            {title}
           </H>
+          {intro && (
+            <T
+              size={14}
+              color="hsl(var(--rt-ink-60))"
+              style={{ marginTop: 14, lineHeight: 1.6, display: 'block', maxWidth: 640 }}
+            >
+              {intro}
+            </T>
+          )}
           <div
             style={{
               marginTop: 22,

@@ -11,18 +11,24 @@ const TABS: Array<{ id: RatingTabId; label: string }> = [
   { id: 'custom', label: 'Свой рейтинг' },
 ];
 
-export function useCurrentTab(): RatingTabId {
+export function useCurrentTab(defaultTab: RatingTabId = 'index'): RatingTabId {
   const sp = useSearchParams();
   const raw = sp.get('tab');
-  if (raw === 'silence' || raw === 'custom') return raw;
-  return 'index';
+  if (raw === 'silence' || raw === 'custom' || raw === 'index') return raw;
+  return defaultTab;
 }
 
-export default function RatingTabs({ compact = false }: { compact?: boolean }) {
+export default function RatingTabs({
+  compact = false,
+  defaultTab = 'index',
+}: {
+  compact?: boolean;
+  defaultTab?: RatingTabId;
+}) {
   const pathname = usePathname();
   const sp = useSearchParams();
   const router = useRouter();
-  const active = useCurrentTab();
+  const active = useCurrentTab(defaultTab);
 
   const switchTo = useCallback(
     (id: RatingTabId) => {

@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type {
   RatingMethodology,
   RatingModelListItem,
 } from '@/lib/api/types/rating';
 import { BrandLogo, Eyebrow, H, T, formatPrice } from './primitives';
-import RatingTabs, { useCurrentTab } from './RatingTabs';
+import RatingTabs, { useCurrentTab, type RatingTabId } from './RatingTabs';
 import {
   useRatingFilters,
   type CapacityBucket,
@@ -31,11 +31,17 @@ const CAPACITY_OPTIONS: Array<{ id: CapacityBucket; label: string }> = [
 export default function MobileListing({
   models,
   methodology,
+  hero,
+  defaultTab = 'index',
+  initialPresetSlug,
 }: {
   models: RatingModelListItem[];
   methodology: RatingMethodology;
+  hero?: ReactNode;
+  defaultTab?: RatingTabId;
+  initialPresetSlug?: string;
 }) {
-  const tab = useCurrentTab();
+  const tab = useCurrentTab(defaultTab);
   const filterState = useRatingFilters(models);
   const { filters, filtered } = filterState;
   const [drawer, setDrawer] = useState(false);
@@ -47,7 +53,7 @@ export default function MobileListing({
 
   return (
     <>
-      <MobileHero stats={methodology.stats} />
+      {hero ?? <MobileHero stats={methodology.stats} />}
       <div
         style={{
           position: 'sticky',
@@ -62,7 +68,7 @@ export default function MobileListing({
             borderBottom: '1px solid hsl(var(--rt-border-subtle))',
           }}
         >
-          <RatingTabs compact />
+          <RatingTabs compact defaultTab={defaultTab} />
         </div>
         <FilterButtons
           activeCount={activeCount}
@@ -71,7 +77,12 @@ export default function MobileListing({
         />
       </div>
       {tab === 'custom' ? (
-        <CustomRatingTab models={filtered} methodology={methodology} variant="mobile" />
+        <CustomRatingTab
+          models={filtered}
+          methodology={methodology}
+          variant="mobile"
+          initialPresetSlug={initialPresetSlug}
+        />
       ) : (
         <MobileRows models={filtered} mode={tab} />
       )}
@@ -80,10 +91,14 @@ export default function MobileListing({
   );
 }
 
-function MobileHero({
+export function MobileHero({
   stats,
+  title = 'Интегральный индекс «Август-климат» качества кондиционеров до 4,0 кВт.',
+  eyebrow = 'Рейтинг · 04.2026',
 }: {
   stats: RatingMethodology['stats'];
+  title?: string;
+  eyebrow?: string;
 }) {
   const numbers: Array<[number | string, string]> = [
     [stats.total_models, 'мод.'],
@@ -106,7 +121,7 @@ function MobileHero({
           marginBottom: 10,
         }}
       >
-        <Eyebrow>Рейтинг · 04.2026</Eyebrow>
+        <Eyebrow>{eyebrow}</Eyebrow>
         <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
           {numbers.map(([n, l]) => (
             <div key={l} style={{ display: 'flex', gap: 3, alignItems: 'baseline' }}>
@@ -127,7 +142,7 @@ function MobileHero({
         </div>
       </div>
       <H size={18} serif as="h1" style={{ letterSpacing: -0.3, lineHeight: 1.25 }}>
-        Интегральный индекс «Август-климат» качества кондиционеров до 4,0 кВт.
+        {title}
       </H>
     </section>
   );

@@ -28,10 +28,12 @@ export default function CustomRatingTab({
   models,
   methodology,
   variant = 'desktop',
+  initialPresetSlug,
 }: {
   models: RatingModelListItem[];
   methodology: RatingMethodology;
   variant?: 'desktop' | 'mobile';
+  initialPresetSlug?: string;
 }) {
   const criteria = useMemo(
     () => [...methodology.criteria].sort((a, b) => b.weight - a.weight),
@@ -46,7 +48,13 @@ export default function CustomRatingTab({
     [methodology.presets]
   );
 
-  const [active, setActive] = useState<Set<string>>(() => new Set(allCodes));
+  const [active, setActive] = useState<Set<string>>(() => {
+    if (initialPresetSlug) {
+      const preset = methodology.presets.find((p) => p.slug === initialPresetSlug);
+      if (preset) return new Set(preset.criteria_codes);
+    }
+    return new Set(allCodes);
+  });
   const [expanded, setExpanded] = useState(variant === 'desktop');
   const [drawer, setDrawer] = useState(false);
 

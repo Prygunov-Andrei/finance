@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { H, T } from './primitives';
 
 const REASONS: Array<[string, string]> = [
@@ -87,8 +88,19 @@ export default function SeoBlock() {
           color="hsl(var(--rt-ink-60))"
           style={{ lineHeight: 1.65, display: 'block', marginBottom: 20 }}
         >
-          В таблице сплит-системы отсортированы по итоговому индексу. Можно включить режим
-          «Самые тихие» для выбора по акустическому комфорту или собрать собственный
+          В таблице сплит-системы отсортированы по итоговому индексу. Можно открыть{' '}
+          <Link
+            href="/rating-split-system/quiet"
+            style={{
+              color: 'hsl(var(--rt-accent))',
+              textDecoration: 'underline',
+              textDecorationColor: 'hsl(var(--rt-border))',
+              textUnderlineOffset: 3,
+            }}
+          >
+            самые тихие
+          </Link>{' '}
+          для выбора по акустическому комфорту или собрать собственный
           рейтинг, отключив неважные для вас критерии.
         </T>
 

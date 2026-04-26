@@ -7,7 +7,7 @@ import type {
   RatingModelListItem,
 } from '@/lib/api/types/rating';
 import { BrandLogo, Meter, T, formatPrice } from './primitives';
-import RatingTabs, { useCurrentTab } from './RatingTabs';
+import RatingTabs, { useCurrentTab, type RatingTabId } from './RatingTabs';
 import FilterBar from './FilterBar';
 import { useRatingFilters } from './useRatingFilters';
 import CustomRatingTab from './CustomRatingTab';
@@ -27,13 +27,17 @@ export default function DesktopListing({
   methodology,
   hero,
   heroCollapsed,
+  defaultTab = 'index',
+  initialPresetSlug,
 }: {
   models: RatingModelListItem[];
   methodology: RatingMethodology;
   hero: ReactNode;
   heroCollapsed: ReactNode;
+  defaultTab?: RatingTabId;
+  initialPresetSlug?: string;
 }) {
-  const tab = useCurrentTab();
+  const tab = useCurrentTab(defaultTab);
   const {
     filters,
     facets,
@@ -51,7 +55,7 @@ export default function DesktopListing({
       <StickyCollapseHero full={hero} collapsed={heroCollapsed}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div style={{ padding: '20px 40px 0' }}>
-            <RatingTabs />
+            <RatingTabs defaultTab={defaultTab} />
           </div>
           <FilterBar
             filters={filters}
@@ -67,7 +71,12 @@ export default function DesktopListing({
       </StickyCollapseHero>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
         {tab === 'custom' ? (
-          <CustomRatingTab models={filtered} methodology={methodology} variant="desktop" />
+          <CustomRatingTab
+            models={filtered}
+            methodology={methodology}
+            variant="desktop"
+            initialPresetSlug={initialPresetSlug}
+          />
         ) : (
           <RankedTable models={filtered} mode={tab} />
         )}

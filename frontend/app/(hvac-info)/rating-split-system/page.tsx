@@ -1,14 +1,8 @@
-import { Suspense } from 'react';
 import {
   getRatingMethodology,
   getRatingModels,
 } from '@/lib/api/services/rating';
-import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
-import HeroBlock, { HeroBlockCollapsed } from './_components/HeroBlock';
-import DesktopListing from './_components/DesktopListing';
-import MobileListing from './_components/MobileListing';
-import SeoBlock from './_components/SeoBlock';
-import SectionFooter from '../_components/SectionFooter';
+import RatingPageContent from './_components/RatingPageContent';
 
 // SSR каждый запрос — ISR snapshot при первом deploy ловит пустой backend
 // (Docker build context не видит compose-сервисы). Для 27 моделей overhead ~50ms.
@@ -33,26 +27,5 @@ export default async function RatingHomePage() {
   }
   const publishedModels = models.filter((m) => m.publish_status === 'published');
 
-  return (
-    <>
-      <HvacInfoHeader />
-      <Suspense fallback={null}>
-        <div className="hidden md:block">
-          <DesktopListing
-            models={publishedModels}
-            methodology={methodology}
-            hero={<HeroBlock stats={methodology.stats} />}
-            heroCollapsed={<HeroBlockCollapsed stats={methodology.stats} />}
-          />
-        </div>
-        <div className="md:hidden">
-          <MobileListing models={publishedModels} methodology={methodology} />
-        </div>
-      </Suspense>
-      <main className="hvac-content">
-        <SeoBlock />
-      </main>
-      <SectionFooter />
-    </>
-  );
+  return <RatingPageContent models={publishedModels} methodology={methodology} />;
 }
