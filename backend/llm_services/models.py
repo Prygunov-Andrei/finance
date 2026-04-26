@@ -178,6 +178,7 @@ class LLMTaskConfig(TimestampedModel):
         WORK_MATCHING_SEMANTIC = 'work_matching_semantic', 'Подбор работ (semantic)'
         WORK_MATCHING_WEB = 'work_matching_web', 'Подбор работ (web search)'
         ESTIMATE_IMPORT = 'estimate_import', 'Импорт сметы из PDF'
+        AC_PROS_CONS = 'ac_pros_cons', 'AC Rating: плюсы/минусы (AI)'
 
     task_type = models.CharField(
         max_length=50,
