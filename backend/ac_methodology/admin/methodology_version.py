@@ -8,6 +8,8 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.translation import gettext_lazy as _
 
+from finans_assistant.admin_site import ac_admin_site
+
 from .inlines import MethodologyCriterionInline
 from ..forms import DuplicateMethodologyVersionForm
 from ..models import MethodologyCriterion, MethodologyVersion
@@ -18,7 +20,7 @@ from ..services import (
 from ac_scoring.engine import refresh_all_ac_model_total_indices
 
 
-@admin.register(MethodologyVersion)
+@admin.register(MethodologyVersion, site=ac_admin_site)
 class MethodologyVersionAdmin(admin.ModelAdmin):
     change_form_template = "admin/ac_methodology/methodologyversion/change_form.html"
     duplicate_form_template = "admin/ac_methodology/methodologyversion/duplicate_form.html"
@@ -125,6 +127,7 @@ class MethodologyVersionAdmin(admin.ModelAdmin):
                         reverse(
                             f"admin:{opts.app_label}_{opts.model_name}_change",
                             args=[new_mv.pk],
+                            current_app=self.admin_site.name,
                         )
                     )
         else:
@@ -160,6 +163,7 @@ class MethodologyVersionAdmin(admin.ModelAdmin):
                     extra_context["duplicate_url"] = reverse(
                         f"admin:{meta.app_label}_{meta.model_name}_duplicate",
                         args=[object_id],
+                        current_app=self.admin_site.name,
                     )
         extra_context["criteria_weight_total_initial"] = round(total, 2)
         return super().changeform_view(request, object_id, form_url, extra_context)

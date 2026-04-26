@@ -91,8 +91,9 @@ def test_admin_criteria_count_zero_when_empty():
 
 @pytest.mark.django_db
 def test_admin_is_registered():
-    from django.contrib import admin as djadmin
-    assert RatingPreset in djadmin.site._registry
+    """RatingPreset должен быть зарегистрирован в урезанном AC-admin (Ф8D)."""
+    from finans_assistant.admin_site import ac_admin_site
+    assert RatingPreset in ac_admin_site._registry
 
 
 # ── Seed migration ─────────────────────────────────────────────────────

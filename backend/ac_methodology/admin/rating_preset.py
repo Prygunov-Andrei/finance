@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from django.contrib import admin
 
+from finans_assistant.admin_site import ac_admin_site
+
 from ..models import RatingPreset
 
 
-@admin.register(RatingPreset)
+@admin.register(RatingPreset, site=ac_admin_site)
 class RatingPresetAdmin(admin.ModelAdmin):
     """Редактор пресетов таба «Свой рейтинг» на странице рейтинга.
 

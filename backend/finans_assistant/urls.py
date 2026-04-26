@@ -33,6 +33,7 @@ from core.views import UserViewSet, NotificationViewSet, cbr_rates
 from core.views import SystemNotificationCreateView
 from core.auth_views import ERPTokenObtainPairView
 from core.version_views import version_info
+from finans_assistant.admin_site import ac_admin_site
 
 # Создаём роутер для ViewSets
 router = DefaultRouter()
@@ -110,8 +111,13 @@ def health_check(request):
 urlpatterns = [
     path('api/v1/health/', health_check, name='health-check'),
     path('api/v1/version/', version_info, name='version-info'),
-    path('admin/', admin.site.urls),
-    path('hvac-admin/', include((admin.site.get_urls(), 'hvac_admin'), namespace='hvac_admin')),
+    # Урезанный admin (whitelist методики + auth + LogEntry).
+    # ac_admin_site.name='ac_admin' → namespace='ac_admin'.
+    path('admin/', ac_admin_site.urls),
+    # Полный admin как backup. admin.site.urls напрямую → namespace='admin'
+    # (default). Internal reverse'ы Django admin резолвят через
+    # current_app=self.name='admin' и попадают сюда.
+    path('hvac-admin/', admin.site.urls),
     # OpenAPI/Swagger документация
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

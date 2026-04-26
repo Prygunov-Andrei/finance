@@ -3,6 +3,8 @@ from __future__ import annotations
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
+from finans_assistant.admin_site import ac_admin_site
+
 from ..models import Criterion
 
 KEY_MEASUREMENT_NOTE = (
@@ -21,7 +23,7 @@ PHOTO_HELP = (
 )
 
 
-@admin.register(Criterion)
+@admin.register(Criterion, site=ac_admin_site)
 class CriterionAdmin(admin.ModelAdmin):
     """Справочник параметров (standalone).
 
