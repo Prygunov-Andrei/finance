@@ -196,7 +196,9 @@ export function DetailHeroCollapsed({ detail, stats }: { detail: RatingModelDeta
           >
             {detail.total_index.toFixed(1)}
           </span>
-          <span style={{ fontSize: 10, color: 'hsl(var(--rt-ink-60))' }}>индекс</span>
+          <span style={{ fontSize: 10, color: 'hsl(var(--rt-ink-60))' }}>
+            индекс «Август-климат»
+          </span>
         </div>
       </div>
       <style>{`
@@ -364,7 +366,7 @@ function HeroRight({
           borderTop: '1px solid hsl(var(--rt-border-subtle))',
         }}
       >
-        <Eyebrow>Индекс</Eyebrow>
+        <Eyebrow>Индекс «Август-климат»</Eyebrow>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 6 }}>
           <span
             style={{
@@ -574,7 +576,9 @@ function HeroMobile({
             background: 'hsl(var(--rt-accent-bg))',
           }}
         >
-          <MobileMetaLabel color="hsl(var(--rt-accent))">Индекс</MobileMetaLabel>
+          <MobileMetaLabel color="hsl(var(--rt-accent))">
+            Индекс «Август-климат»
+          </MobileMetaLabel>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 6 }}>
             <span
               style={{
