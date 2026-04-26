@@ -100,3 +100,12 @@ export async function getResources(): Promise<Resource[]> {
   const response = await fetchApi<CollectionResponse<Resource>>('/references/resources/', { revalidate: 3600 });
   return unwrapCollectionResponse(response);
 }
+
+export interface FeaturedNewsResponse {
+  post: NewsItem | null;
+  category: string | null;
+}
+
+export async function getFeaturedNews(): Promise<FeaturedNewsResponse> {
+  return fetchApi<FeaturedNewsResponse>('/featured-news/', { revalidate: 300 });
+}
