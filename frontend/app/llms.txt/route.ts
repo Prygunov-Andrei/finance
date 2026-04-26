@@ -1,46 +1,61 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
-  const content = `# hvac-info.com
+const CONTENT = `# HVAC Info — Независимый рейтинг кондиционеров и новости климат-индустрии
 
-> Портал новостей и каталог оборудования HVAC-индустрии
-> (отопление, вентиляция, кондиционирование)
+> Hvac-info.com — независимый портал о кондиционерах: лабораторные замеры шума, рейтинг сплит-систем 2.5–4.5 кВт по методике «Август-климат», новости HVAC-индустрии.
 
-## Разделы
+## Основные разделы
 
-- [Новости](https://hvac-info.com/): Актуальные новости климатической индустрии
-- [Производители](https://hvac-info.com/manufacturers): Каталог производителей HVAC-оборудования
-- [Бренды](https://hvac-info.com/brands): Каталог брендов оборудования
-- [Ресурсы](https://hvac-info.com/resources): Источники и полезные ссылки
-- [Оценка сметы](https://hvac-info.com/smeta): Портал автоматической оценки строительных смет
-- [Обратная связь](https://hvac-info.com/feedback): Контактная форма
+- [Рейтинг сплит-систем](https://hvac-info.com/rating-split-system): сравнение моделей по 30 критериям, лабораторные замеры шума, индекс «Август-климат».
+- [Самые тихие кондиционеры](https://hvac-info.com/quiet): топ моделей с самыми низкими замерами шума внутреннего блока.
+- [Методика «Август-климат»](https://hvac-info.com/rating-split-system/methodology): описание индекса, 30 критериев, веса, медианы по рынку.
+- [Архив моделей](https://hvac-info.com/rating-split-system/archive): снятые с производства модели.
+- [Подать заявку на тестирование](https://hvac-info.com/rating-split-system/submit): форма для производителей.
+- [Новости HVAC](https://hvac-info.com/): лента новостей климатической индустрии.
+- [Производители](https://hvac-info.com/manufacturers): каталог производителей HVAC-оборудования.
+- [Бренды](https://hvac-info.com/brands): каталог брендов оборудования.
 
-## API (публичный, без авторизации)
+## Ценовые сегменты
 
-- GET https://hvac-info.com/api/hvac/news/ — список новостей (JSON, пагинация по 12)
-- GET https://hvac-info.com/api/hvac/news/{id}/ — конкретная новость
-- GET https://hvac-info.com/api/hvac/references/manufacturers/ — производители
-- GET https://hvac-info.com/api/hvac/references/brands/ — бренды
-- GET https://hvac-info.com/api/hvac/references/resources/ — ресурсы
+- [До 20 000 ₽](https://hvac-info.com/price/do-20000-rub)
+- [До 25 000 ₽](https://hvac-info.com/price/do-25000-rub)
+- [До 30 000 ₽](https://hvac-info.com/price/do-30000-rub)
+- [До 35 000 ₽](https://hvac-info.com/price/do-35000-rub)
+- [До 40 000 ₽](https://hvac-info.com/price/do-40000-rub)
+- [До 50 000 ₽](https://hvac-info.com/price/do-50000-rub)
+- [До 60 000 ₽](https://hvac-info.com/price/do-60000-rub)
+
+## Авторы
+
+- **Максим Савинов** — главный редактор, автор методики «Август-климат»
+- **Андрей Прыгунов** — редактор
 
 ## Машиночитаемые форматы
 
-- RSS: https://hvac-info.com/rss.xml
+- Полная база знаний: https://hvac-info.com/llms-full.txt
 - Sitemap: https://hvac-info.com/sitemap.xml
-- JSON-LD: встроен в каждую страницу (Schema.org NewsArticle, Organization)
-- Полный контент: https://hvac-info.com/llms-full.txt
+- RSS новостей: https://hvac-info.com/rss.xml
+- JSON-LD Schema.org Product встроен в страницы детальной модели рейтинга.
+
+## Публичные API (без авторизации)
+
+- GET https://hvac-info.com/api/public/v1/rating/models/ — список моделей рейтинга (JSON)
+- GET https://hvac-info.com/api/public/v1/rating/models/by-slug/{slug}/ — детальная модель
+- GET https://hvac-info.com/api/public/v1/rating/methodology/ — методика и критерии
+- GET https://hvac-info.com/api/v1/hvac/public/news/ — новости (JSON, пагинация)
+- GET https://hvac-info.com/api/v1/hvac/public/references/manufacturers/ — производители
 
 ## О сайте
 
-HVAC Info — информационный портал для профессионалов климатической индустрии в России.
-Публикуем новости производителей оборудования для отопления, вентиляции и кондиционирования,
-ведём каталог производителей и брендов, предоставляем сервис оценки строительных смет.
+HVAC Info — независимый информационный портал. Команда замеряет в лаборатории шум кондиционеров и оценивает сплит-системы по 30 параметрам собственной методики «Август-климат» (компрессор, теплообменники, фильтрация, управление, гарантия и др.). Цель — дать покупателю прозрачное сравнение моделей и держать индустрию в фокусе.
 `;
 
-  return new NextResponse(content, {
+export async function GET() {
+  return new NextResponse(CONTENT, {
+    status: 200,
     headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
     },
   });
 }
