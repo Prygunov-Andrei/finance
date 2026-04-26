@@ -40,14 +40,12 @@ export default function HvacInfoHeader() {
       }}
     >
       <div
+        className="rt-header-bar"
         style={{
           display: 'flex',
           alignItems: 'center',
-          height: 64,
-          padding: '0 28px',
+          height: 72,
           gap: 28,
-          maxWidth: 1440,
-          margin: '0 auto',
         }}
       >
         <Link
@@ -57,7 +55,7 @@ export default function HvacInfoHeader() {
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
-            height: 36,
+            height: 44,
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,18 +63,18 @@ export default function HvacInfoHeader() {
             src="/rating-logo/hvac-info-light.svg"
             alt="HVAC Info"
             className="rt-logo-light"
-            width={144}
-            height={36}
-            style={{ display: 'block', height: 36, width: 'auto' }}
+            width={176}
+            height={44}
+            style={{ display: 'block', height: 44, width: 'auto' }}
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/rating-logo/hvac-info-dark.svg"
             alt="HVAC Info"
             className="rt-logo-dark"
-            width={144}
-            height={36}
-            style={{ display: 'none', height: 36, width: 'auto' }}
+            width={176}
+            height={44}
+            style={{ display: 'none', height: 44, width: 'auto' }}
           />
         </Link>
 
@@ -176,7 +174,9 @@ export default function HvacInfoHeader() {
       <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
 
       <style>{`
+        .rt-header-bar { padding: 0 16px; }
         @media (min-width: 1024px) {
+          .rt-header-bar { padding: 0 40px; }
           .rt-nav-desktop { display: flex !important; }
           .rt-actions-desktop { display: flex !important; }
           .rt-actions-mobile { display: none !important; }
