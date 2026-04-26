@@ -6,8 +6,10 @@ import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
+  Loader2,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -229,6 +231,8 @@ export default function ACModelEditor({ mode: modeProp }: ACModelEditorProps) {
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiConfirmOpen, setAiConfirmOpen] = useState(false);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -335,6 +339,42 @@ export default function ACModelEditor({ mode: modeProp }: ACModelEditorProps) {
     value: FormState[K]
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleGenerateProsCons = async () => {
+    if (modelId === null) return;
+    setAiConfirmOpen(false);
+    setAiGenerating(true);
+    try {
+      const result = await acRatingService.generateModelProsCons(modelId);
+      setForm((prev) => ({
+        ...prev,
+        pros_text: result.generated.pros.join('\n'),
+        cons_text: result.generated.cons.join('\n'),
+      }));
+      toast.success(`Готово. Сгенерировано через ${result.provider}.`);
+    } catch (err: unknown) {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      const data = axios.isAxiosError(err)
+        ? (err.response?.data as Record<string, unknown> | undefined)
+        : undefined;
+      const detailMsg =
+        data && typeof data.detail === 'string' ? data.detail : null;
+      // eslint-disable-next-line no-console
+      console.error('generateModelProsCons failed', { status, data, err });
+      if (status === 400) {
+        toast.error(
+          detailMsg ||
+            'Не удалось вычислить scoring — проверьте активную методику и raw_values модели'
+        );
+      } else if (status === 503) {
+        toast.error(detailMsg || 'AI временно недоступен. Попробуйте позже');
+      } else {
+        toast.error(detailMsg || 'Ошибка генерации (см. консоль)');
+      }
+    } finally {
+      setAiGenerating(false);
+    }
   };
 
   const toggleRegion = (code: string) => {
@@ -907,6 +947,44 @@ export default function ACModelEditor({ mode: modeProp }: ACModelEditorProps) {
           {/* ── Pros/Cons ─────────────────────────────────────── */}
           <TabsContent value="proscons" className="mt-4">
             <Card className="p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-sm text-muted-foreground">
+                  Плюсы и минусы модели для портала. Можно ввести вручную или
+                  сгенерировать через ИИ на основе scoring-результатов и
+                  параметров.
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    mode === 'create' ||
+                    aiGenerating ||
+                    form.raw_values.length === 0
+                  }
+                  title={
+                    mode === 'create'
+                      ? 'Сначала сохраните модель'
+                      : form.raw_values.length === 0
+                      ? 'Сначала заполни параметры модели (вкладка «Параметры»)'
+                      : undefined
+                  }
+                  onClick={() => {
+                    if (form.pros_text.trim() || form.cons_text.trim()) {
+                      setAiConfirmOpen(true);
+                    } else {
+                      handleGenerateProsCons();
+                    }
+                  }}
+                  data-testid="ac-model-ai-pros-cons"
+                >
+                  {aiGenerating ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 mr-2" />
+                  )}
+                  {aiGenerating ? 'Генерация...' : 'Сгенерировать через ИИ'}
+                </Button>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label>Плюсы</Label>
@@ -915,6 +993,7 @@ export default function ACModelEditor({ mode: modeProp }: ACModelEditorProps) {
                     rows={8}
                     value={form.pros_text}
                     onChange={(e) => setField('pros_text', e.target.value)}
+                    data-testid="ac-model-pros-text"
                   />
                 </div>
                 <div>
@@ -924,12 +1003,14 @@ export default function ACModelEditor({ mode: modeProp }: ACModelEditorProps) {
                     rows={8}
                     value={form.cons_text}
                     onChange={(e) => setField('cons_text', e.target.value)}
+                    data-testid="ac-model-cons-text"
                   />
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                Кнопка «Сгенерировать через ИИ» появится в Ф8B.
-              </div>
+              <p className="text-xs text-muted-foreground">
+                После генерации текст можно отредактировать вручную перед
+                сохранением модели.
+              </p>
             </Card>
           </TabsContent>
 
@@ -1288,6 +1369,28 @@ export default function ACModelEditor({ mode: modeProp }: ACModelEditorProps) {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AlertDialog open={aiConfirmOpen} onOpenChange={setAiConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Сгенерировать плюсы/минусы через ИИ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Текущий текст в полях «Плюсы» и «Минусы» будет перезаписан
+              сгенерированным. Сохранение модели нужно будет выполнить отдельно.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={aiGenerating}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleGenerateProsCons}
+              disabled={aiGenerating}
+              data-testid="ac-model-ai-confirm"
+            >
+              {aiGenerating ? 'Генерация...' : 'Сгенерировать'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

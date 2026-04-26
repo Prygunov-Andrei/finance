@@ -218,3 +218,137 @@ export interface RecalculateResponse {
 export interface ReorderPhotosResponse {
   photos: ACModelPhoto[];
 }
+
+// ── Criteria (Ф8B-1) ──────────────────────────────────────────────────
+// Соответствуют backend/ac_methodology/admin_serializers.py.
+
+export type ACCriterionValueType =
+  | 'numeric'
+  | 'binary'
+  | 'categorical'
+  | 'custom_scale'
+  | 'formula'
+  | 'lab'
+  | 'fallback'
+  | 'brand_age';
+
+export type ACCriterionGroup =
+  | 'climate'
+  | 'compressor'
+  | 'acoustics'
+  | 'control'
+  | 'dimensions'
+  | 'other';
+
+// AdminCriterionListSerializer
+export interface ACCriterionListItem {
+  id: number;
+  code: string;
+  name_ru: string;
+  photo_url: string;
+  unit: string;
+  value_type: ACCriterionValueType;
+  group: ACCriterionGroup;
+  is_active: boolean;
+  is_key_measurement: boolean;
+  methodologies_count: number;
+}
+
+// AdminCriterionSerializer (full)
+export interface ACCriterion {
+  id: number;
+  code: string;
+  name_ru: string;
+  name_en: string;
+  name_de: string;
+  name_pt: string;
+  description_ru: string;
+  description_en: string;
+  description_de: string;
+  description_pt: string;
+  unit: string;
+  photo: string;
+  photo_url: string;
+  value_type: ACCriterionValueType;
+  group: ACCriterionGroup;
+  is_active: boolean;
+  is_key_measurement: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CriteriaListParams {
+  value_type?: ACCriterionValueType | '';
+  group?: ACCriterionGroup | '';
+  is_active?: 'true' | 'false';
+  is_key_measurement?: 'true' | 'false';
+  search?: string;
+  ordering?: string;
+  page?: number;
+}
+
+// ── Methodology (Ф8B-1) ───────────────────────────────────────────────
+
+// AdminMethodologyListSerializer
+export interface ACMethodologyListItem {
+  id: number;
+  version: string;
+  name: string;
+  is_active: boolean;
+  criteria_count: number;
+  weight_sum: number;
+  needs_recalculation: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// AdminMethodologyCriterionReadSerializer
+export interface ACMethodologyCriterion {
+  id: number;
+  criterion: ACCriterionListItem;
+  scoring_type: string;
+  weight: number;
+  min_value: number | null;
+  median_value: number | null;
+  max_value: number | null;
+  is_inverted: boolean;
+  median_by_capacity: Record<string, number> | null;
+  custom_scale_json: unknown;
+  formula_json: unknown;
+  is_required_lab: boolean;
+  is_required_checklist: boolean;
+  is_required_catalog: boolean;
+  use_in_lab: boolean;
+  use_in_checklist: boolean;
+  use_in_catalog: boolean;
+  region_scope: string;
+  is_public: boolean;
+  display_order: number;
+  is_active: boolean;
+}
+
+// AdminMethodologyDetailSerializer
+export interface ACMethodology {
+  id: number;
+  version: string;
+  name: string;
+  description: string;
+  tab_description_index: string;
+  tab_description_quiet: string;
+  tab_description_custom: string;
+  is_active: boolean;
+  needs_recalculation: boolean;
+  criteria_count: number;
+  weight_sum: number;
+  methodology_criteria: ACMethodologyCriterion[];
+  created_at: string;
+  updated_at: string;
+}
+
+// ── AI generate-pros-cons (Ф8B-1) ─────────────────────────────────────
+
+export interface GenerateProsConsResponse {
+  model: ACModelDetail;
+  generated: { pros: string[]; cons: string[] };
+  provider: string;
+}

@@ -1,13 +1,19 @@
 import acRatingApiClient from './acRatingApiClient';
 import type {
   ACBrand,
+  ACCriterion,
+  ACCriterionListItem,
+  ACMethodology,
+  ACMethodologyListItem,
   ACModelDetail,
   ACModelListItem,
   ACModelPhoto,
   ACModelWritable,
   BrandsListParams,
+  CriteriaListParams,
   EquipmentType,
   GenerateDarkLogosResponse,
+  GenerateProsConsResponse,
   ModelsListParams,
   NormalizeLogosResponse,
   PaginatedResponse,
@@ -37,6 +43,20 @@ function buildModelsParams(params?: ModelsListParams): URLSearchParams {
     sp.set('equipment_type', String(params.equipment_type));
   }
   if (params.region) sp.set('region', params.region);
+  if (params.search) sp.set('search', params.search);
+  if (params.ordering) sp.set('ordering', params.ordering);
+  if (params.page) sp.set('page', String(params.page));
+  return sp;
+}
+
+function buildCriteriaParams(params?: CriteriaListParams): URLSearchParams {
+  const sp = new URLSearchParams();
+  if (!params) return sp;
+  if (params.value_type) sp.set('value_type', params.value_type);
+  if (params.group) sp.set('group', params.group);
+  if (params.is_active) sp.set('is_active', params.is_active);
+  if (params.is_key_measurement)
+    sp.set('is_key_measurement', params.is_key_measurement);
   if (params.search) sp.set('search', params.search);
   if (params.ordering) sp.set('ordering', params.ordering);
   if (params.page) sp.set('page', String(params.page));
@@ -240,6 +260,93 @@ const acRatingService = {
     const response = await acRatingApiClient.post<GenerateDarkLogosResponse>(
       '/brands/generate-dark-logos/',
       body
+    );
+    return response.data;
+  },
+
+  // ── Criteria (Ф8B-1) ──────────────────────────────────────────────
+  async getCriteria(
+    params?: CriteriaListParams
+  ): Promise<{
+    items: ACCriterionListItem[];
+    next: string | null;
+    count: number | null;
+  }> {
+    const sp = buildCriteriaParams(params);
+    const response = await acRatingApiClient.get<unknown>('/criteria/', {
+      params: sp,
+    });
+    const data = response.data;
+    if (Array.isArray(data)) {
+      return {
+        items: data as ACCriterionListItem[],
+        next: null,
+        count: data.length,
+      };
+    }
+    const paginated = data as PaginatedResponse<ACCriterionListItem>;
+    return {
+      items: paginated.results || [],
+      next: paginated.next ?? null,
+      count: paginated.count ?? null,
+    };
+  },
+
+  async getCriterion(id: number): Promise<ACCriterion> {
+    const response = await acRatingApiClient.get<ACCriterion>(
+      `/criteria/${id}/`
+    );
+    return response.data;
+  },
+
+  async createCriterion(payload: FormData): Promise<ACCriterion> {
+    const response = await acRatingApiClient.post<ACCriterion>(
+      '/criteria/',
+      payload,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async updateCriterion(id: number, payload: FormData): Promise<ACCriterion> {
+    const response = await acRatingApiClient.patch<ACCriterion>(
+      `/criteria/${id}/`,
+      payload,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async deleteCriterion(id: number): Promise<void> {
+    await acRatingApiClient.delete(`/criteria/${id}/`);
+  },
+
+  // ── Methodology (Ф8B-1) ───────────────────────────────────────────
+  async getMethodologies(): Promise<ACMethodologyListItem[]> {
+    const response = await acRatingApiClient.get<unknown>('/methodologies/');
+    return normalizeList<ACMethodologyListItem>(response.data);
+  },
+
+  async getMethodology(id: number): Promise<ACMethodology> {
+    const response = await acRatingApiClient.get<ACMethodology>(
+      `/methodologies/${id}/`
+    );
+    return response.data;
+  },
+
+  async activateMethodology(id: number): Promise<ACMethodology> {
+    const response = await acRatingApiClient.post<ACMethodology>(
+      `/methodologies/${id}/activate/`
+    );
+    return response.data;
+  },
+
+  // ── AI: pros/cons (Ф8B-1) ─────────────────────────────────────────
+  async generateModelProsCons(
+    modelId: number
+  ): Promise<GenerateProsConsResponse> {
+    const response = await acRatingApiClient.post<GenerateProsConsResponse>(
+      `/models/${modelId}/generate-pros-cons/`
     );
     return response.data;
   },

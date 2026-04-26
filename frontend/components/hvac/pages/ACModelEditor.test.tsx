@@ -13,6 +13,7 @@ const mockGetRegions = vi.fn();
 const mockGetModel = vi.fn();
 const mockCreateModel = vi.fn();
 const mockUpdateModel = vi.fn();
+const mockGenerateProsCons = vi.fn();
 
 vi.mock('../services/acRatingService', () => ({
   default: {
@@ -22,6 +23,8 @@ vi.mock('../services/acRatingService', () => ({
     getModel: (...args: unknown[]) => mockGetModel(...args),
     createModel: (...args: unknown[]) => mockCreateModel(...args),
     updateModel: (...args: unknown[]) => mockUpdateModel(...args),
+    generateModelProsCons: (...args: unknown[]) =>
+      mockGenerateProsCons(...args),
   },
 }));
 
@@ -47,6 +50,38 @@ vi.mock('@/hooks/erp-router', () => ({
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
+}));
+
+// Radix Tabs не монтирует неактивные TabsContent — для тестов разворачиваем
+// все табы сразу, чтобы можно было проверять элементы внутри них.
+vi.mock('@/components/ui/tabs', () => ({
+  Tabs: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TabsList: ({ children }: { children: React.ReactNode }) => (
+    <div role="tablist">{children}</div>
+  ),
+  TabsTrigger: ({
+    children,
+    value,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    value: string;
+  } & Record<string, unknown>) => (
+    <button role="tab" data-tab-value={value} data-state="inactive" {...rest}>
+      {children}
+    </button>
+  ),
+  TabsContent: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
+    <div role="tabpanel" data-tab-value={value}>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/common/ImageWithFallback', () => ({
@@ -91,6 +126,7 @@ beforeEach(() => {
   mockGetModel.mockReset();
   mockCreateModel.mockReset();
   mockUpdateModel.mockReset();
+  mockGenerateProsCons.mockReset();
   mockNavigate.mockReset();
   mockUseParams.mockReset();
 
@@ -200,5 +236,111 @@ describe('ACModelEditor — edit mode', () => {
     });
     // Total Index из загруженной модели виден (отображается в badge и под slug).
     expect(screen.getAllByText(/87\.4/).length).toBeGreaterThan(0);
+  });
+});
+
+describe('ACModelEditor — AI pros/cons (Ф8B-1)', () => {
+  const MODEL_WITH_RAW = {
+    id: 42,
+    slug: 'daikin-ftxm35m',
+    brand: 10,
+    brand_detail: SAMPLE_BRANDS[0],
+    series: 'FTXM',
+    inner_unit: 'FTXM35M',
+    outer_unit: 'RXM35M',
+    nominal_capacity: 3500,
+    equipment_type: null,
+    publish_status: 'draft' as const,
+    total_index: 87.4,
+    youtube_url: '',
+    rutube_url: '',
+    vk_url: '',
+    price: '85000.00',
+    pros_text: '',
+    cons_text: '',
+    is_ad: false,
+    ad_position: null,
+    editorial_lede: '',
+    editorial_body: '',
+    editorial_quote: '',
+    editorial_quote_author: '',
+    inner_unit_dimensions: '',
+    inner_unit_weight_kg: null,
+    outer_unit_dimensions: '',
+    outer_unit_weight_kg: null,
+    photos: [],
+    suppliers: [],
+    raw_values: [
+      {
+        criterion_code: 'noise_min',
+        raw_value: '19',
+        numeric_value: 19,
+        compressor_model: '',
+        source: '',
+        source_url: '',
+        comment: '',
+        verification_status: 'unverified',
+        lab_status: 'none',
+      },
+    ],
+    region_codes: ['ru'],
+    created_at: '',
+    updated_at: '',
+  };
+
+  it('кнопка disabled в create mode', async () => {
+    mockUseParams.mockReturnValue({});
+    render(<ACModelEditor mode="create" />);
+    await waitFor(() => screen.getByTestId('ac-editor-inner'));
+
+    await waitFor(() => {
+      const btn = screen.getByTestId('ac-model-ai-pros-cons') as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+    });
+  });
+
+  it('кнопка disabled когда raw_values пустые', async () => {
+    mockUseParams.mockReturnValue({ id: '42' });
+    mockGetModel.mockResolvedValue({ ...MODEL_WITH_RAW, raw_values: [] });
+
+    render(<ACModelEditor mode="edit" />);
+    await waitFor(() => screen.getByTestId('ac-editor-inner'));
+
+    await waitFor(() => {
+      const btn = screen.getByTestId('ac-model-ai-pros-cons') as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+    });
+  });
+
+  it('клик по кнопке (пустые pros/cons) → сразу POST → form-поля заполнены ответом', async () => {
+    mockUseParams.mockReturnValue({ id: '42' });
+    mockGetModel.mockResolvedValue(MODEL_WITH_RAW);
+    mockGenerateProsCons.mockResolvedValue({
+      model: { ...MODEL_WITH_RAW, pros_text: 'p1\np2', cons_text: 'c1' },
+      generated: { pros: ['p1', 'p2', 'p3'], cons: ['c1', 'c2', 'c3'] },
+      provider: 'OpenAIProvider: gpt-4o-mini',
+    });
+
+    render(<ACModelEditor mode="edit" />);
+    await waitFor(() => screen.getByTestId('ac-editor-inner'));
+
+    await waitFor(() => screen.getByTestId('ac-model-ai-pros-cons'));
+
+    fireEvent.click(screen.getByTestId('ac-model-ai-pros-cons'));
+
+    await waitFor(() => {
+      expect(mockGenerateProsCons).toHaveBeenCalledWith(42);
+    });
+
+    await waitFor(() => {
+      const pros = screen.getByTestId(
+        'ac-model-pros-text'
+      ) as HTMLTextAreaElement;
+      expect(pros.value).toBe('p1\np2\np3');
+      const cons = screen.getByTestId(
+        'ac-model-cons-text'
+      ) as HTMLTextAreaElement;
+      expect(cons.value).toBe('c1\nc2\nc3');
+    });
   });
 });
