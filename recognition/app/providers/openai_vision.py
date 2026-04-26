@@ -48,6 +48,32 @@ def _apply_max_tokens(payload: dict, max_tokens: int) -> None:
         payload["max_tokens"] = max_tokens
 
 
+def _apply_thinking_mode(payload: dict) -> None:
+    """DeepSeek V4 thinking control (https://api-docs.deepseek.com/guides/thinking_mode).
+
+    OpenAI-совместимый формат:
+    - `thinking: {type: "enabled"|"disabled"}` (toggle reasoning)
+    - `reasoning_effort: "high"|"max"` (TOP-LEVEL, НЕ внутри thinking)
+
+    Default для thinking enabled = high. low/medium маппятся на high (ниже не поставить),
+    xhigh → max. Применяется только к моделям deepseek-v4-*.
+
+    Reasoning_content токены идут ДО content. На больших промптах (наш кейс 50+ rows)
+    могут поглотить max_tokens, content остаётся пустым. Решение:
+    - Либо thinking disabled (быстро, content без reasoning)
+    - Либо thinking enabled + max_tokens=32000+ (по аналогии с deepseek-reasoner default)
+    """
+    model = str(payload.get("model") or "")
+    if not model.startswith("deepseek-v4-"):
+        return
+    mode = (settings.llm_thinking_mode or "").strip()
+    effort = (settings.llm_thinking_effort or "").strip()
+    if mode:
+        payload["thinking"] = {"type": mode}  # "enabled" | "disabled"
+    if effort:
+        payload["reasoning_effort"] = effort  # top-level: "high" | "max"
+
+
 class OpenAIVisionProvider(BaseLLMProvider):
     def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         self.api_key = api_key if api_key is not None else settings.openai_api_key
@@ -60,7 +86,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         # соединение живым 5 минут idle (совпадает с OpenAI prompt-cache
         # TTL — логично прогревать то что потом всё равно сбросит TLS).
         self._client = httpx.AsyncClient(
-            timeout=120.0,
+            timeout=600.0,  # DeepSeek thinking high может занять 60-300сек/запрос
             http2=True,
             limits=httpx.Limits(
                 max_connections=10,
@@ -129,6 +155,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
             "messages": messages,
         }
         _apply_max_tokens(payload, max_tokens or settings.llm_max_tokens)
+        _apply_thinking_mode(payload)
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
@@ -167,6 +194,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
             ],
         }
         _apply_max_tokens(payload, settings.llm_max_tokens)
+        _apply_thinking_mode(payload)
         data = await self._post_with_retry(payload)
         return str(data["choices"][0]["message"]["content"])
 
@@ -218,6 +246,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         _apply_max_tokens(
             payload, max_tokens or settings.llm_normalize_max_tokens
         )
+        _apply_thinking_mode(payload)
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0

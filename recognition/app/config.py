@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # быстрого rollback в случае проблем).
     llm_normalize_enabled: bool = True
     llm_normalize_max_tokens: int = 6000  # достаточно для ~30 items/стр в JSON
+    # DeepSeek V4 thinking mode: "" (не передавать, использовать дефолт модели),
+    # "disabled" (быстрый non-thinking, экономит max_tokens для content),
+    # "enabled" (reasoning_content генерится перед content — нужно поднять
+    # llm_normalize_max_tokens до 16000-32000). Применяется только к моделям
+    # начинающимся с "deepseek-v4-".
+    llm_thinking_mode: str = ""
+    llm_thinking_effort: str = ""  # "" / "high" / "max"
     # E15.05 it2 (R27) — conditional multimodal Vision retry.
     llm_multimodal_retry_enabled: bool = True
     llm_multimodal_retry_threshold: float = 0.7
