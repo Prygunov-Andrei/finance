@@ -48,7 +48,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     presetPages = (methodology.presets || [])
       .filter((p) => !p.is_all_selected)
       .map((p) => ({
-        url: `${SITE_URL}/rating-split-system/${p.slug}`,
+        url: `${SITE_URL}/rating-split-system/preset/${p.slug}`,
         lastModified: now,
         changeFrequency: 'weekly',
         priority: 0.7,

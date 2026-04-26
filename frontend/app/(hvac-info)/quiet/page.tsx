@@ -3,7 +3,7 @@ import {
   getRatingMethodology,
   getRatingModels,
 } from '@/lib/api/services/rating';
-import RatingPageContent from '../_components/RatingPageContent';
+import RatingPageContent from '../rating-split-system/_components/RatingPageContent';
 import { filterQuietModels } from './quietHelpers';
 
 export const revalidate = 3600;

@@ -90,7 +90,7 @@ export default function SeoBlock() {
         >
           В таблице сплит-системы отсортированы по итоговому индексу. Можно открыть{' '}
           <Link
-            href="/rating-split-system/quiet"
+            href="/quiet"
             style={{
               color: 'hsl(var(--rt-accent))',
               textDecoration: 'underline',

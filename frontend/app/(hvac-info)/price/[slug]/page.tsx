@@ -4,7 +4,7 @@ import {
   getRatingMethodology,
   getRatingModels,
 } from '@/lib/api/services/rating';
-import RatingPageContent from '../../_components/RatingPageContent';
+import RatingPageContent from '../../rating-split-system/_components/RatingPageContent';
 import { PRICE_SLUGS, filterByBudget, findPriceSlug } from './priceHelpers';
 
 export const revalidate = 3600;
