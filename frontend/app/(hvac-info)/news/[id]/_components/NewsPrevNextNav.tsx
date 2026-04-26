@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { HvacNews as NewsItem } from '@/lib/api/types/hvac';
-import { T } from '../../../ratings/_components/primitives';
+import { T } from '../../../rating-split-system/_components/primitives';
 
 interface Props {
   prev: NewsItem | null;

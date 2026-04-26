@@ -83,7 +83,7 @@ export default function FilterBar(props: FilterBarProps) {
       )}
       <div style={{ flex: 1 }} />
       <Link
-        href="/ratings/submit/"
+        href="/rating-split-system/submit/"
         style={{
           display: 'inline-flex',
           alignItems: 'center',

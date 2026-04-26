@@ -1,5 +1,5 @@
 import type { HvacNews as NewsItem } from '@/lib/api/types/hvac';
-import { Eyebrow, H, T } from '../../../ratings/_components/primitives';
+import { Eyebrow, H, T } from '../../../rating-split-system/_components/primitives';
 import {
   formatNewsDate,
   getNewsCategoryLabel,

@@ -18,8 +18,8 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     label: 'Рейтинг',
-    href: '/ratings',
-    match: (p) => p.startsWith('/ratings'),
+    href: '/rating-split-system',
+    match: (p) => p.startsWith('/rating-split-system'),
   },
   { label: 'ISmeta', muted: true },
   { label: 'Мешок Монтажников', muted: true },

@@ -14,7 +14,7 @@ export default function BackToRating() {
       }}
     >
       <Link
-        href="/ratings"
+        href="/rating-split-system"
         style={{
           display: 'inline-flex',
           alignItems: 'center',

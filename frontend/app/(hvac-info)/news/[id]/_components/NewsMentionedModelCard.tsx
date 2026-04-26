@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { HvacNewsMentionedAcModel } from '@/lib/api/types/hvac';
-import { BrandLogo, Eyebrow, T, formatPrice } from '../../../ratings/_components/primitives';
+import { BrandLogo, Eyebrow, T, formatPrice } from '../../../rating-split-system/_components/primitives';
 
 export default function NewsMentionedModelCard({
   models,
@@ -77,7 +77,7 @@ function SingleCard({ model }: { model: HvacNewsMentionedAcModel }) {
         </div>
       </div>
       <Link
-        href={`/ratings/${model.slug}/`}
+        href={`/rating-split-system/${model.slug}/`}
         style={{
           padding: '8px 14px',
           borderRadius: 4,
@@ -106,7 +106,7 @@ function SingleCard({ model }: { model: HvacNewsMentionedAcModel }) {
 function CompactCard({ model }: { model: HvacNewsMentionedAcModel }) {
   return (
     <Link
-      href={`/ratings/${model.slug}/`}
+      href={`/rating-split-system/${model.slug}/`}
       style={{
         display: 'block',
         padding: 14,

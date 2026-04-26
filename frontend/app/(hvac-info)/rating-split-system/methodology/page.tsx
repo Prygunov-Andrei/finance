@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     'Методика расчёта индекса «Август-климат»: 30 параметров, веса, шкалы.',
 };
 
-// force-dynamic — иначе build-time SSG может захватить пустой API (см. /ratings/ урок)
+// force-dynamic — иначе build-time SSG может захватить пустой API (см. /rating-split-system/ урок)
 export const dynamic = 'force-dynamic';
 
 export default async function RatingMethodologyPage() {
