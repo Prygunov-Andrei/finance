@@ -98,5 +98,6 @@ urlpatterns = [
     path("api/v1/", include("apps.estimate.urls")),
     path("api/v1/", include("apps.agent.urls")),
     path("api/v1/", include("apps.integration.urls")),
+    path("api/v1/", include("apps.recognition_jobs.urls")),
     # path("api/v1/workspaces/", include("apps.workspace.urls")),
 ]
