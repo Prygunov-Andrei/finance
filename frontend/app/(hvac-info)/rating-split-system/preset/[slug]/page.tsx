@@ -5,6 +5,7 @@ import {
   getRatingModels,
 } from '@/lib/api/services/rating';
 import RatingPageContent from '../../_components/RatingPageContent';
+import { findPublishablePreset, publishablePresets } from './presetHelpers';
 
 export const revalidate = 3600;
 
@@ -13,9 +14,7 @@ type Props = { params: Promise<{ slug: string }> };
 export async function generateStaticParams() {
   try {
     const methodology = await getRatingMethodology();
-    return methodology.presets
-      .filter((p) => !p.is_all_selected)
-      .map((p) => ({ slug: p.slug }));
+    return publishablePresets(methodology.presets).map((p) => ({ slug: p.slug }));
   } catch {
     return [];
   }
@@ -29,9 +28,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   } catch {
     // Метаданные fallback ниже
   }
-  const preset = methodology?.presets.find(
-    (p) => p.slug === slug && !p.is_all_selected,
-  );
+  const preset = methodology
+    ? findPublishablePreset(methodology.presets, slug)
+    : undefined;
   if (!preset) return { title: 'Пресет не найден' };
   const title = `Рейтинг ${preset.label} — Август-климат | HVAC Info`;
   const description =
@@ -65,9 +64,7 @@ export default async function PresetRatingPage({ params }: Props) {
     console.error('[ratings-preset] fetch failed:', e);
   }
 
-  const preset = methodology.presets.find(
-    (p) => p.slug === slug && !p.is_all_selected,
-  );
+  const preset = findPublishablePreset(methodology.presets, slug);
   if (!preset) notFound();
 
   const published = models.filter((m) => m.publish_status === 'published');

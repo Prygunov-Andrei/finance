@@ -4,6 +4,7 @@ import {
   getRatingModels,
 } from '@/lib/api/services/rating';
 import RatingPageContent from '../_components/RatingPageContent';
+import { filterQuietModels } from './quietHelpers';
 
 export const revalidate = 3600;
 
@@ -37,12 +38,7 @@ export default async function QuietRatingPage() {
     console.error('[ratings-quiet] fetch failed, rendering empty:', e);
   }
 
-  // noise_score — нормализованный балл «Август-климат» по методике (0–100):
-  // больше = тише. Поэтому DESC = «самые тихие первые».
-  const measured = models
-    .filter((m) => m.publish_status === 'published')
-    .filter((m) => m.has_noise_measurement && m.noise_score != null)
-    .sort((a, b) => (b.noise_score ?? 0) - (a.noise_score ?? 0));
+  const measured = filterQuietModels(models);
 
   return (
     <RatingPageContent
