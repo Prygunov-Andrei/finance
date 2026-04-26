@@ -2,10 +2,12 @@
 
 import asyncio
 import logging
+import uuid
 from typing import Any, cast
 
 import fitz
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+import httpx
+from fastapi import APIRouter, Depends, File, Header, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
@@ -16,6 +18,7 @@ from ..schemas.invoice import InvoiceParseResponse
 from ..schemas.probe import ProbeResponse
 from ..schemas.quote import QuoteParseResponse
 from ..schemas.spec import SpecParseResponse
+from ..services import job_registry
 from ..services.invoice_parser import InvoiceParser
 from ..services.pdf_text import TEXT_LAYER_MIN_CHARS_PER_PAGE
 from ..services.quote_parser import QuoteParser
@@ -236,3 +239,213 @@ async def parse_quote(
     assert isinstance(result, QuoteParseResponse)
     _log_done("quote", filename, result)
     return result
+
+
+# ============================================================================
+# E19-1: async spec parsing — 202 Accepted + page-level callbacks.
+# ============================================================================
+
+# Какие event'ы recognition отправляет на callback URL (поле "event" в payload):
+# - started:    парсинг стартовал (после открытия PDF, до первого LLM-call).
+# - page_done:  страница завершена; payload содержит {page, items, partial_count}.
+# - finished:   все страницы готовы; payload — финальный SpecParseResponse-набор
+#               + llm_costs (заполняется E18 позже; пока пусто).
+# - failed:     исключение в парсинге; payload — {error, code}.
+# - cancelled:  получен сигнал отмены через /v1/parse/spec/cancel/{job_id}.
+
+class _AsyncAcceptedResponse(BaseModel):
+    status: str
+    job_id: str
+
+
+class _CancelResponse(BaseModel):
+    cancelled: bool
+
+
+@router.post(
+    "/v1/parse/spec/async",
+    status_code=202,
+    response_model=_AsyncAcceptedResponse,
+)
+async def parse_spec_async(
+    request: Request,
+    file: UploadFile = File(...),
+    x_callback_url: str = Header(..., alias="X-Callback-URL"),
+    x_job_id: str = Header("", alias="X-Job-Id"),
+    x_callback_token: str = Header("", alias="X-Callback-Token"),
+    _auth: None = Depends(verify_api_key),
+    provider: BaseLLMProvider = Depends(get_provider),
+) -> _AsyncAcceptedResponse:
+    """Асинхронный парсинг спецификации.
+
+    Принимает PDF, возвращает 202 моментально. Парсит в фоне через
+    `asyncio.create_task`, шлёт callback'и на `X-Callback-URL` с заголовком
+    `X-Callback-Token` (если передан). При отмене через
+    `/v1/parse/spec/cancel/{job_id}` — отправляет `cancelled` callback.
+
+    Headers:
+    - X-Callback-URL: куда POST'ить callback'и (обязательно).
+    - X-Job-Id: id job'а на стороне backend'а; если пусто — recognition
+      генерит uuid4. Возвращается клиенту в ответе.
+    - X-Callback-Token: shared-secret который кладётся в каждый callback
+      как `X-Callback-Token` header (опционально).
+
+    E18 интеграция (X-LLM-* override) — отложена до E18-1; здесь используем
+    singleton provider из app.state как и sync endpoint.
+    """
+    content, filename = await _read_pdf(file)
+
+    job_id = x_job_id or str(uuid.uuid4())
+    logger.info(
+        "spec_parse_async accepted",
+        extra={
+            "job_id": job_id,
+            "doc_filename": filename,
+            "size_bytes": len(content),
+            "callback_url": x_callback_url,
+        },
+    )
+
+    task = asyncio.create_task(
+        _run_async_spec_job(
+            job_id=job_id,
+            pdf_bytes=content,
+            filename=filename,
+            callback_url=x_callback_url,
+            callback_token=x_callback_token,
+            provider=provider,
+        )
+    )
+    await job_registry.register(job_id, task)
+    return _AsyncAcceptedResponse(status="accepted", job_id=job_id)
+
+
+@router.post(
+    "/v1/parse/spec/cancel/{job_id}",
+    status_code=200,
+    response_model=_CancelResponse,
+)
+async def cancel_spec_job(
+    job_id: str,
+    _auth: None = Depends(verify_api_key),
+) -> _CancelResponse:
+    """Отменить running job. Возвращает {"cancelled": true} если сигнал
+    отправлен (Task ещё не завершилась), иначе {"cancelled": false}.
+
+    Сама отмена асинхронна: `cancelled` callback уйдёт после того, как
+    Task поймает CancelledError.
+    """
+    cancelled = await job_registry.cancel(job_id)
+    logger.info(
+        "spec_parse_async cancel requested",
+        extra={"job_id": job_id, "cancelled": cancelled},
+    )
+    return _CancelResponse(cancelled=cancelled)
+
+
+def _make_callback_client() -> httpx.AsyncClient:
+    """Factory для callback HTTP-клиента. Вынесено в отдельную функцию
+    чтобы тесты могли monkeypatch'ить только канал отправки callback'ов,
+    не задевая глобальный httpx.AsyncClient (который использует TestClient
+    и сам ASGITransport)."""
+    return httpx.AsyncClient(timeout=settings.async_callback_timeout)
+
+
+async def _run_async_spec_job(
+    *,
+    job_id: str,
+    pdf_bytes: bytes,
+    filename: str,
+    callback_url: str,
+    callback_token: str,
+    provider: BaseLLMProvider,
+) -> None:
+    """Background-обёртка над SpecParser. Шлёт callbacks по progress + final."""
+    parser = SpecParser(provider)
+    partial_count = 0
+
+    async def send_callback(event: str, payload: dict[str, Any]) -> None:
+        body = {"job_id": job_id, "event": event, **payload}
+        headers = {"Content-Type": "application/json"}
+        if callback_token:
+            headers["X-Callback-Token"] = callback_token
+        try:
+            async with _make_callback_client() as client:
+                await client.post(callback_url, headers=headers, json=body)
+        except Exception as e:
+            # ТЗ: НЕ ретраим callbacks — backend получит timeout/connection-
+            # reset на свои health-check'и через polling и переведёт job в
+            # failed. Только лог warning.
+            logger.warning(
+                "callback failed",
+                extra={
+                    "job_id": job_id,
+                    "event": event,
+                    "callback_url": callback_url,
+                    "error": str(e),
+                },
+            )
+
+    async def on_page_done(page_1based: int, items: list[dict]) -> None:
+        nonlocal partial_count
+        partial_count += len(items)
+        await send_callback(
+            "page_done",
+            {
+                "page": page_1based,
+                "items": items,
+                "partial_count": partial_count,
+            },
+        )
+
+    try:
+        await send_callback("started", {"filename": filename})
+        result = await parser.parse(
+            pdf_bytes,
+            filename=filename,
+            on_page_done=on_page_done,
+        )
+        # llm_costs пока пусто — добавится в E18-1, когда LLMProfile.pricing
+        # будет считать стоимость по usage. Сейчас просто {} placeholder.
+        await send_callback(
+            "finished",
+            {
+                "status": result.status,
+                "items": [it.model_dump() for it in result.items],
+                "pages_stats": result.pages_stats.model_dump(),
+                "pages_summary": [p.model_dump() for p in result.pages_summary],
+                "errors": result.errors,
+                "llm_costs": {},
+            },
+        )
+        logger.info(
+            "spec_parse_async finished",
+            extra={
+                "job_id": job_id,
+                "items_count": len(result.items),
+                "pages_total": result.pages_stats.total,
+            },
+        )
+    except asyncio.CancelledError:
+        logger.info("spec_parse_async cancelled", extra={"job_id": job_id})
+        await send_callback("cancelled", {})
+        raise
+    except LLMUnavailableError as e:
+        logger.warning(
+            "spec_parse_async llm unavailable",
+            extra={"job_id": job_id, "error": str(e)},
+        )
+        await send_callback(
+            "failed",
+            {"error": str(e), "code": "llm_unavailable"},
+        )
+    except Exception as e:
+        logger.exception(
+            "spec_parse_async failed", extra={"job_id": job_id}
+        )
+        await send_callback(
+            "failed",
+            {"error": str(e), "code": "internal_error"},
+        )
+    finally:
+        await job_registry.cleanup(job_id)

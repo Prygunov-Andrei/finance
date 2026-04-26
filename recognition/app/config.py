@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     # запросов к OpenAI API → rate-limit 429 даже на gpt-4o. Semaphore
     # внутри SpecParser гейтит jobs. 6 — безопасный default для tier-1 API.
     llm_max_concurrency: int = 6
+    # E19-1: process-level semaphore — суммарный потолок одновременных LLM-
+    # вызовов по всем running async-job'ам. llm_max_concurrency — per-job
+    # внутри одного PDF. С двумя параллельными jobs (default backend queue)
+    # без global cap получаем 2 × 6 = 12 одновременных calls и упираемся в
+    # rate-limit DeepSeek/OpenAI. 4 — безопасный default, поднимаем через .env.
+    llm_global_concurrency: int = 4
+    # E19-1: timeout на POST callback'а recognition → backend. Recognition не
+    # ретраит: если backend упал — лог warning, parse продолжается.
+    async_callback_timeout: float = 10.0
     dpi: int = 200
     max_page_retries: int = 2
     port: int = 8003

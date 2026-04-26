@@ -265,7 +265,19 @@ class OpenAIVisionProvider(BaseLLMProvider):
         больших PDF (19+ стр). Было 3 attempts × exp(2^n) = 1/2/4s, что
         недостаточно для OpenAI minute-window 429. Теперь 6 attempts с
         respect Retry-After header + exponential base 3s (3/9/27s max).
+
+        E19-1: каждый исходящий HTTP-call гейтится глобальным семафором
+        (`llm_throttle.get_global_semaphore`). Это process-level cap на
+        суммарные concurrent calls по ВСЕМ running async-job'ам — поверх
+        per-job `llm_max_concurrency`.
         """
+        from ..services.llm_throttle import get_global_semaphore
+
+        sema = await get_global_semaphore()
+        async with sema:
+            return await self._post_with_retry_unguarded(payload)
+
+    async def _post_with_retry_unguarded(self, payload: dict) -> dict:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

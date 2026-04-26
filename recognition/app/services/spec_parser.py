@@ -8,10 +8,12 @@ E15.04 — добавлен column-aware path:
 - 3й приоритет (если text layer отсутствует): Vision на исходном image.
 """
 
+import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import fitz
@@ -91,6 +93,14 @@ def _sticky_from_section_heading(section_name: str) -> str:
 
 logger = logging.getLogger(__name__)
 
+# E19-1: per-page progress callback. Вызывается после post-process данной
+# страницы, но ДО cross-page continuation merge. Cross-page изменения
+# last item доедут в финальном `finished` callback на async-роуте.
+# Сигнатура: (page_1based, items_dicts) → Awaitable[None]. items —
+# уже готовые dict'ы (asdict от NormalizedItem) для JSON-сериализации.
+PageDoneCallback = Callable[[int, list[dict]], Awaitable[None]]
+
+
 CLASSIFY_PROMPT = """Ты получаешь изображение страницы проектной спецификации (ОВиК/СС).
 
 Определи тип страницы:
@@ -155,8 +165,19 @@ class SpecParser:
     def __init__(self, provider: BaseLLMProvider) -> None:
         self.provider = provider
         self.state = _ParseState()
+        self._on_page_done: PageDoneCallback | None = None
 
-    async def parse(self, pdf_bytes: bytes, filename: str = "document.pdf") -> SpecParseResponse:
+    async def parse(
+        self,
+        pdf_bytes: bytes,
+        filename: str = "document.pdf",
+        *,
+        on_page_done: PageDoneCallback | None = None,
+    ) -> SpecParseResponse:
+        # E19-1: progress hook для async-режима. None = backward-compat
+        # (sync-роут /v1/parse/spec не передаёт callback — поведение
+        # идентично текущему).
+        self._on_page_done = on_page_done
         state = self.state
         doc = await run_in_threadpool(fitz.open, stream=pdf_bytes, filetype="pdf")
         try:
@@ -557,6 +578,11 @@ class SpecParser:
             rows = pages_rows[page_num] if page_num < len(pages_rows) else []
             self._apply_postprocess(norm, rows=rows, initial_sticky=initial_sticky)
 
+            # E19-1: per-page progress callback ПОСЛЕ post-process, но ДО
+            # cross-page merge. Cross-page может потом удлинить last.name —
+            # финальная форма доедет до клиента через `finished` event.
+            await self._fire_page_done(page_num + 1, norm.items)
+
             # Cross-page continuation (Класс C spec-2): rows изъятые с
             # начала следующей страницы склеиваем в name last item ЭТОЙ.
             cp_tails = getattr(self, "_cross_page_continuations", {}).get(page_num)
@@ -664,6 +690,35 @@ class SpecParser:
         text_complete)."""
         await self._process_page(doc, page_num)
 
+    async def _fire_page_done(
+        self,
+        page_1based: int,
+        items: list[NormalizedItem] | list[SpecItem],
+    ) -> None:
+        """Вызвать `on_page_done` (E19-1) если установлен. Тихо ловим
+        исключения чтобы кривой callback не уронил парсер.
+
+        Принимает список `NormalizedItem` (column-aware/batch path) или
+        `SpecItem` (Vision/legacy fallback) и сериализует в plain dicts.
+        """
+        if self._on_page_done is None:
+            return
+        try:
+            payload: list[dict] = []
+            for it in items:
+                if isinstance(it, SpecItem):
+                    payload.append(it.model_dump())
+                else:
+                    payload.append(asdict(it))
+            await self._on_page_done(page_1based, payload)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # pragma: no cover — диагностика
+            logger.warning(
+                "on_page_done callback failed",
+                extra={"page": page_1based, "error": str(e)},
+            )
+
     def build_partial(self) -> SpecParseResponse:
         """Snapshot current state — used when the outer timeout fires."""
         state = self.state
@@ -709,6 +764,7 @@ class SpecParser:
                 return
 
             items_llm = await self._extract_items(page_b64, page_num)
+            items_before = len(state.items)
             for item_data in items_llm:
                 raw_name = str(item_data.get("name", "")).strip()
                 # DEV-BACKLOG #13: Vision path учитывает sticky_parent_name,
@@ -735,6 +791,8 @@ class SpecParser:
                     )
                 )
             state.pages_processed += 1
+            # E19-1: progress callback (Vision fallback path).
+            await self._fire_page_done(page_num + 1, state.items[items_before:])
 
         except Exception as e:
             # DEV-BACKLOG #16: logger.exception пишет traceback в JSON-лог —
@@ -797,6 +855,8 @@ class SpecParser:
         self._apply_postprocess(
             normalized, rows=rows, initial_sticky=initial_sticky
         )
+        # E19-1: progress callback (sequential column-aware fallback).
+        await self._fire_page_done(page_num + 1, normalized.items)
         state.current_section = normalized.new_section or state.current_section
         state.sticky_parent_name = normalized.new_sticky or state.sticky_parent_name
 
@@ -941,6 +1001,7 @@ class SpecParser:
         state.sticky_parent_name = new_sticky
         if not parsed_items:
             return False
+        items_before = len(state.items)
         for item_data in parsed_items:
             state.sort_order += 1
             state.items.append(
@@ -958,6 +1019,8 @@ class SpecParser:
                 )
             )
         state.pages_processed += 1
+        # E19-1: progress callback (legacy text-layer fallback).
+        await self._fire_page_done(page_num + 1, state.items[items_before:])
         return True
 
     async def _classify_page(self, image_b64: str, page_num: int) -> dict:
