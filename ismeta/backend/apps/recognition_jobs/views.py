@@ -21,7 +21,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -40,10 +40,16 @@ class RecognitionJobCursorPagination(CursorPagination):
 
 
 class RecognitionJobViewSet(viewsets.ReadOnlyModelViewSet):
-    """List + retrieve RecognitionJob; cancel + callback — extra actions."""
+    """List + retrieve RecognitionJob; cancel + callback — extra actions.
+
+    Permission_classes намеренно НЕ переопределены — используется global из
+    settings.REST_FRAMEWORK (IsAuthenticated в prod, AllowAny в DEV через
+    ISMETA_AUTH_DISABLED=true). Это согласовано с другими ismeta ViewSets
+    (EstimateViewSet, MaterialViewSet и т.д.) — они тоже используют global.
+    Workspace filter работает через DEFAULT_FILTER_BACKENDS глобально.
+    """
 
     serializer_class = RecognitionJobSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = RecognitionJobCursorPagination
     queryset = RecognitionJob.objects.select_related(
         "estimate", "workspace", "created_by"
@@ -65,7 +71,8 @@ class RecognitionJobViewSet(viewsets.ReadOnlyModelViewSet):
         detail=True,
         methods=["post"],
         url_path="cancel",
-        permission_classes=[IsAuthenticated],
+        # Использует global permission (как list/retrieve) — синхронно с прочими
+        # ismeta endpoints. AllowAny в DEV, IsAuthenticated в prod.
     )
     def cancel(self, request: Request, pk: str | None = None) -> Response:
         """Отменить job. Если running → POST на recognition /cancel/{id}.
