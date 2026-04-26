@@ -278,6 +278,11 @@ function MobileRows({
                 </span>
                 <span style={{ textAlign: 'right' }}>
                   <span
+                    title={
+                      mode === 'silence'
+                        ? 'Уровень шума, дБ(А)'
+                        : 'Значение индекса «Август-климат»'
+                    }
                     style={{
                       fontFamily: 'var(--rt-font-serif)',
                       fontSize: 16,

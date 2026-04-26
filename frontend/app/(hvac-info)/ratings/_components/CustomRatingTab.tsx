@@ -721,9 +721,11 @@ function DesktopCustomRow({
           paddingRight: 14,
         }}
       >
-        <T size={12} color="hsl(var(--rt-ink-60))" mono>
-          {base.toFixed(1)}
-        </T>
+        <span title='Значение индекса «Август-климат»'>
+          <T size={12} color="hsl(var(--rt-ink-60))" mono>
+            {base.toFixed(1)}
+          </T>
+        </span>
         {deltaDir === 'same' ? (
           <T size={10} color="hsl(var(--rt-ink-40))" mono>
             ·
@@ -899,6 +901,7 @@ function MobileCustomList({
                     )}
                   </span>
                   <span
+                    title='Значение индекса «Август-климат»'
                     style={{
                       marginTop: 3,
                       fontFamily: 'var(--rt-font-mono)',
