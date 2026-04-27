@@ -270,12 +270,18 @@ class NewsPostViewSet(viewsets.ModelViewSet):
 
         # Проверяем, изменились ли переводимые поля (для skip translation
         # при правке только мета-полей: category, lede, editorial_author и т.п.).
-        # Нормализуем строки через strip() — frontend может прислать body с
-        # лишним whitespace после processImageUrls/RichTextEditor.
+        # Сравниваем СЕМАНТИЧЕСКИ — через strip_tags() убираем HTML-атрибуты
+        # (frontend processImageUrls меняет src в <img> с относительного на
+        # absolute, текстовый diff появляется хотя контент не менялся).
+        from django.utils.html import strip_tags
         translatable_fields = ('title', 'body', 'source_language')
 
         def _norm(v):
-            return '' if v is None else str(v).strip()
+            if v is None:
+                return ''
+            text = strip_tags(str(v))
+            # схлопываем все whitespace в один пробел — игнор форматирования
+            return ' '.join(text.split())
 
         changed_fields = [
             f for f in translatable_fields
