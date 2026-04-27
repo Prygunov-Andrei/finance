@@ -1680,6 +1680,18 @@ def _merge_cluster_into_main(
     """
     main = rows[main_idx]
     main_cells = main.cells
+    # E20-2: proxy-main detection. Если main.name сам — continuation-фрагмент
+    # (lowercase Cyrillic / blacklist-маркер «ванный», «щего», «супертонкого»
+    # и т.д.), это row-«карман» с qty/unit, попавший в середину multi-line
+    # name. Above-main absorb-кандидаты — peer-rows того же item, а не шлейф
+    # предыдущего → защиты (a)/(b) не применяем (иначе теряем середину name
+    # и UPPERCASE-голова item-а склеивается напрямую с main: «...базальтового
+    # ванный обкладочным...»). См. ОВиК Spec-4 стр 2/8/19/26/50/65/77 — было
+    # 23 broken ОБМ-Вент item'ов в baseline-job.
+    main_name_initial = (main_cells.get("name") or "").strip()
+    main_is_proxy_continuation = bool(main_name_initial) and _is_continuation_of_neighbour(
+        main_name_initial
+    )
     # Собираем absorbed indices в y-order. Cluster sorted by index = sorted by y.
     absorb_idx_in_order: list[int] = []
     for j in cluster:
@@ -1693,8 +1705,8 @@ def _merge_cluster_into_main(
         # continuation текущего main (если бы соседнее main row было ниже,
         # cluster содержал бы 2 main и cluster-merge не сработал бы).
         other_name = (other.cells.get("name") or "").strip()
-        if other_name and j < main_idx:
-            initial_main_name = (main_cells.get("name") or "").strip()
+        if other_name and j < main_idx and not main_is_proxy_continuation:
+            initial_main_name = main_name_initial
             current_main_name = _build_running_name(rows, main_idx, absorb_idx_in_order)
             looks_like_continuation = _is_continuation_of_neighbour(other_name)
             # (a) main изначально имел name И orphan = continuation

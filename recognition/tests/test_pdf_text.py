@@ -848,6 +848,121 @@ class TestE201Fixes:
         # row 1 (continuation) должен быть SKIPped: main running name >80, lowercase + blacklist.
         assert 1 not in absorbed, f"continuation '{rows[1].cells['name']}' должна SKIP, got absorbed={absorbed}"
 
+    def test_cluster_absorbs_above_main_when_main_is_proxy_continuation(self):
+        """E20-2 (Class M / 23 ОБМ-Вент остатков): когда main row сам имеет
+        name-фрагмент-continuation (lowercase Cyrillic / blacklist «ванный»),
+        он — proxy-main multi-line item, и outer над ним — peer-rows того же
+        item, не шлейф предыдущего. Защиты (a)/(b) НЕ применяются: defended
+        bucket «супертонкого … каширо-» между UPPERCASE-головой «ОБМ-5Ф …»
+        и main НЕ должен skip-аться, иначе голова склеивается с main
+        напрямую («…базальтового ванный обкладочным…»).
+        """
+        from app.services.pdf_text import TableRow, _merge_cluster_into_main
+        rows = [
+            TableRow(
+                page_number=1, y_mid=610.0, row_index=0,
+                cells={"name": "ОБМ-5Ф прошивной базальтовый материал из базальтового"},
+            ),
+            TableRow(
+                page_number=1, y_mid=623.8, row_index=1,
+                cells={"name": "супертонкого волокна без применения связующего, каширо-"},
+            ),
+            TableRow(
+                page_number=1, y_mid=637.5, row_index=2,
+                cells={
+                    "name": "ванный обкладочным материалом из алюминиевой фольги с",
+                    "unit": "м2",
+                    "qty": "36",
+                },
+            ),
+            TableRow(
+                page_number=1, y_mid=651.4, row_index=3,
+                cells={"name": "одной стороны (коэффициент расхода 1,2 на 1 м2 изолируе-"},
+            ),
+            TableRow(
+                page_number=1, y_mid=665.2, row_index=4,
+                cells={"name": "мой поверхности по тех.регламенту)"},
+            ),
+        ]
+        cluster = [0, 1, 2, 3, 4]
+        main_idx = 2
+        absorbed = _merge_cluster_into_main(rows, cluster, main_idx)
+        assert sorted(absorbed) == [0, 1, 3, 4], (
+            f"все 4 peer-row должны absorb-ться (proxy main = continuation), got: {absorbed}"
+        )
+        name = rows[main_idx].cells.get("name", "")
+        # Голова должна быть в начале.
+        assert name.startswith("ОБМ-5Ф"), f"name должен начинаться с 'ОБМ-5Ф', got: {name!r}"
+        # Defended bucket «супертонкого» НЕ должен быть пропущен.
+        assert "супертонкого волокна" in name, (
+            f"defended bucket 'супертонкого волокна' должен войти в name, got: {name!r}"
+        )
+        # Dash-rule склейки внутри _merge_name_parts.
+        assert "кашированный обкладочным" in name, (
+            f"dash-rule 'каширо- ванный'→'кашированный', got: {name!r}"
+        )
+        assert "изолируемой поверхности" in name, (
+            f"dash-rule 'изолируе- мой'→'изолируемой', got: {name!r}"
+        )
+        # Регрессия-pattern (та же что в SQL-query) НЕ должен встречаться.
+        import re
+        assert not re.search(r"базальтового\s+ванный", name), (
+            f"head должна быть отделена от main через 'супертонкого' continuation, got: {name!r}"
+        )
+        # qty/unit взяты с main.
+        assert rows[main_idx].cells.get("qty") == "36"
+        assert rows[main_idx].cells.get("unit") == "м2"
+
+    def test_obm_vent_proxy_main_full_pipeline_real_pdf(self):
+        """E20-2: end-to-end smoke на реальной странице 2 spec-4 PDF.
+
+        Критерий: после `extract_structured_rows` ровно один TableRow содержит
+        полное «ОБМ-5Ф … кашированный обкладочным … тех.регламенту)» с qty=36
+        и unit=м². Pre-fix этого row не было — была склейка
+        «…базальтового ванный обкладочным…» с пропущенным «супертонкого»
+        bucket'ом и phantom row для defended.
+        """
+        import os
+        import pytest
+        pdf_path = (
+            "/Users/andrei_prygunov/Downloads/Спорт-школа КЛИН/Проекты/"
+            "Альбом СК-269-7-22-ОВ2 (ВЕНТ) ИЗМ3.1_СПЕЦИФИКАЦИЯ.pdf"
+        )
+        if not os.path.exists(pdf_path):
+            pytest.skip(f"Spec-4 PDF не найден: {pdf_path}")
+        import fitz
+        from app.services.pdf_text import extract_structured_rows
+        doc = fitz.open(pdf_path)
+        try:
+            page = doc[1]  # page 2 (0-based index 1)
+            rows = extract_structured_rows(page)
+        finally:
+            doc.close()
+        # Должен быть ровно один row с qty=36 unit=м² и start «ОБМ-5Ф».
+        obm_rows = [
+            r for r in rows
+            if r.cells.get("qty") == "36"
+            and r.cells.get("unit") in ("м2", "м²")
+            and r.cells.get("name", "").startswith("ОБМ-5Ф")
+        ]
+        assert len(obm_rows) == 1, f"ожидаем ровно 1 ОБМ-5Ф row qty=36, got {len(obm_rows)}: {obm_rows}"
+        name = obm_rows[0].cells.get("name", "")
+        assert "супертонкого волокна" in name, f"middle bucket lost: {name!r}"
+        assert "кашированный обкладочным" in name, f"dash-rule failed: {name!r}"
+        # Регрессия-pattern.
+        import re
+        assert not re.search(r"базальтового\s+ванный", name), (
+            f"regression pattern 'базальтового ванный' present: {name!r}"
+        )
+        # Phantom row defended «супертонкого ... каширо-» НЕ должен оставаться отдельно.
+        defended_phantom = [
+            r for r in rows
+            if r.cells.get("name", "").startswith("супертонкого волокна")
+        ]
+        assert defended_phantom == [], (
+            f"phantom defended row не absorb-нулась: {defended_phantom}"
+        )
+
 
 class TestIsHeaderRow:
     def test_header_row_detected(self):
