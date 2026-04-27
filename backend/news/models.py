@@ -213,10 +213,13 @@ class NewsPost(models.Model):
 
     category = models.CharField(
         _("Category"),
-        max_length=20,
-        choices=Category.choices,
+        max_length=64,
         default=Category.OTHER,
-        help_text=_("Категория новости. Показывается как eyebrow-label и chip-filter в ленте."),
+        help_text=_(
+            "Slug категории новости. Свободная строка — справочник "
+            "динамический (см. NewsCategory). Старый TextChoices enum "
+            "Category остаётся как Python-helper для defaults и legacy."
+        ),
     )
     category_ref = models.ForeignKey(
         "NewsCategory",
@@ -393,9 +396,28 @@ class NewsPost(models.Model):
     def is_published(self):
         """Проверяет, опубликована ли новость"""
         return (
-            self.status == 'published' and 
+            self.status == 'published' and
             self.pub_date <= timezone.now()
         )
+
+    def get_category_display(self):
+        """Wave 9: после снятия ``choices`` Django не генерирует этот метод
+        автоматически. Сохраняем API: для legacy-slug возвращаем русский label
+        из TextChoices enum; для динамических — name из FK NewsCategory; иначе
+        slug как есть (никогда не падаем)."""
+        slug = self.category or ""
+        # Legacy 8 enum'ов — отдают локализованный label.
+        try:
+            return self.Category(slug).label
+        except ValueError:
+            pass
+        # Динамические категории — берём name из FK (если sync прошёл).
+        if self.category_ref_id:
+            try:
+                return self.category_ref.name
+            except NewsCategory.DoesNotExist:
+                pass
+        return slug
 
 class NewsMedia(models.Model):
     """

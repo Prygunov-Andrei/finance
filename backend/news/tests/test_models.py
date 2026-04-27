@@ -38,3 +38,33 @@ def test_reading_time_manual_override_preserved():
     post.body = " ".join(["y"] * 2000)
     post.save()
     assert post.reading_time_minutes == 7
+
+
+# ---------------------------------------------------------------------------
+# Wave 9 — динамические категории
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_model_accepts_arbitrary_slug_after_choices_removed():
+    """Wave 9: после снятия choices=Category.choices модель принимает
+    произвольный slug, не входящий в TextChoices enum."""
+    custom_slug = "custom_dynamic_slug"
+    post = NewsPost.objects.create(
+        title="Динамическая категория",
+        body="тело",
+        category=custom_slug,
+    )
+    post.refresh_from_db()
+    assert post.category == custom_slug
+
+
+@pytest.mark.django_db
+def test_get_category_display_for_unknown_slug_returns_slug_as_is():
+    """Wave 9: get_category_display() для slug вне TextChoices возвращает
+    его как есть (Django fallback). Frontend использует category_object.name
+    через FK для отображения."""
+    post = NewsPost.objects.create(
+        title="T", body="B", category="not_in_enum",
+    )
+    assert post.get_category_display() == "not_in_enum"
