@@ -427,6 +427,54 @@ export default function ACCriterionEditor({
             </div>
           </div>
 
+          {(valueType === 'categorical' || valueType === 'custom_scale') && (
+            <Card
+              className="p-4 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900"
+              data-testid="ac-criterion-categorical-hint"
+            >
+              <div className="flex gap-3">
+                <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm space-y-2">
+                  <strong className="block">
+                    Как задать варианты значений и баллы за них
+                  </strong>
+                  <p className="text-muted-foreground">
+                    Этот критерий —{' '}
+                    {valueType === 'categorical'
+                      ? 'категориальный'
+                      : 'с индивидуальной шкалой'}
+                    . Конкретные варианты (например «Нет» / «Щёточка» /
+                    «Отдельный прибор» для ионизатора) и баллы за них (например
+                    0 / 50 / 100) задаются в JSON-шкале внутри методики, поле{' '}
+                    <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">
+                      custom_scale_json
+                    </code>
+                    .
+                  </p>
+                  <p className="text-muted-foreground">
+                    Сейчас редактирование шкалы доступно только через старую
+                    Django-админку:
+                  </p>
+                  <a
+                    href="/hvac-admin/ac_methodology/methodologyversion/1/change/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs break-all"
+                  >
+                    /hvac-admin/ac_methodology/methodologyversion/1/change/ →
+                  </a>
+                  <p className="text-xs text-muted-foreground">
+                    В inline-таблице критериев найди этот критерий → поле «Custom
+                    scale json» → впиши, например:
+                  </p>
+                  <code className="block p-2 bg-muted rounded text-xs font-mono whitespace-pre-wrap">
+                    {`{"Нет": 0, "Щёточка": 50, "Отдельный прибор": 100}`}
+                  </code>
+                </div>
+              </div>
+            </Card>
+          )}
+
           <div className="flex items-center gap-6 flex-wrap">
             <div className="flex items-center gap-3">
               <Switch
