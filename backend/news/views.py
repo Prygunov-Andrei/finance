@@ -270,21 +270,33 @@ class NewsPostViewSet(viewsets.ModelViewSet):
 
         # Проверяем, изменились ли переводимые поля (для skip translation
         # при правке только мета-полей: category, lede, editorial_author и т.п.).
+        # Нормализуем строки через strip() — frontend может прислать body с
+        # лишним whitespace после processImageUrls/RichTextEditor.
         translatable_fields = ('title', 'body', 'source_language')
-        translatable_changed = any(
-            field in serializer.validated_data
-            and getattr(instance, field) != serializer.validated_data[field]
-            for field in translatable_fields
-        )
+
+        def _norm(v):
+            return '' if v is None else str(v).strip()
+
+        changed_fields = [
+            f for f in translatable_fields
+            if f in serializer.validated_data
+            and _norm(getattr(instance, f)) != _norm(serializer.validated_data[f])
+        ]
+        translatable_changed = bool(changed_fields)
 
         news_post = serializer.save()
 
         # Translation только если запросили И что-то переводимое изменилось.
         should_translate = auto_translate and translatable_changed
         if auto_translate and not translatable_changed:
-            logger.info(
-                "translate skipped for post %s: only non-translatable fields changed",
+            logger.warning(
+                "translate SKIPPED for post %s: only non-translatable fields changed",
                 news_post.id,
+            )
+        elif should_translate:
+            logger.warning(
+                "translate ENQUEUED for post %s: changed fields=%s",
+                news_post.id, changed_fields,
             )
 
         output_data = self._handle_translation_and_response(news_post, should_translate, source_language, request)
