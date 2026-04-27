@@ -97,17 +97,12 @@ export function getNewsBodyWithoutHero(news: NewsItem): string {
     body = body.replace(/^\s*<img[^>]*>\s*/i, '');
   }
 
-  // Если lede пустое — режем первый <p> ТОЛЬКО если в body есть второй,
-  // иначе короткие новости (1 img + 1 параграф) полностью исчезнут.
-  if (!news.lede || !news.lede.trim()) {
-    // Убираем пустые <p></p> в начале (от парсинга tinymce/tiptap).
-    body = body.replace(/^\s*(<p>\s*<\/p>\s*)+/gi, '');
-    // Считаем содержательные <p>; режем только если ≥ 2.
-    const pCount = (body.match(/<p[\s>]/gi) || []).length;
-    if (pCount >= 2) {
-      body = body.replace(/^\s*<p>[\s\S]*?<\/p>\s*/i, '');
-    }
-  }
+  // Убираем пустые <p></p> в начале (от парсинга tinymce/tiptap).
+  body = body.replace(/^\s*(<p>\s*<\/p>\s*)+/gi, '');
+
+  // НЕ отрезаем первый <p>, даже если lede взят из него — lede это
+  // preview (обрезанный до 200 символов), а body показывает текст полностью.
+  // Дубль hero-lede и body-первого-параграфа — нормальный newspaper-pattern.
 
   return body.trim();
 }
