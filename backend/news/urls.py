@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from .admin_views import FeaturedNewsSettingsAdminView
 from .views import (
     NewsPostViewSet, CommentViewSet, MediaUploadViewSet, NewsAuthorViewSet,
     NewsCategoryViewSet, NewsBulkCategoryView, FeaturedNewsView,
@@ -23,5 +24,6 @@ router.register(r'rating-runs', RatingRunViewSet, basename='rating-runs')
 urlpatterns = [
     path('news/bulk-update-category/', NewsBulkCategoryView.as_view(), name='news-bulk-update-category'),
     path('featured-news/', FeaturedNewsView.as_view(), name='featured-news'),
+    path('admin/featured-settings/', FeaturedNewsSettingsAdminView.as_view(), name='admin-featured-settings'),
     path('', include(router.urls)),
 ]

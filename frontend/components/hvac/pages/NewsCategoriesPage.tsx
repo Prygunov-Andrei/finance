@@ -6,8 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
-  Plus, Trash2, Loader2, FolderTree, Save, X, Pencil, RotateCcw,
+  Plus, Trash2, Loader2, FolderTree, Save, X, Pencil, RotateCcw, Star,
 } from 'lucide-react';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import newsCategoriesService, {
   NewsCategoryItem,
 } from '../services/newsCategoriesService';
@@ -47,6 +50,8 @@ interface InlineEditState {
   order: number;
 }
 
+const FEATURED_NONE = '__none__';
+
 export default function NewsCategoriesPage() {
   const { user } = useAuth();
   const [categories, setCategories] = useState<NewsCategoryItem[]>([]);
@@ -63,6 +68,11 @@ export default function NewsCategoriesPage() {
 
   // Inline rename
   const [editing, setEditing] = useState<InlineEditState | null>(null);
+
+  // Featured news settings (главная новость в hero на hvac-info.com)
+  const [featuredCategorySlug, setFeaturedCategorySlug] = useState<string | null>(null);
+  const [featuredLoaded, setFeaturedLoaded] = useState(false);
+  const [savingFeatured, setSavingFeatured] = useState(false);
 
   const isAdmin = user?.is_staff === true;
 
@@ -82,6 +92,35 @@ export default function NewsCategoriesPage() {
   useEffect(() => {
     if (isAdmin) loadCategories();
   }, [isAdmin, loadCategories]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    newsCategoriesService.getFeaturedSettings()
+      .then((s) => {
+        if (cancelled) return;
+        setFeaturedCategorySlug(s.category_slug ?? null);
+        setFeaturedLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFeaturedLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, [isAdmin]);
+
+  const saveFeatured = async () => {
+    setSavingFeatured(true);
+    try {
+      await newsCategoriesService.updateFeaturedSettings({
+        category: featuredCategorySlug,
+      });
+      toast.success('Главная новость в hero обновлена');
+    } catch {
+      toast.error('Ошибка сохранения');
+    } finally {
+      setSavingFeatured(false);
+    }
+  };
 
   const sorted = [...categories].sort((a, b) => {
     if (a.order !== b.order) return a.order - b.order;
@@ -244,6 +283,57 @@ export default function NewsCategoriesPage() {
           </Button>
         )}
       </div>
+
+      <Card className="p-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-[260px]">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Star className="h-4 w-4" />
+              Главная новость в hero (hvac-info.com)
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Из выбранной категории берётся последняя 5★-новость для hero-блока
+              на главной. Пусто = последняя 5★-новость из всех категорий.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select
+              value={featuredCategorySlug ?? FEATURED_NONE}
+              onValueChange={(v) =>
+                setFeaturedCategorySlug(v === FEATURED_NONE ? null : v)
+              }
+              disabled={!featuredLoaded || savingFeatured}
+            >
+              <SelectTrigger
+                className="w-64"
+                data-testid="featured-category-select"
+              >
+                <SelectValue placeholder="— Любая категория —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={FEATURED_NONE}>— Любая категория —</SelectItem>
+                {sorted
+                  .filter((c) => c.is_active)
+                  .map((c) => (
+                    <SelectItem key={c.slug} value={c.slug}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={saveFeatured}
+              disabled={!featuredLoaded || savingFeatured}
+              data-testid="featured-save-btn"
+            >
+              {savingFeatured && (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              )}
+              Сохранить
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       <Card className="overflow-hidden">
         <table className="w-full text-sm">

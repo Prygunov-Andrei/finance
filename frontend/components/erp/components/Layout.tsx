@@ -230,6 +230,7 @@ const menuItems: MenuItem[] = [
     section: 'dashboard',
     children: [
       { id: 'hvac-news', label: 'Новости', icon: <FileText className="w-4 h-4" />, path: '/hvac/news', section: 'dashboard' },
+      { id: 'hvac-news-categories', label: 'Категории новостей', icon: <FolderOpen className="w-4 h-4" />, path: '/hvac/news-categories', section: 'dashboard' },
       { id: 'hvac-manufacturers', label: 'Производители', icon: <Building2 className="w-4 h-4" />, path: '/hvac/manufacturers', section: 'dashboard' },
       { id: 'hvac-brands', label: 'Бренды', icon: <Package className="w-4 h-4" />, path: '/hvac/brands', section: 'dashboard' },
       { id: 'hvac-resources', label: 'Ресурсы', icon: <Globe className="w-4 h-4" />, path: '/hvac/resources', section: 'dashboard' },
@@ -434,6 +435,7 @@ pathToParent['hvac/news'] = { label: 'HVAC-новости', path: '/hvac/news' }
 pathToParent['hvac/news/create'] = { label: 'Новости', path: '/hvac/news' };
 pathToParent['hvac/news/edit'] = { label: 'Новости', path: '/hvac/news' };
 pathToParent['hvac/scheduled'] = { label: 'Новости', path: '/hvac/news' };
+pathToParent['hvac/news-categories'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/manufacturers'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/brands'] = { label: 'HVAC-новости', path: '/hvac/news' };
 pathToParent['hvac/resources'] = { label: 'HVAC-новости', path: '/hvac/news' };

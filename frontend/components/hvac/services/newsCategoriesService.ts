@@ -20,6 +20,14 @@ export interface BulkUpdateCategoryResponse {
   updated: number;
 }
 
+export interface FeaturedNewsSettings {
+  id: number;
+  category: string | null;
+  category_name: string | null;
+  category_slug: string | null;
+  updated_at: string;
+}
+
 const newsCategoriesService = {
   getNewsCategories: async (): Promise<NewsCategoryItem[]> => {
     const response = await apiClient.get('/news-categories/');
@@ -61,6 +69,18 @@ const newsCategoriesService = {
       ids,
       category_slug: categorySlug,
     });
+    return response.data;
+  },
+
+  getFeaturedSettings: async (): Promise<FeaturedNewsSettings> => {
+    const response = await apiClient.get('/admin/featured-settings/');
+    return response.data;
+  },
+
+  updateFeaturedSettings: async (payload: {
+    category: string | null;
+  }): Promise<FeaturedNewsSettings> => {
+    const response = await apiClient.patch('/admin/featured-settings/', payload);
     return response.data;
   },
 };

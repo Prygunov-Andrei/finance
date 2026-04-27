@@ -7,6 +7,8 @@ const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 const mockDelete = vi.fn();
 const mockRestore = vi.fn();
+const mockGetFeatured = vi.fn();
+const mockUpdateFeatured = vi.fn();
 
 vi.mock('../services/newsCategoriesService', () => ({
   default: {
@@ -16,6 +18,8 @@ vi.mock('../services/newsCategoriesService', () => ({
     deleteNewsCategory: (...args: unknown[]) => mockDelete(...args),
     restoreNewsCategory: (...args: unknown[]) => mockRestore(...args),
     bulkUpdateNewsCategory: vi.fn(),
+    getFeaturedSettings: (...args: unknown[]) => mockGetFeatured(...args),
+    updateFeaturedSettings: (...args: unknown[]) => mockUpdateFeatured(...args),
   },
 }));
 
@@ -39,6 +43,15 @@ beforeEach(() => {
   mockUpdate.mockReset();
   mockDelete.mockReset();
   mockRestore.mockReset();
+  mockGetFeatured.mockReset();
+  mockUpdateFeatured.mockReset();
+  mockGetFeatured.mockResolvedValue({
+    id: 1,
+    category: null,
+    category_name: null,
+    category_slug: null,
+    updated_at: '2026-04-27T00:00:00Z',
+  });
   (globalThis as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
     NoopResizeObserver as unknown as typeof ResizeObserver;
   if (typeof window !== 'undefined') {
@@ -159,6 +172,27 @@ describe('NewsCategoriesPage', () => {
     fireEvent.click(screen.getByTestId('restore-btn-old'));
     await waitFor(() => {
       expect(mockRestore).toHaveBeenCalledWith('old');
+    });
+  });
+
+  it('featured: загружает settings и сохраняет выбор', async () => {
+    mockGet.mockResolvedValue(SAMPLE);
+    mockGetFeatured.mockResolvedValue({
+      id: 1,
+      category: 'business',
+      category_name: 'Деловые',
+      category_slug: 'business',
+      updated_at: '2026-04-27T00:00:00Z',
+    });
+    mockUpdateFeatured.mockResolvedValue({});
+    render(<NewsCategoriesPage />);
+    await waitFor(() => screen.getByTestId('featured-save-btn'));
+
+    expect(mockGetFeatured).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('featured-save-btn'));
+    await waitFor(() => {
+      expect(mockUpdateFeatured).toHaveBeenCalledWith({ category: 'business' });
     });
   });
 });
