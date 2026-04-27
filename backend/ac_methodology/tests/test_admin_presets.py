@@ -60,6 +60,17 @@ def test_anonymous_presets_list_401(anon_client):
 
 
 @pytest.mark.django_db
+def test_presets_list_no_pagination(staff_client):
+    for i in range(25):
+        RatingPresetFactory(slug=f"p_{i:02d}")
+    resp = staff_client.get("/api/hvac/rating/presets/")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, list), "Ожидается plain list (pagination_class=None)"
+    assert len(body) >= 25
+
+
+@pytest.mark.django_db
 def test_regular_user_presets_list_403(regular_client):
     resp = regular_client.get("/api/hvac/rating/presets/")
     assert resp.status_code == 403
