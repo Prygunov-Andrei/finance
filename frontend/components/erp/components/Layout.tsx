@@ -611,14 +611,19 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
               );
             }
 
-            // Проверяем, активен ли какой-либо дочерний пункт
-            const isAnyChildActive = item.children?.some(child => 
-              location.pathname === child.path
+            // Проверяем, активен ли какой-либо дочерний пункт.
+            // startsWith с '/' в конце — иначе `/hvac-rating/...` ловится
+            // префиксом `/hvac` (HVAC-новости), и активны два пункта одновременно.
+            const isAnyChildActive = item.children?.some(child =>
+              location.pathname === child.path ||
+              (child.path !== '/' && child.path !== '' &&
+               location.pathname.startsWith(child.path + '/'))
             ) || false;
-            
+
             // Родительский пункт активен, если совпадает его путь ИЛИ активен любой дочерний пункт
-            const isActive = location.pathname === item.path || 
-                            (item.path !== '/' && item.path !== '' && location.pathname.startsWith(item.path)) ||
+            const isActive = location.pathname === item.path ||
+                            (item.path !== '/' && item.path !== '' &&
+                             location.pathname.startsWith(item.path + '/')) ||
                             isAnyChildActive;
             
             return (
@@ -652,7 +657,11 @@ export function Layout({ children, onLogout, user }: LayoutProps) {
                 {item.children && isSidebarOpen && expandedMenus.includes(item.id) && (
                   <div className="pl-8">
                     {(item.children || []).map(child => {
-                      const isChildActive = location.pathname === child.path;
+                      // startsWith с '/' в конце — чтобы edit-страницы типа
+                      // `/hvac-rating/models/edit/5` подсвечивали child «Модели».
+                      const isChildActive = location.pathname === child.path ||
+                        (child.path !== '/' && child.path !== '' &&
+                         location.pathname.startsWith(child.path + '/'));
 
                       return (
                         <div key={child.id}>
