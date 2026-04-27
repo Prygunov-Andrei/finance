@@ -217,7 +217,21 @@ class NewsPostWriteSerializer(serializers.ModelSerializer):
             allowed_str = ', '.join(allowed_languages)
             raise serializers.ValidationError(f"Исходный язык должен быть одним из: {allowed_str}.")
         return value
-    
+
+    def validate_category(self, value):
+        """Строгая проверка: slug должен существовать в NewsCategory.
+
+        После Wave 9 поле NewsPost.category — свободный slug без TextChoices.
+        Чтобы избежать тихого desync (CharField с любой строкой, FK = NULL),
+        требуем чтобы slug был зарегистрирован в справочнике NewsCategory.
+        """
+        if value and not NewsCategory.objects.filter(slug=value).exists():
+            raise serializers.ValidationError(
+                f"Категория со slug '{value}' не найдена. "
+                "Создай её в /erp/hvac/news-categories/."
+            )
+        return value
+
     def validate(self, attrs):
         """Проверяем логику статуса и даты публикации"""
         status = attrs.get('status', self.instance.status if self.instance else 'draft')
@@ -244,11 +258,11 @@ class NewsPostWriteSerializer(serializers.ModelSerializer):
             return
         cat_slug = validated_data['category']
         try:
-            validated_data['category_ref'] = NewsCategory.objects.get(
-                slug=cat_slug, is_active=True,
-            )
+            validated_data['category_ref'] = NewsCategory.objects.get(slug=cat_slug)
         except NewsCategory.DoesNotExist:
-            # Legacy 'other' и категории без записи в NewsCategory — FK = NULL.
+            # validate_category отсекает несуществующие slug'и до этой точки;
+            # ветка остаётся для defensive-обработки (если сериализатор
+            # вызван минуя is_valid()).
             validated_data['category_ref'] = None
 
     def create(self, validated_data):

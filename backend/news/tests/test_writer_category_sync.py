@@ -72,11 +72,12 @@ def test_patch_changes_category_and_category_ref(categories):
 
 
 @pytest.mark.django_db
-def test_patch_to_legacy_category_clears_category_ref(categories):
-    """PATCH category='other' (нет в NewsCategory) → category_ref = None.
+def test_patch_to_unknown_category_returns_400(categories):
+    """Wave 9: строгая валидация — slug, отсутствующий в NewsCategory, отвергается.
 
-    Замечание: NewsCategory seed-миграция (0028) обычно создаёт slug='other'
-    тоже, но если slug отсутствует или is_active=False — FK должен стать NULL.
+    До Wave 9 сериализатор молча ставил FK=None; теперь validate_category
+    возвращает ValidationError, чтобы исключить тихий desync category vs.
+    category_ref.
     """
     post = NewsPost.objects.create(
         title="T", body="B",
@@ -86,17 +87,13 @@ def test_patch_to_legacy_category_clears_category_ref(categories):
     )
     post.refresh_from_db()
 
-    NewsCategory.objects.filter(slug="other").delete()
+    NewsCategory.objects.filter(slug="nonexistent_slug_xyz").delete()
 
     serializer = NewsPostWriteSerializer(
-        post, data={"category": "other"}, partial=True,
+        post, data={"category": "nonexistent_slug_xyz"}, partial=True,
     )
-    assert serializer.is_valid(), serializer.errors
-    serializer.save()
-
-    post.refresh_from_db()
-    assert post.category == "other"
-    assert post.category_ref_id is None
+    assert not serializer.is_valid()
+    assert "category" in serializer.errors
 
 
 @pytest.mark.django_db
@@ -123,3 +120,70 @@ def test_patch_without_category_keeps_existing_ref(categories):
     assert post.category_ref_id == "brands"
 
 
+# ---------------------------------------------------------------------------
+# Wave 9 — динамические категории (snять choices, max_length 20→64)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_create_with_long_dynamic_slug(categories):
+    """POST новости с slug длиной >20 символов (Wave 9 расширил поле до 64)."""
+    long_slug = "ekspertnye-obzory-konditsionerov"  # 33 символа
+    NewsCategory.objects.update_or_create(
+        slug=long_slug,
+        defaults={"name": "Экспертные обзоры", "order": 90, "is_active": True},
+    )
+
+    serializer = NewsPostWriteSerializer(data={
+        "title": "T", "body": "B",
+        "pub_date": timezone.now().isoformat(),
+        "status": "draft", "source_language": "ru",
+        "category": long_slug,
+    })
+    assert serializer.is_valid(), serializer.errors
+    serializer.validated_data.pop("auto_translate", None)
+    post = serializer.save()
+    post.refresh_from_db()
+
+    assert post.category == long_slug
+    assert post.category_ref_id == long_slug
+    assert len(post.category) > 20
+
+
+@pytest.mark.django_db
+def test_create_with_unknown_slug_returns_400(categories):
+    """POST с slug, которого нет в NewsCategory, отвергается строгой валидацией."""
+    serializer = NewsPostWriteSerializer(data={
+        "title": "T", "body": "B",
+        "pub_date": timezone.now().isoformat(),
+        "status": "draft", "source_language": "ru",
+        "category": "totally_not_in_db",
+    })
+    assert not serializer.is_valid()
+    assert "category" in serializer.errors
+
+
+@pytest.mark.django_db
+def test_all_legacy_enum_slugs_accepted(categories):
+    """Regression: все 8 legacy slugs из TextChoices enum продолжают валидироваться.
+
+    Seed-миграция 0028 создаёт их в NewsCategory; даже после снятия choices
+    сериализатор должен их принимать.
+    """
+    legacy_slugs = [
+        "business", "industry", "market", "regulation",
+        "review", "guide", "brands", "other",
+    ]
+    for slug in legacy_slugs:
+        NewsCategory.objects.update_or_create(
+            slug=slug, defaults={"name": slug.capitalize(), "is_active": True},
+        )
+
+    for slug in legacy_slugs:
+        serializer = NewsPostWriteSerializer(data={
+            "title": "T", "body": "B",
+            "pub_date": timezone.now().isoformat(),
+            "status": "draft", "source_language": "ru",
+            "category": slug,
+        })
+        assert serializer.is_valid(), (slug, serializer.errors)
