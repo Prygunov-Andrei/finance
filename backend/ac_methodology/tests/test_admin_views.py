@@ -185,6 +185,31 @@ def test_delete_criterion(staff_client):
 
 
 @pytest.mark.django_db
+def test_criteria_list_no_pagination(staff_client):
+    """Wave 5: 31 критерий в проде; админу нужны все, не 20."""
+    for i in range(25):
+        CriterionFactory(code=f"crit_{i:02d}")
+
+    resp = staff_client.get("/api/hvac/rating/criteria/")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, list), "Ожидается plain list (pagination_class=None)"
+    assert len(body) == 25
+
+
+@pytest.mark.django_db
+def test_methodologies_list_no_pagination(staff_client):
+    for i in range(3):
+        MethodologyVersionFactory(version=f"9.{i}")
+
+    resp = staff_client.get("/api/hvac/rating/methodologies/")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, list)
+    assert len(body) >= 3
+
+
+@pytest.mark.django_db
 def test_filter_criterion_is_key_measurement(staff_client):
     CriterionFactory(code="key_one", is_key_measurement=True)
     CriterionFactory(code="not_key", is_key_measurement=False)

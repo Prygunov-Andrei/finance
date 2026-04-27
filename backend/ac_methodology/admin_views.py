@@ -38,6 +38,7 @@ class CriterionAdminViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsHvacAdminProxyAllowed]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    pagination_class = None
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["code", "name_ru", "name_en"]
     ordering_fields = ["code", "created_at"]
@@ -82,6 +83,7 @@ class MethodologyAdminViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     permission_classes = [IsHvacAdminProxyAllowed]
+    pagination_class = None
 
     def get_queryset(self):
         qs = MethodologyVersion.objects.all().annotate(
@@ -135,6 +137,7 @@ class RatingPresetAdminViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsHvacAdminProxyAllowed]
     serializer_class = AdminRatingPresetSerializer
+    pagination_class = None
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["slug", "label"]
     ordering_fields = ["order", "created_at"]
