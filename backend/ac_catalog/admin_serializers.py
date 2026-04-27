@@ -24,13 +24,18 @@ from .models import (
 )
 
 
-def _absolute_url(request, file_field) -> str:
+def _file_url(file_field) -> str:
+    """Относительный URL медиа-файла (например `/media/ac_models/foo.png`).
+
+    НЕ используем `request.build_absolute_uri` — за BFF proxy
+    (`/api/ac-rating-admin/[...path]/`) Django видит HTTP и собирает
+    `http://hvac-info.com/...`, что блокируется браузером как mixed
+    content на HTTPS-странице. Возвращаем относительный — браузер сам
+    соберёт `https://hvac-info.com/media/...` с текущей схемой.
+    """
     if not file_field:
         return ""
-    url = file_field.url
-    if request is not None:
-        return request.build_absolute_uri(url)
-    return url
+    return file_field.url
 
 
 class EquipmentTypeAdminSerializer(serializers.ModelSerializer):
@@ -56,7 +61,7 @@ class AdminACModelPhotoSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "image_url")
 
     def get_image_url(self, obj: ACModelPhoto) -> str:
-        return _absolute_url(self.context.get("request"), obj.image)
+        return _file_url(obj.image)
 
 
 class AdminACModelPhotoNestedSerializer(serializers.ModelSerializer):
@@ -76,7 +81,7 @@ class AdminACModelPhotoNestedSerializer(serializers.ModelSerializer):
         read_only_fields = ("image_url",)
 
     def get_image_url(self, obj: ACModelPhoto) -> str:
-        return _absolute_url(self.context.get("request"), obj.image)
+        return _file_url(obj.image)
 
 
 class AdminACModelSupplierSerializer(serializers.ModelSerializer):
@@ -152,7 +157,7 @@ class AdminACModelListSerializer(serializers.ModelSerializer):
         photo = next(iter(obj.photos.all()), None)
         if photo is None:
             return ""
-        return _absolute_url(self.context.get("request"), photo.image)
+        return _file_url(photo.image)
 
     def get_photos_count(self, obj: ACModel) -> int:
         return obj.photos.count()

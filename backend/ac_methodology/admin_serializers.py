@@ -25,13 +25,18 @@ from .models import (
 )
 
 
-def _absolute_url(request, file_field) -> str:
+def _file_url(file_field) -> str:
+    """Относительный URL медиа-файла (например `/media/criteria/foo.png`).
+
+    НЕ используем `request.build_absolute_uri` — за BFF proxy
+    (`/api/ac-rating-admin/[...path]/`) Django видит HTTP и собирает
+    `http://hvac-info.com/...`, что блокируется браузером как mixed
+    content на HTTPS-странице. Возвращаем относительный — браузер сам
+    соберёт `https://hvac-info.com/media/...` с текущей схемой.
+    """
     if not file_field:
         return ""
-    url = file_field.url
-    if request is not None:
-        return request.build_absolute_uri(url)
-    return url
+    return file_field.url
 
 
 class AdminCriterionListSerializer(serializers.ModelSerializer):
@@ -58,7 +63,7 @@ class AdminCriterionListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_photo_url(self, obj: Criterion) -> str:
-        return _absolute_url(self.context.get("request"), obj.photo)
+        return _file_url(obj.photo)
 
     def get_methodologies_count(self, obj: Criterion) -> int:
         # Аннотация может быть проставлена queryset'ом (`_methodologies_count`),
@@ -99,7 +104,7 @@ class AdminCriterionSerializer(serializers.ModelSerializer):
         }
 
     def get_photo_url(self, obj: Criterion) -> str:
-        return _absolute_url(self.context.get("request"), obj.photo)
+        return _file_url(obj.photo)
 
 
 class AdminMethodologyCriterionReadSerializer(serializers.ModelSerializer):

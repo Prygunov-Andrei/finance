@@ -143,7 +143,7 @@ def test_retrieve_criterion_returns_photo_url(staff_client, media_tmp):
     resp = staff_client.get(f"/api/hvac/rating/criteria/{crit.id}/")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["photo_url"].startswith("http")
+    assert "/media/" in body["photo_url"]
     assert body["code"] == "energy_class"
 
 

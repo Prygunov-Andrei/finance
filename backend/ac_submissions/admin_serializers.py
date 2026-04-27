@@ -10,6 +10,20 @@ from rest_framework import serializers
 from .models import ACSubmission, SubmissionPhoto
 
 
+def _file_url(file_field) -> str:
+    """Относительный URL медиа-файла (например `/media/submissions/foo.png`).
+
+    НЕ используем `request.build_absolute_uri` — за BFF proxy
+    (`/api/ac-rating-admin/[...path]/`) Django видит HTTP и собирает
+    `http://hvac-info.com/...`, что блокируется браузером как mixed
+    content на HTTPS-странице. Возвращаем относительный — браузер сам
+    соберёт `https://hvac-info.com/media/...` с текущей схемой.
+    """
+    if not file_field:
+        return ""
+    return file_field.url
+
+
 class AdminSubmissionPhotoSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
@@ -19,11 +33,7 @@ class AdminSubmissionPhotoSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_image_url(self, obj):
-        if not obj.image:
-            return ""
-        request = self.context.get("request")
-        url = obj.image.url
-        return request.build_absolute_uri(url) if request else url
+        return _file_url(obj.image)
 
 
 class AdminSubmissionListSerializer(serializers.ModelSerializer):
@@ -64,11 +74,9 @@ class AdminSubmissionListSerializer(serializers.ModelSerializer):
 
     def get_primary_photo_url(self, obj):
         photo = obj.photos.first()
-        if not photo or not photo.image:
+        if not photo:
             return ""
-        request = self.context.get("request")
-        url = photo.image.url
-        return request.build_absolute_uri(url) if request else url
+        return _file_url(photo.image)
 
 
 class AdminSubmissionDetailSerializer(serializers.ModelSerializer):
