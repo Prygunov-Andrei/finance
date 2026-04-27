@@ -1,7 +1,7 @@
 'use client';
 
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { useCallback } from 'react';
+import Link from 'next/link';
+import { useSearchParams, usePathname } from 'next/navigation';
 
 export type RatingTabId = 'index' | 'silence' | 'custom';
 
@@ -11,11 +11,35 @@ const TABS: Array<{ id: RatingTabId; label: string }> = [
   { id: 'custom', label: 'Свой рейтинг' },
 ];
 
+const RATING_HOME = '/rating-split-system/';
+const QUIET_PATH = '/quiet';
+
+function isMainRatingPage(pathname: string): boolean {
+  return pathname === '/rating-split-system' || pathname === RATING_HOME;
+}
+
 export function useCurrentTab(defaultTab: RatingTabId = 'index'): RatingTabId {
   const sp = useSearchParams();
   const raw = sp.get('tab');
   if (raw === 'silence' || raw === 'custom' || raw === 'index') return raw;
   return defaultTab;
+}
+
+function tabHref(
+  id: RatingTabId,
+  pathname: string,
+  sp: URLSearchParams,
+): string {
+  if (isMainRatingPage(pathname)) {
+    const next = new URLSearchParams(sp.toString());
+    if (id === 'index') next.delete('tab');
+    else next.set('tab', id);
+    const qs = next.toString();
+    return qs ? `${RATING_HOME}?${qs}` : RATING_HOME;
+  }
+  if (id === 'index') return RATING_HOME;
+  if (id === 'silence') return QUIET_PATH;
+  return `${RATING_HOME}?tab=custom`;
 }
 
 export default function RatingTabs({
@@ -27,19 +51,8 @@ export default function RatingTabs({
 }) {
   const pathname = usePathname();
   const sp = useSearchParams();
-  const router = useRouter();
   const active = useCurrentTab(defaultTab);
-
-  const switchTo = useCallback(
-    (id: RatingTabId) => {
-      const next = new URLSearchParams(sp.toString());
-      if (id === 'index') next.delete('tab');
-      else next.set('tab', id);
-      const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [pathname, sp, router]
-  );
+  const onMain = isMainRatingPage(pathname);
 
   return (
     <div
@@ -52,13 +65,15 @@ export default function RatingTabs({
     >
       {TABS.map((tab) => {
         const isActive = tab.id === active;
+        const href = tabHref(tab.id, pathname, sp);
         return (
-          <button
+          <Link
             key={tab.id}
-            type="button"
+            href={href}
             role="tab"
             aria-selected={isActive}
-            onClick={() => switchTo(tab.id)}
+            scroll={!onMain ? undefined : false}
+            replace={onMain}
             style={{
               position: 'relative',
               padding: '10px 0',
@@ -70,6 +85,7 @@ export default function RatingTabs({
               fontWeight: isActive ? 600 : 500,
               cursor: 'pointer',
               marginBottom: -1,
+              textDecoration: 'none',
             }}
           >
             {tab.label}
@@ -86,7 +102,7 @@ export default function RatingTabs({
                 }}
               />
             )}
-          </button>
+          </Link>
         );
       })}
     </div>
