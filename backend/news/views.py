@@ -253,19 +253,41 @@ class NewsPostViewSet(viewsets.ModelViewSet):
         return Response(output_data, status=status.HTTP_201_CREATED, headers=headers)
     
     def update(self, request, *args, **kwargs):
-        """Переопределяем update для обработки автоперевода и возврата полного объекта"""
+        """Переопределяем update для обработки автоперевода и возврата полного объекта.
+
+        Перевод запускается только если auto_translate=True И реально изменились
+        переводимые поля (title/body/source_language). Меняешь только category или
+        lede — translation не дёргается.
+        """
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        
+
         # Извлекаем auto_translate до сохранения, чтобы не передавать его в модель
         auto_translate = serializer.validated_data.pop('auto_translate', False)
         source_language = serializer.validated_data.get('source_language', instance.source_language)
-        
+
+        # Проверяем, изменились ли переводимые поля (для skip translation
+        # при правке только мета-полей: category, lede, editorial_author и т.п.).
+        translatable_fields = ('title', 'body', 'source_language')
+        translatable_changed = any(
+            field in serializer.validated_data
+            and getattr(instance, field) != serializer.validated_data[field]
+            for field in translatable_fields
+        )
+
         news_post = serializer.save()
-        
-        output_data = self._handle_translation_and_response(news_post, auto_translate, source_language, request)
+
+        # Translation только если запросили И что-то переводимое изменилось.
+        should_translate = auto_translate and translatable_changed
+        if auto_translate and not translatable_changed:
+            logger.info(
+                "translate skipped for post %s: only non-translatable fields changed",
+                news_post.id,
+            )
+
+        output_data = self._handle_translation_and_response(news_post, should_translate, source_language, request)
         return Response(output_data)
     
     @action(detail=True, methods=['post'], url_path='retranslate')
