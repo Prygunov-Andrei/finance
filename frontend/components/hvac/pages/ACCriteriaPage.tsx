@@ -3,7 +3,6 @@ import axios from 'axios';
 import { Link, useNavigate } from '@/hooks/erp-router';
 import { toast } from 'sonner';
 import {
-  Edit,
   Info,
   Plus,
   RefreshCw,
@@ -396,16 +395,6 @@ export default function ACCriteriaPage() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          asChild
-                          title="Редактировать"
-                        >
-                          <Link to={`/hvac-rating/criteria/edit/${c.id}`}>
-                            <Edit className="w-4 h-4" />
-                          </Link>
-                        </Button>
                         {isAdmin && (
                           <Button
                             size="sm"

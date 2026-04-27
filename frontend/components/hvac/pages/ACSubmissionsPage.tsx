@@ -6,7 +6,6 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Eye,
   RefreshCw,
   Search,
   Trash2,
@@ -530,9 +529,10 @@ export default function ACSubmissionsPage() {
                   return (
                     <TableRow
                       key={r.id}
-                      className={`hover:bg-muted/40 ${
+                      className={`hover:bg-muted/40 cursor-pointer ${
                         selected ? 'bg-muted/30' : ''
                       }`}
+                      onClick={() => openDetail(r.id)}
                       data-testid={`ac-submission-row-${r.id}`}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -576,7 +576,10 @@ export default function ACSubmissionsPage() {
                       <TableCell className="text-sm whitespace-nowrap">
                         {formatCapacity(r.nominal_capacity_watt)}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell
+                        className="text-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <a
                           href={`mailto:${r.submitter_email}`}
                           className="text-primary hover:underline"
@@ -589,7 +592,7 @@ export default function ACSubmissionsPage() {
                           {STATUS_LABEL[r.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {r.converted_model_id ? (
                           <Link
                             to={`/hvac-rating/models/edit/${r.converted_model_id}`}
@@ -609,15 +612,6 @@ export default function ACSubmissionsPage() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openDetail(r.id)}
-                            title="Просмотр"
-                            data-testid={`ac-submission-view-${r.id}`}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"

@@ -4,7 +4,6 @@ import { Link, useNavigate } from '@/hooks/erp-router';
 import { toast } from 'sonner';
 import {
   Check,
-  Eye,
   RefreshCw,
   RotateCcw,
   Search,
@@ -400,9 +399,10 @@ export default function ACReviewsPage() {
                   return (
                     <TableRow
                       key={r.id}
-                      className={`hover:bg-muted/40 ${
+                      className={`hover:bg-muted/40 cursor-pointer ${
                         selected ? 'bg-muted/30' : ''
                       }`}
+                      onClick={() => setViewReview(r)}
                       data-testid={`ac-review-row-${r.id}`}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -412,7 +412,7 @@ export default function ACReviewsPage() {
                           aria-label={`Выбрать отзыв ${r.id}`}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Link
                           to={`/hvac-rating/models/edit/${r.model}`}
                           className="text-primary hover:underline"
@@ -460,15 +460,6 @@ export default function ACReviewsPage() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setViewReview(r)}
-                            title="Подробнее"
-                            data-testid={`ac-review-view-${r.id}`}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"

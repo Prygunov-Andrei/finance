@@ -3,7 +3,6 @@ import axios from 'axios';
 import { Link, useNavigate } from '@/hooks/erp-router';
 import { toast } from 'sonner';
 import {
-  Edit,
   Plus,
   RefreshCw,
   Search,
@@ -482,12 +481,13 @@ export default function ACModelsPage() {
                   return (
                     <TableRow
                       key={m.id}
-                      className={`hover:bg-muted/40 ${
+                      className={`hover:bg-muted/40 cursor-pointer ${
                         selected ? 'bg-muted/30' : ''
                       }`}
+                      onClick={() => navigate(`/hvac-rating/models/edit/${m.id}`)}
                       data-testid={`ac-model-row-${m.id}`}
                     >
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selected}
                           onCheckedChange={() => toggleSelect(m.id)}
@@ -508,10 +508,7 @@ export default function ACModelsPage() {
                       <TableCell className="font-medium">
                         {m.brand_name}
                       </TableCell>
-                      <TableCell
-                        className="cursor-pointer"
-                        onClick={() => navigate(`/hvac-rating/models/edit/${m.id}`)}
-                      >
+                      <TableCell>
                         {m.inner_unit || <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell>{m.series || '—'}</TableCell>
@@ -532,18 +529,8 @@ export default function ACModelsPage() {
                           <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            asChild
-                            title="Редактировать"
-                          >
-                            <Link to={`/hvac-rating/models/edit/${m.id}`}>
-                              <Edit className="w-4 h-4" />
-                            </Link>
-                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"
