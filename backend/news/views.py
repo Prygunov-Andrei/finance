@@ -164,11 +164,13 @@ class NewsPostViewSet(viewsets.ModelViewSet):
             is_no_news_found_bool = is_no_news_found.lower() in ('true', '1', 'yes')
             queryset = queryset.filter(is_no_news_found=is_no_news_found_bool)
 
-        # Фильтрация по категории (M5.5 — chip-row в Ф7A HVAC news ленте)
+        # Фильтрация по категории (M5.5 — chip-row в Ф7A HVAC news ленте).
+        # Wave 9 hotfix: после снятия choices с NewsPost.category список валидных
+        # slug'ов берётся из динамического NewsCategory (не из legacy enum).
         category = self.request.query_params.get('category', None)
         if category:
-            valid_categories = {c[0] for c in NewsPost.Category.choices}
-            if category in valid_categories:
+            from .models import NewsCategory
+            if NewsCategory.objects.filter(slug=category, is_active=True).exists():
                 queryset = queryset.filter(category=category)
 
         # Фильтрация по star_rating (через запятую: ?star_rating=5,4)
