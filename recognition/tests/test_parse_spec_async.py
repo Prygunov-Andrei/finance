@@ -9,7 +9,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
-from app.api.parse import get_provider
+from app.deps import get_provider
 from app.main import app
 from app.providers.base import BaseLLMProvider
 from app.schemas.spec import PagesStats, SpecItem, SpecParseResponse
@@ -162,7 +162,14 @@ async def test_async_endpoint_returns_202_immediately(
     assert finished["status"] == "done"
     assert len(finished["items"]) == 2
     assert finished["pages_stats"]["total"] == 2
-    assert finished["llm_costs"] == {}
+    # E18-1: llm_costs = LLMCosts.model_dump(); buckets = None для тест-стаба
+    # без usage_log; total_usd = 0 (LLM не вызывался).
+    assert finished["llm_costs"] == {
+        "extract": None,
+        "multimodal": None,
+        "classify": None,
+        "total_usd": 0.0,
+    }
 
     # X-Callback-Token прокидывается в каждый callback request.
     for cb in captured_callbacks:

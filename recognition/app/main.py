@@ -11,24 +11,16 @@ from .api.parse import router as parse_router
 from .config import settings
 from .logging_setup import configure_logging
 from .middleware import request_id_middleware
-from .providers.openai_vision import OpenAIVisionProvider
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level)
-    provider = OpenAIVisionProvider()
-    app.state.provider = provider
+    # E18-1: singleton provider убран — теперь per-request через
+    # `app.deps.get_provider`. Прогрев connection pool потерян (как и сам pool
+    # между запросами); компромисс ради override через X-LLM-* headers.
     app.state.provider_name = f"openai-{settings.llm_model}"
-    # TD-01: прогрев TCP/TLS/HTTP/2 connection pool к OpenAI. Первый
-    # spec/invoice-parse запрос не платит 4-8с на handshake. Ошибка
-    # non-fatal — если нет API key / сети в тестах, сервис всё равно
-    # стартует.
-    await provider.warm_up()
-    try:
-        yield
-    finally:
-        await provider.aclose()
+    yield
 
 
 app = FastAPI(

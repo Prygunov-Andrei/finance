@@ -11,7 +11,7 @@ os.environ.setdefault("RECOGNITION_API_KEY", "test-key")
 os.environ.setdefault("LLM_API_KEY", "sk-test")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test")
 
-from app.api.parse import get_provider  # noqa: E402
+from app.deps import get_provider  # noqa: E402
 from app.main import app  # noqa: E402
 from app.providers.base import BaseLLMProvider  # noqa: E402
 

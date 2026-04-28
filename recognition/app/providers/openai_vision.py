@@ -27,17 +27,6 @@ from .base import BaseLLMProvider, TextCompletion
 
 logger = logging.getLogger(__name__)
 
-def _api_base() -> str:
-    return settings.openai_api_base.rstrip("/")
-
-
-def _chat_url() -> str:
-    return f"{_api_base()}/v1/chat/completions"
-
-
-def _models_url() -> str:
-    return f"{_api_base()}/v1/models"
-
 
 def _apply_max_tokens(payload: dict, max_tokens: int) -> None:
     """E15-06 it2 (A/B gpt-5.2): новые reasoning-модели gpt-5.x требуют
@@ -97,16 +86,47 @@ def _apply_thinking_mode(payload: dict) -> None:
 
 
 class OpenAIVisionProvider(BaseLLMProvider):
-    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        api_base: str | None = None,
+        extract_model: str | None = None,
+        multimodal_model: str | None = None,
+        classify_model: str | None = None,
+        vision_counter_enabled: bool | None = None,
+        multimodal_retry_enabled: bool | None = None,
+    ) -> None:
+        super().__init__()  # E18-1: усыновляем usage_log из BaseLLMProvider.
+        # E18-1: per-request override через X-LLM-* headers (см. app/deps.py).
+        # Все аргументы None → fallback на settings.* (backward-compat поведение).
         self.api_key = api_key if api_key is not None else settings.llm_api_key
+        self.api_base = (api_base or settings.openai_api_base).rstrip("/")
+        self.extract_model = extract_model or settings.llm_extract_model
+        self.multimodal_model = multimodal_model or settings.llm_multimodal_model
+        self.classify_model = classify_model or settings.llm_classify_model
+        self.vision_counter_enabled = (
+            vision_counter_enabled
+            if vision_counter_enabled is not None
+            else settings.llm_vision_counter_enabled
+        )
+        self.multimodal_retry_enabled = (
+            multimodal_retry_enabled
+            if multimodal_retry_enabled is not None
+            else settings.llm_multimodal_retry_enabled
+        )
         # `model` kwarg оставлен для backward-compat (старые тесты); в runtime
-        # text_complete/vision/multimodal читают settings.llm_*_model напрямую.
+        # text_complete/vision/multimodal читают self.*_model.
         self.model = model or settings.llm_model
         # TD-01: HTTP/2 + persistent connections. Ключевой вин — один TCP +
         # TLS handshake на все 9+ LLM-calls одного документа (вместо 9
         # независимых холодных соединений). `keepalive_expiry=300` держит
         # соединение живым 5 минут idle (совпадает с OpenAI prompt-cache
         # TTL — логично прогревать то что потом всё равно сбросит TLS).
+        # E18-1: per-request lifecycle — pool теряется на каждом /parse/spec
+        # запросе (новый AsyncClient). Это компромисс ради override через
+        # headers; на практике TLS handshake — миллисекунды, parse — секунды.
         self._client = httpx.AsyncClient(
             timeout=600.0,  # DeepSeek thinking high может занять 60-300сек/запрос
             http2=True,
@@ -116,6 +136,12 @@ class OpenAIVisionProvider(BaseLLMProvider):
                 keepalive_expiry=300,
             ),
         )
+
+    def _chat_url(self) -> str:
+        return f"{self.api_base}/v1/chat/completions"
+
+    def _models_url(self) -> str:
+        return f"{self.api_base}/v1/models"
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -131,7 +157,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         """
         try:
             resp = await self._client.get(
-                _models_url(),
+                self._models_url(),
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 timeout=10.0,
             )
@@ -171,7 +197,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         payload = {
-            "model": settings.llm_extract_model,
+            "model": self.extract_model,
             "response_format": {"type": "json_object"},
             "temperature": temperature,
             "messages": messages,
@@ -182,6 +208,13 @@ class OpenAIVisionProvider(BaseLLMProvider):
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
+        self._record_usage(
+            "extract",
+            self.extract_model,
+            int(usage.get("prompt_tokens") or 0),
+            int(usage.get("completion_tokens") or 0),
+            int(cached),
+        )
         return TextCompletion(
             content=str(data["choices"][0]["message"]["content"]),
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
@@ -201,7 +234,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         # Этот метод используется legacy Vision-route (classify_page /
         # extract_items) — на нём оставляем classify-модель (mini).
         payload = {
-            "model": settings.llm_classify_model,
+            "model": self.classify_model,
             "response_format": {"type": "json_object"},
             "messages": [
                 {
@@ -220,6 +253,15 @@ class OpenAIVisionProvider(BaseLLMProvider):
         _apply_thinking_mode(payload)
         _apply_determinism_params(payload)
         data = await self._post_with_retry(payload)
+        usage = data.get("usage") or {}
+        cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
+        self._record_usage(
+            "classify",
+            self.classify_model,
+            int(usage.get("prompt_tokens") or 0),
+            int(usage.get("completion_tokens") or 0),
+            int(cached),
+        )
         return str(data["choices"][0]["message"]["content"])
 
     async def multimodal_complete(
@@ -262,7 +304,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
             }
         )
         payload = {
-            "model": settings.llm_multimodal_model,
+            "model": self.multimodal_model,
             "response_format": {"type": "json_object"},
             "temperature": temperature,
             "messages": messages,
@@ -275,6 +317,13 @@ class OpenAIVisionProvider(BaseLLMProvider):
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
+        self._record_usage(
+            "multimodal",
+            self.multimodal_model,
+            int(usage.get("prompt_tokens") or 0),
+            int(usage.get("completion_tokens") or 0),
+            int(cached),
+        )
         return TextCompletion(
             content=str(data["choices"][0]["message"]["content"]),
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
@@ -310,7 +359,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
-                resp = await self._client.post(_chat_url(), headers=headers, json=payload)
+                resp = await self._client.post(self._chat_url(), headers=headers, json=payload)
             except httpx.HTTPError as e:
                 last_exc = e
                 logger.warning(

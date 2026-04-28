@@ -45,6 +45,7 @@ from .pdf_text import (
     extract_invoice_rows,
     has_usable_text_layer,
 )
+from .pricing import build_llm_costs
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,7 @@ class InvoiceParser:
                 state.pages_skipped,
                 len(state.errors),
             ),
+            llm_costs=build_llm_costs(getattr(self.provider, "usage_log", None)),
         )
 
     # ------------------------------------------------------------------
@@ -600,6 +602,7 @@ class InvoiceParser:
                 state.pages_skipped,
                 len(state.errors),
             ),
+            llm_costs=build_llm_costs(getattr(self.provider, "usage_log", None)),
         )
 
 

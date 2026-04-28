@@ -6,7 +6,7 @@ import json
 import fitz
 import pytest
 
-from app.api.parse import get_provider
+from app.deps import get_provider
 from app.main import app
 from app.providers.base import BaseLLMProvider
 from app.services.spec_parser import SpecParser

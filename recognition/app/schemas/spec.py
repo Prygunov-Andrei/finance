@@ -3,6 +3,43 @@
 from pydantic import BaseModel, Field
 
 
+class LLMCallCost(BaseModel):
+    """E18-1: суммарная стоимость одного типа LLM-call'ов (extract / multimodal /
+    classify) за один parse-запрос.
+
+    `cost_usd = None` — модели нет в pricing.json (например, кастомная локальная
+    LLM); UI отрисует «—» вместо $0 чтобы не вводить PO в заблуждение.
+    """
+
+    model: str
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    cached_tokens: int
+    cost_usd: float | None = None
+
+
+class LLMCosts(BaseModel):
+    """E18-1: разбивка стоимости одного parse-запроса по bucket'ам.
+
+    extract — column-aware text-only normalize (provider.text_complete).
+    multimodal — Phase 2 multimodal retry + vision_counter
+    (provider.multimodal_complete).
+    classify — legacy Vision-fallback (provider.vision_complete) на
+    страницах без text-layer / для классификации страниц.
+
+    Любой bucket = None если за этот запрос не было соответствующих
+    вызовов. `total_usd` — сумма cost_usd трёх bucket'ов (None трактуется
+    как 0 — мы не знаем сколько стоило, и хотим чтобы общая стоимость
+    оставалась реалистичной нижней оценкой).
+    """
+
+    extract: LLMCallCost | None = None
+    multimodal: LLMCallCost | None = None
+    classify: LLMCallCost | None = None
+    total_usd: float = 0.0
+
+
 class SpecItem(BaseModel):
     name: str
     model_name: str = ""
@@ -54,3 +91,6 @@ class SpecParseResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     pages_stats: PagesStats = Field(default_factory=PagesStats)
     pages_summary: list[PageSummary] = Field(default_factory=list)
+    # E18-1: разбивка стоимости LLM-вызовов за этот запрос. Pricing —
+    # `recognition/app/pricing.json`. Backend сохраняет в ImportLog.cost_usd.
+    llm_costs: LLMCosts = Field(default_factory=LLMCosts)

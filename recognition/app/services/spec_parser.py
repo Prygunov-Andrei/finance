@@ -32,6 +32,7 @@ from .pdf_text import (
     has_usable_text_layer,
     parse_page_items,
 )
+from .pricing import build_llm_costs
 from .spec_normalizer import (
     LLMNormalizationError,
     NormalizedItem,
@@ -755,6 +756,7 @@ class SpecParser:
                 skipped=state.pages_skipped,
                 error=len(state.errors),
             ),
+            llm_costs=build_llm_costs(getattr(self.provider, "usage_log", None)),
         )
 
     async def _process_page(self, doc: fitz.Document, page_num: int) -> None:
@@ -1113,6 +1115,7 @@ class SpecParser:
                 error=len(state.errors),
             ),
             pages_summary=sorted(state.pages_summary, key=lambda p: p.page),
+            llm_costs=build_llm_costs(getattr(self.provider, "usage_log", None)),
         )
 
 

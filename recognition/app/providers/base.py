@@ -24,7 +24,48 @@ class TextCompletion:
     cached_tokens: int = 0
 
 
+@dataclass
+class UsageEntry:
+    """E18-1: единичная запись в usage_log провайдера. Bucket задаёт тип
+    LLM-вызова — extract (text-only normalize), multimodal (vision/multimodal
+    retry, vision_counter), classify (legacy Vision-fallback на сканах).
+
+    Parser в _finalize читает usage_log и группирует по bucket → строит
+    LLMCosts (см. schemas/spec.py).
+    """
+
+    bucket: str  # "extract" | "multimodal" | "classify"
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    cached_tokens: int = 0
+
+
 class BaseLLMProvider(ABC):
+    def __init__(self) -> None:
+        # E18-1: usage_log — list of UsageEntry, per-request lifecycle.
+        # Provider создаётся в `app/deps.get_provider` per-request, поэтому
+        # log изолирован между запросами (один parser = один provider).
+        self.usage_log: list[UsageEntry] = []
+
+    def _record_usage(
+        self,
+        bucket: str,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cached_tokens: int = 0,
+    ) -> None:
+        self.usage_log.append(
+            UsageEntry(
+                bucket=bucket,
+                model=model,
+                prompt_tokens=int(prompt_tokens or 0),
+                completion_tokens=int(completion_tokens or 0),
+                cached_tokens=int(cached_tokens or 0),
+            )
+        )
+
     @abstractmethod
     async def vision_complete(self, image_b64: str, prompt: str) -> str:
         """Send image + prompt to LLM Vision, return text response."""

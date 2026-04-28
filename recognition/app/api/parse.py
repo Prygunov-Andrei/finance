@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from ..auth import verify_api_key
 from ..config import settings
+from ..deps import get_provider
 from ..providers.base import BaseLLMProvider
 from ..schemas.invoice import InvoiceParseResponse
 from ..schemas.probe import ProbeResponse
@@ -36,13 +37,6 @@ PROBE_TIMEOUT_SECONDS = 10
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def get_provider(request: Request) -> BaseLLMProvider:
-    provider = getattr(request.app.state, "provider", None)
-    if provider is None:
-        raise RuntimeError("LLM provider not initialized — lifespan not run")
-    return provider  # type: ignore[no-any-return]
 
 
 async def _read_pdf(file: UploadFile) -> tuple[bytes, str]:
@@ -207,7 +201,11 @@ async def parse_spec(
 ) -> SpecParseResponse:
     content, filename = await _read_pdf(file)
     parser = SpecParser(provider)
-    result = await _run_with_timeout(parser, content, filename, "spec_parse")
+    try:
+        result = await _run_with_timeout(parser, content, filename, "spec_parse")
+    finally:
+        # E18-1: provider per-request — закрываем httpx pool после ответа.
+        await provider.aclose()
     assert isinstance(result, SpecParseResponse)
     _log_done("spec", filename, result)
     return result
@@ -221,7 +219,10 @@ async def parse_invoice(
 ) -> InvoiceParseResponse:
     content, filename = await _read_pdf(file)
     parser = InvoiceParser(provider)
-    result = await _run_with_timeout(parser, content, filename, "invoice_parse")
+    try:
+        result = await _run_with_timeout(parser, content, filename, "invoice_parse")
+    finally:
+        await provider.aclose()
     assert isinstance(result, InvoiceParseResponse)
     _log_done("invoice", filename, result)
     return result
@@ -235,7 +236,10 @@ async def parse_quote(
 ) -> QuoteParseResponse:
     content, filename = await _read_pdf(file)
     parser = QuoteParser(provider)
-    result = await _run_with_timeout(parser, content, filename, "quote_parse")
+    try:
+        result = await _run_with_timeout(parser, content, filename, "quote_parse")
+    finally:
+        await provider.aclose()
     assert isinstance(result, QuoteParseResponse)
     _log_done("quote", filename, result)
     return result
@@ -405,8 +409,9 @@ async def _run_async_spec_job(
             filename=filename,
             on_page_done=on_page_done,
         )
-        # llm_costs пока пусто — добавится в E18-1, когда LLMProfile.pricing
-        # будет считать стоимость по usage. Сейчас просто {} placeholder.
+        # E18-1: llm_costs построены в SpecParser._finalize по
+        # provider.usage_log. Backend (E19 RecognitionJob.llm_costs JSONB)
+        # сохраняет payload как есть.
         await send_callback(
             "finished",
             {
@@ -415,7 +420,7 @@ async def _run_async_spec_job(
                 "pages_stats": result.pages_stats.model_dump(),
                 "pages_summary": [p.model_dump() for p in result.pages_summary],
                 "errors": result.errors,
-                "llm_costs": {},
+                "llm_costs": result.llm_costs.model_dump(),
             },
         )
         logger.info(
@@ -448,4 +453,9 @@ async def _run_async_spec_job(
             {"error": str(e), "code": "internal_error"},
         )
     finally:
+        # E18-1: provider per-request — фоновая задача владеет lifecycle.
+        try:
+            await provider.aclose()
+        except Exception:  # pragma: no cover — defensive
+            pass
         await job_registry.cleanup(job_id)

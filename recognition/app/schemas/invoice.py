@@ -14,7 +14,7 @@ E16 it1 — hybrid pipeline для счетов поставщиков:
 
 from pydantic import BaseModel, Field
 
-from .spec import PagesStats
+from .spec import LLMCosts, PagesStats
 
 
 class InvoiceItem(BaseModel):
@@ -80,3 +80,5 @@ class InvoiceParseResponse(BaseModel):
     invoice_meta: InvoiceMeta = Field(default_factory=InvoiceMeta)
     errors: list[str] = Field(default_factory=list)
     pages_stats: PagesStats = Field(default_factory=PagesStats)
+    # E18-1: см. SpecParseResponse.llm_costs.
+    llm_costs: LLMCosts = Field(default_factory=LLMCosts)
