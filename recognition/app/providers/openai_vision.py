@@ -48,6 +48,22 @@ def _apply_max_tokens(payload: dict, max_tokens: int) -> None:
         payload["max_tokens"] = max_tokens
 
 
+def _apply_determinism_params(payload: dict) -> None:
+    """TD-04: добавить seed + top_p в payload для run-to-run детерминизма.
+
+    OpenAI/DeepSeek поддерживают `seed: int` (deterministic completions при
+    одинаковых params) и `top_p: float` (nucleus sampling). С temperature=0 +
+    top_p=0 модель выбирает greedy лучший token; seed закрепляет tie-breaking
+    в случае равных logprobs.
+
+    DeepSeek thinking_mode=enabled может игнорировать seed (CoT-стохастика
+    внутри reasoning_content). Это known limitation — см.
+    docs/recognition/known-issues.md.
+    """
+    payload["seed"] = int(settings.llm_seed)
+    payload["top_p"] = float(settings.llm_top_p)
+
+
 def _apply_thinking_mode(payload: dict) -> None:
     """DeepSeek V4 thinking control (https://api-docs.deepseek.com/guides/thinking_mode).
 
@@ -156,6 +172,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         }
         _apply_max_tokens(payload, max_tokens or settings.llm_max_tokens)
         _apply_thinking_mode(payload)
+        _apply_determinism_params(payload)
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
@@ -195,6 +212,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
         }
         _apply_max_tokens(payload, settings.llm_max_tokens)
         _apply_thinking_mode(payload)
+        _apply_determinism_params(payload)
         data = await self._post_with_retry(payload)
         return str(data["choices"][0]["message"]["content"])
 
@@ -247,6 +265,7 @@ class OpenAIVisionProvider(BaseLLMProvider):
             payload, max_tokens or settings.llm_normalize_max_tokens
         )
         _apply_thinking_mode(payload)
+        _apply_determinism_params(payload)
         data = await self._post_with_retry(payload)
         usage = data.get("usage") or {}
         cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
