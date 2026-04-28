@@ -75,34 +75,28 @@ class LLMProfileViewSet(viewsets.ModelViewSet):
             )
         return Response(LLMProfileSerializer(profile).data)
 
-    @action(detail=False, methods=["post"], url_path="test-connection")
-    def test_connection(self, request: Request) -> Response:
-        """Проверить connectivity к base_url + api_key.
+    @staticmethod
+    def _perform_test(base_url: str, api_key: str) -> dict:
+        """Дёрнуть base_url/v1/models с Bearer auth, вернуть LLMProfileTestResult dict.
 
-        Body: {"base_url": "...", "api_key": "..."}.
-        Делает GET base_url/v1/models с Bearer auth (OpenAI-compat).
-
-        Контракт frontend: LLMProfileTestResult = {ok, status_code?, models?, error?}.
-        Сетевые ошибки/таймауты возвращаются как 200 + {ok: false, error: "..."}
-        чтобы UI показал понятный message без HTTP-error toast.
+        Сетевые ошибки/таймауты → {ok: false, error: "..."} (HTTP 200 наружу),
+        чтобы UI показал понятный toast без HTTP-error.
         """
-        base = (request.data.get("base_url") or "").rstrip("/")
-        key = request.data.get("api_key") or ""
-        if not base or not key:
-            return Response(
-                {"ok": False, "error": "base_url и api_key обязательны"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        base = (base_url or "").rstrip("/")
+        if not base or not api_key:
+            return {"ok": False, "error": "base_url и api_key обязательны"}
         url = f"{base}/v1/models"
         try:
             with httpx.Client(timeout=10.0) as client:
-                resp = client.get(url, headers={"Authorization": f"Bearer {key}"})
+                resp = client.get(
+                    url, headers={"Authorization": f"Bearer {api_key}"}
+                )
         except httpx.HTTPError as exc:
             logger.info(
                 "llm_profiles test_connection transport error",
                 extra={"base_url": base, "error": str(exc)[:200]},
             )
-            return Response({"ok": False, "error": f"Соединение не установлено: {exc}"})
+            return {"ok": False, "error": f"Соединение не установлено: {exc}"}
 
         models: list[str] = []
         if resp.status_code == 200:
@@ -117,17 +111,62 @@ class LLMProfileViewSet(viewsets.ModelViewSet):
                         ][:50]
             except ValueError:
                 pass
+        return {
+            "ok": resp.status_code == 200,
+            "status_code": resp.status_code,
+            "models": models or None,
+            "error": None
+            if resp.status_code == 200
+            else f"HTTP {resp.status_code}: {resp.text[:200]}",
+        }
 
-        return Response(
-            {
-                "ok": resp.status_code == 200,
-                "status_code": resp.status_code,
-                "models": models or None,
-                "error": None
-                if resp.status_code == 200
-                else f"HTTP {resp.status_code}: {resp.text[:200]}",
-            }
-        )
+    @action(detail=False, methods=["post"], url_path="test-connection")
+    def test_connection(self, request: Request) -> Response:
+        """Проверить connectivity к base_url + api_key.
+
+        Body: {"base_url": "...", "api_key": "..."}. Используется в форме CREATE
+        и в EDIT когда пользователь ввёл новый api_key.
+
+        Контракт frontend: LLMProfileTestResult = {ok, status_code?, models?, error?}.
+        """
+        base = request.data.get("base_url") or ""
+        key = request.data.get("api_key") or ""
+        if not base or not key:
+            return Response(
+                {"ok": False, "error": "base_url и api_key обязательны"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(self._perform_test(base, key))
+
+    @action(detail=True, methods=["post"], url_path="test-connection")
+    def test_connection_existing(
+        self, request: Request, pk: str | None = None
+    ) -> Response:
+        """TD-05: Проверить connectivity для уже сохранённого профиля.
+
+        Декриптует `api_key` из БД, дёргает тот же `_perform_test`. Используется
+        фронтом в EDIT-mode когда поле api_key пустое (security — реальный ключ
+        не показывается). Без этого endpoint'а кнопка «Тест соединения» в edit
+        была disabled и выглядела сломанной.
+        """
+        profile = self.get_object()
+        try:
+            api_key = profile.get_api_key()
+        except Exception as exc:  # noqa: BLE001 — любая decrypt failure → понятный error UI
+            logger.warning(
+                "test_connection_existing decrypt failed",
+                extra={"profile_id": profile.id, "error": str(exc)[:200]},
+            )
+            return Response(
+                {
+                    "ok": False,
+                    "error": (
+                        "Не удалось расшифровать api_key (LLM_PROFILE_ENCRYPTION_KEY"
+                        " изменился?). Введите ключ заново и сохраните."
+                    ),
+                }
+            )
+        return Response(self._perform_test(profile.base_url, api_key))
 
 
 class ImportLogCursorPagination(CursorPagination):

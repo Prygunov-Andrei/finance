@@ -234,3 +234,56 @@ def test_test_connection_missing_fields(client):
         format="json",
     )
     assert resp.status_code == 400
+
+
+# TD-05: test-connection-existing — для edit-mode UI без введённого api_key.
+
+
+@pytest.mark.django_db
+def test_test_connection_existing_uses_decrypted_key(client, profile):
+    """detail=True endpoint декриптует api_key из БД и проксирует на /v1/models.
+
+    UI в edit-mode дёргает этот URL когда поле api_key пустое (security — реальный
+    ключ не показывается в форме). Без этого endpoint'а кнопка «Тест соединения»
+    в edit была disabled.
+    """
+    fake_response = httpx.Response(
+        200,
+        json={"data": [{"id": "gpt-4o"}]},
+        request=httpx.Request("GET", "https://api.openai.com/v1/models"),
+    )
+
+    captured: dict = {}
+
+    def _capture(self, url, headers=None, **kwargs):  # type: ignore[no-untyped-def]
+        captured["url"] = url
+        captured["headers"] = headers
+        return fake_response
+
+    with patch("httpx.Client.get", _capture):
+        resp = client.post(
+            f"/api/v1/llm-profiles/{profile.id}/test-connection/",
+            {},
+            format="json",
+        )
+    assert resp.status_code == 200, resp.content
+    data = resp.json()
+    assert data["ok"] is True
+    # Бэкенд декриптовал api_key из БД (не передан в request).
+    assert captured["headers"]["Authorization"] == "Bearer sk-existing-1234"
+    assert captured["url"].endswith("/v1/models")
+
+
+@pytest.mark.django_db
+def test_test_connection_existing_decrypt_failure(client, profile, settings):
+    """Если LLM_PROFILE_ENCRYPTION_KEY поменяли — InvalidToken → понятный error."""
+    settings.LLM_PROFILE_ENCRYPTION_KEY = Fernet.generate_key().decode()
+    resp = client.post(
+        f"/api/v1/llm-profiles/{profile.id}/test-connection/",
+        {},
+        format="json",
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is False
+    assert "расшифровать" in data["error"]

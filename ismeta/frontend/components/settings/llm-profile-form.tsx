@@ -122,11 +122,20 @@ export function LlmProfileForm({
   };
 
   const testConnection = useMutation({
-    mutationFn: () =>
-      llmProfileApi.testConnection(
+    mutationFn: () => {
+      // TD-05: в edit-mode поле api_key пустое (security — реальный ключ не
+      // показывается). Чтобы кнопка работала без повторного ввода ключа, дёргаем
+      // /llm-profiles/{id}/test-connection/ — backend декриптует ключ из БД.
+      // Если пользователь ввёл новый ключ — используем стандартный endpoint
+      // чтобы протестировать введённый, а не сохранённый.
+      if (isEdit && profile && !state.api_key.trim()) {
+        return llmProfileApi.testConnectionExisting(profile.id, workspaceId);
+      }
+      return llmProfileApi.testConnection(
         { base_url: state.base_url, api_key: state.api_key },
         workspaceId,
-      ),
+      );
+    },
     onSuccess: (res) => {
       if (res.ok) {
         setTestStatus({ kind: "ok", models: res.models ?? [] });
@@ -191,10 +200,12 @@ export function LlmProfileForm({
   if (!isEdit && !state.api_key.trim()) errors.api_key = "API key обязателен";
 
   const canSubmit = Object.keys(errors).length === 0 && !submit.isPending;
+  // TD-05: в edit-mode разрешаем тест существующего профиля без введённого
+  // api_key (backend декриптует из БД). В create-mode api_key обязателен.
   const canTest =
     state.base_url.trim() !== "" &&
-    state.api_key.trim() !== "" &&
-    !testConnection.isPending;
+    !testConnection.isPending &&
+    (Boolean(isEdit && profile) || state.api_key.trim() !== "");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
