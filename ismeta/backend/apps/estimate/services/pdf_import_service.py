@@ -47,15 +47,26 @@ class PDFParseError(Exception):
         self.status_code = status_code
 
 
-def parse_pdf_via_recognition(pdf_bytes: bytes, filename: str) -> dict:
+def parse_pdf_via_recognition(
+    pdf_bytes: bytes,
+    filename: str,
+    extra_headers: dict[str, str] | None = None,
+) -> dict:
     """Вызывает Recognition /v1/parse/spec и переводит ответ в легаси формат.
 
-    Returns: {items, status, errors, pages_total, pages_processed, pages_skipped}
+    Returns: {items, status, errors, pages_total, pages_processed, pages_skipped,
+              pages_summary, llm_costs}
     Raises: PDFParseError при любых ошибках клиента (401/413/415/422/500/502/таймаут).
+
+    E18-2: extra_headers содержит X-LLM-* override для per-request выбора
+    провайдера/модели (см. apps.llm_profiles.proxy.build_llm_headers).
+    llm_costs приходит из recognition (E18-1) — пробрасывается в ImportLog.
     """
     client = RecognitionClient()
     try:
-        response = async_to_sync(client.parse_spec)(pdf_bytes, filename)
+        response = async_to_sync(client.parse_spec)(
+            pdf_bytes, filename, extra_headers=extra_headers
+        )
     except RecognitionClientError as e:
         logger.warning(
             "recognition parse_spec failed: code=%s status=%s", e.code, e.status_code
@@ -75,6 +86,7 @@ def parse_pdf_via_recognition(pdf_bytes: bytes, filename: str) -> dict:
         "pages_processed": stats.get("processed", 0),
         "pages_skipped": stats.get("skipped", 0),
         "pages_summary": response.get("pages_summary", []),
+        "llm_costs": response.get("llm_costs") or {},
     }
 
 

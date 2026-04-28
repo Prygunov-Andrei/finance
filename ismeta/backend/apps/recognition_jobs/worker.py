@@ -63,11 +63,35 @@ def _mark_failed(job_id, message: str) -> None:
     )
 
 
+def _build_llm_headers_for_job(job: RecognitionJob) -> dict[str, str]:
+    """E18-2: lookup LLMProfile по job.profile_id и построить X-LLM-* headers.
+
+    Если profile_id пуст или профиль удалён — возвращаем пустой dict
+    (recognition использует свои env-defaults).
+    """
+    if not job.profile_id:
+        return {}
+    from apps.llm_profiles.models import LLMProfile
+    from apps.llm_profiles.proxy import build_llm_headers
+
+    profile = LLMProfile.objects.filter(id=job.profile_id).first()
+    if not profile:
+        logger.warning(
+            "recognition_jobs profile_not_found",
+            extra={"job_id": str(job.id), "profile_id": job.profile_id},
+        )
+        return {}
+    return build_llm_headers(profile)
+
+
 async def _post_to_recognition(job: RecognitionJob) -> tuple[int | None, str]:
     """Чистый HTTP-call на recognition /v1/parse/spec/async.
 
     Возвращает (status_code, body|error). status_code=None при transport error.
     Без DB-операций — чтобы можно было тестировать unit'ом без транзакций.
+
+    E18-2: если у job есть profile_id — пробрасываем X-LLM-* headers
+    (api_key расшифровывается из LLMProfile.api_key_encrypted).
     """
     callback_url = (
         f"{settings.BACKEND_INTERNAL_URL.rstrip('/')}"
@@ -79,8 +103,8 @@ async def _post_to_recognition(job: RecognitionJob) -> tuple[int | None, str]:
         "X-Job-Id": str(job.id),
         "X-Callback-Token": job.cancellation_token,
     }
-    # E18 (LLM-профили) ещё не сделан — X-LLM-* headers пока НЕ передаём.
-    # Recognition использует defaults из своего .env (DeepSeek V4-Pro thinking high).
+    llm_headers = await sync_to_async(_build_llm_headers_for_job)(job)
+    headers.update(llm_headers)
     files = {
         "file": (
             job.file_name,

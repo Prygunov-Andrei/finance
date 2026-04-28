@@ -218,4 +218,33 @@ class RecognitionJobViewSet(viewsets.ReadOnlyModelViewSet):
         job.completed_at = timezone.now()
         job.save()
 
+        # E18-2: ImportLog после успешного apply (status=done).
+        # Пишем только при успехе — failed apply не должен порождать
+        # «успешный» лог cost'а. Ошибки создания лога не должны ломать job.
+        if job.status == RecognitionJob.STATUS_DONE:
+            try:
+                from apps.llm_profiles.models import ImportLog
+
+                total_usd = (
+                    job.llm_costs.get("total_usd")
+                    if isinstance(job.llm_costs, dict)
+                    else None
+                )
+                ImportLog.objects.create(
+                    estimate_id=job.estimate_id,
+                    file_type=job.file_type or "pdf",
+                    file_name=job.file_name or "",
+                    profile_id=job.profile_id,
+                    cost_usd=total_usd,
+                    items_created=len(items),
+                    pages_processed=job.pages_done or 0,
+                    llm_metadata=job.llm_costs or {},
+                    created_by=job.created_by,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "recognition_jobs import_log create failed",
+                    extra={"job_id": str(job.id), "error": str(exc)},
+                )
+
 

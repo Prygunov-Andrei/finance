@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "apps.workspace",
     "apps.estimate",
     "apps.llm",
+    "apps.llm_profiles",
     "apps.agent",
     "apps.integration",
     "apps.recognition_jobs",
@@ -161,6 +162,12 @@ ISMETA_LLM_PROVIDER_DEFAULT = config("LLM_PROVIDER_DEFAULT", default="openai")
 ISMETA_LLM_MODE = config("ISMETA_LLM_MODE", default=config("LLM_MODE", default="real"))  # real | cassette | mock
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 ISMETA_KNOWLEDGE_MD_ROOT = config("KNOWLEDGE_MD_ROOT", default=str(BASE_DIR / "data/knowledge"))
+
+# ==== LLM Profiles (E18-2) ====
+# Fernet key для шифрования api_key в LLMProfile. Генерация:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Без ключа миграции применяются, но encrypt/decrypt бросает ImproperlyConfigured.
+LLM_PROFILE_ENCRYPTION_KEY = config("LLM_PROFILE_ENCRYPTION_KEY", default="")
 
 # ==== Recognition Service (E15.02b) ====
 # standalone PDF-parsing microservice (recognition/)

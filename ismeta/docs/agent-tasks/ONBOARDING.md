@@ -111,6 +111,34 @@ env -u OPENAI_API_KEY docker compose -f ismeta/docker-compose.yml up -d --force-
 
 Иначе контейнер может взять старый ключ (отозван после пополнения баланса 2026-04-23).
 
+## 10b. LLM Profiles (E18-2) — генерация ключа Fernet
+
+После E18-2 в БД лежит модель `LLMProfile` с зашифрованным `api_key`. Для шифрования
+требуется `LLM_PROFILE_ENCRYPTION_KEY` в `ismeta/.env` (gitignored).
+
+Генерация (один раз на инсталляцию):
+
+```bash
+docker exec ismeta-backend python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Полученное значение положить в `ismeta/.env` под ключом `LLM_PROFILE_ENCRYPTION_KEY=...`,
+затем `docker compose restart ismeta-backend recognition-worker`.
+
+**ВАЖНО:** смена ключа делает ВСЕ существующие зашифрованные `api_key_encrypted` в
+таблице `llm_profile` нечитаемыми (CRUD `LLMProfile` возвращает 500). Для rotate
+сначала создать новые профили на новом ключе, удалить старые.
+
+API-эндпоинты (контракт frontend, `/api/v1`):
+- `GET/POST /llm-profiles/`
+- `PATCH/DELETE /llm-profiles/{id}/`
+- `POST /llm-profiles/{id}/set-default/`
+- `GET /llm-profiles/default/`
+- `POST /llm-profiles/test-connection/` — проверяет `GET base_url/v1/models` с переданным ключом
+
+Использование в `import-pdf`: FormData принимает `llm_profile_id` (опционально). Без
+него recognition использует defaults из своего `.env`.
+
 ## 11. Полезные команды
 
 ```bash

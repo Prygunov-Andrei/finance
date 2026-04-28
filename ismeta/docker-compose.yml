@@ -72,6 +72,8 @@ services:
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       RECOGNITION_URL: ${RECOGNITION_URL:-http://recognition:8003}
       RECOGNITION_API_KEY: ${RECOGNITION_API_KEY:-dev-recognition-key}
+      # E18-2: Fernet-ключ для шифрования LLMProfile.api_key (см. .env.example).
+      LLM_PROFILE_ENCRYPTION_KEY: ${LLM_PROFILE_ENCRYPTION_KEY:-}
     ports:
       - "${BACKEND_PORT:-8001}:8000"
     volumes:
@@ -115,6 +117,8 @@ services:
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       RECOGNITION_URL: ${RECOGNITION_URL:-http://recognition:8003}
       RECOGNITION_API_KEY: ${RECOGNITION_API_KEY:-dev-recognition-key}
+      # E18-2: Fernet-ключ для шифрования LLMProfile.api_key (см. .env.example).
+      LLM_PROFILE_ENCRYPTION_KEY: ${LLM_PROFILE_ENCRYPTION_KEY:-}
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://ismeta-backend:8000}
       RECOGNITION_MAX_PARALLEL_JOBS: ${RECOGNITION_MAX_PARALLEL_JOBS:-2}
       RECOGNITION_WORKER_POLL_INTERVAL: ${RECOGNITION_WORKER_POLL_INTERVAL:-2.0}

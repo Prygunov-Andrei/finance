@@ -63,14 +63,35 @@ class RecognitionClient:
         """
         return await self._post("/v1/probe", pdf_bytes, filename, timeout=15.0)
 
-    async def parse_spec(self, pdf_bytes: bytes, filename: str) -> dict[str, Any]:
-        return await self._post("/v1/parse/spec", pdf_bytes, filename)
+    async def parse_spec(
+        self,
+        pdf_bytes: bytes,
+        filename: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/v1/parse/spec", pdf_bytes, filename, extra_headers=extra_headers
+        )
 
-    async def parse_invoice(self, pdf_bytes: bytes, filename: str) -> dict[str, Any]:
-        return await self._post("/v1/parse/invoice", pdf_bytes, filename)
+    async def parse_invoice(
+        self,
+        pdf_bytes: bytes,
+        filename: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/v1/parse/invoice", pdf_bytes, filename, extra_headers=extra_headers
+        )
 
-    async def parse_quote(self, pdf_bytes: bytes, filename: str) -> dict[str, Any]:
-        return await self._post("/v1/parse/quote", pdf_bytes, filename)
+    async def parse_quote(
+        self,
+        pdf_bytes: bytes,
+        filename: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        return await self._post(
+            "/v1/parse/quote", pdf_bytes, filename, extra_headers=extra_headers
+        )
 
     async def healthz(self) -> dict[str, Any]:
         """Liveness check, no auth required."""
@@ -91,10 +112,19 @@ class RecognitionClient:
     # ------------------------------------------------------------------
 
     async def _post(
-        self, path: str, pdf_bytes: bytes, filename: str, timeout: float | None = None
+        self,
+        path: str,
+        pdf_bytes: bytes,
+        filename: str,
+        timeout: float | None = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers: dict[str, str] = {"X-API-Key": self.api_key}
+        # E18-2: X-LLM-* override headers — recognition использует их вместо
+        # своих env-defaults для per-request переключения провайдера.
+        if extra_headers:
+            headers.update(extra_headers)
         files = {"file": (filename, pdf_bytes, "application/pdf")}
         effective_timeout = timeout if timeout is not None else self.timeout
 

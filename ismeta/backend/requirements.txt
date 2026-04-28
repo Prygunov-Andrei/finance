@@ -21,6 +21,7 @@ httpx>=0.27
 
 # Auth
 PyJWT>=2.8
+cryptography>=42.0  # E18-2: Fernet encryption для LLMProfile.api_key
 
 # Validation
 pydantic>=2.7
