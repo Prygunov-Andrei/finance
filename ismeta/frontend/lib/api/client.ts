@@ -487,8 +487,8 @@ export const llmProfileApi = {
       { method: "POST", workspaceId },
     ),
 
-  // Тест соединения. Делается до сохранения профиля — backend проксирует на
-  // recognition `GET /v1/models` через переданные base_url+api_key.
+  // Тест соединения нового профиля (форма CREATE или EDIT с введённым api_key).
+  // Backend дёргает base_url/v1/models с Bearer auth.
   testConnection: (
     data: { base_url: string; api_key: string },
     workspaceId: string,
@@ -498,4 +498,14 @@ export const llmProfileApi = {
       body: data as unknown as Record<string, unknown>,
       workspaceId,
     }),
+
+  // TD-05: Тест соединения существующего профиля по id.
+  // Backend декриптует api_key из БД и дёргает тот же `/v1/models` test.
+  // Используется в EDIT-mode когда поле api_key пустое (UX: security — реальный
+  // ключ не показывается, поэтому без этого endpoint'а кнопка теста была disabled).
+  testConnectionExisting: (id: number, workspaceId: string) =>
+    apiFetch<LLMProfileTestResult>(
+      `/llm-profiles/${id}/test-connection/`,
+      { method: "POST", workspaceId },
+    ),
 };
