@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { PdfImportDialog } from "@/components/estimate/pdf-import-dialog";
-import type { RecognitionJob } from "@/lib/api/types";
+import type { LLMProfile, RecognitionJob } from "@/lib/api/types";
 
 // Sonner мокаем чтобы получать вызовы тостов в spy.
 const toastMock = vi.hoisted(() => ({
@@ -55,6 +55,36 @@ function jsonResponse(data: unknown, init: ResponseInit = {}) {
   });
 }
 
+function makeProfile(overrides: Partial<LLMProfile> = {}): LLMProfile {
+  return {
+    id: 1,
+    name: "OpenAI",
+    base_url: "https://api.openai.com",
+    api_key_preview: "***1234",
+    extract_model: "gpt-4o-mini",
+    multimodal_model: "",
+    classify_model: "",
+    vision_supported: true,
+    is_default: true,
+    created_at: "",
+    updated_at: "",
+    ...overrides,
+  };
+}
+
+// Универсальный fetch handler, который сначала отдаёт список профилей, а
+// затем — переданный response для upload-вызова.
+function makeFetchHandler(
+  profiles: LLMProfile[],
+  uploadResponse: Response,
+): ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: RequestInfo) => {
+    const u = String(url);
+    if (u.includes("/llm-profiles/")) return jsonResponse(profiles);
+    return uploadResponse;
+  });
+}
+
 function renderDialog(onOpenChange = vi.fn()) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -91,26 +121,45 @@ describe("PdfImportDialog (async)", () => {
     vi.unstubAllGlobals();
   });
 
+  function installFetch(
+    profiles: LLMProfile[],
+    uploadResponse: Response,
+  ): void {
+    fetchSpy = makeFetchHandler(profiles, uploadResponse);
+    vi.stubGlobal("fetch", fetchSpy);
+  }
+
   it("submits with ?async=true and immediately closes the dialog", async () => {
-    fetchSpy.mockResolvedValueOnce(jsonResponse(makeJob(), { status: 202 }));
+    installFetch([makeProfile()], jsonResponse(makeJob(), { status: 202 }));
 
     const { onOpenChange } = renderDialog();
 
+    // Ждём пока подтянутся профили (preselected default).
+    await screen.findByTestId("pdf-import-profile-select");
+
     selectFile();
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(String(url)).toMatch(/\/estimates\/e1\/import\/pdf\/\?async=true$/);
-    expect(init.method).toBe("POST");
-    expect(init.body).toBeInstanceOf(FormData);
+    await waitFor(() =>
+      expect(
+        fetchSpy.mock.calls.some(([u]) =>
+          /\/estimates\/e1\/import\/pdf\/\?async=true$/.test(String(u)),
+        ),
+      ).toBe(true),
+    );
+    const uploadCall = fetchSpy.mock.calls.find(([u]) =>
+      String(u).includes("import/pdf"),
+    )!;
+    expect(uploadCall[1].method).toBe("POST");
+    expect(uploadCall[1].body).toBeInstanceOf(FormData);
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
   it("shows «launched» toast with file name after successful submit", async () => {
-    fetchSpy.mockResolvedValueOnce(jsonResponse(makeJob(), { status: 202 }));
+    installFetch([makeProfile()], jsonResponse(makeJob(), { status: 202 }));
 
     renderDialog();
+    await screen.findByTestId("pdf-import-profile-select");
     selectFile("ОВ-2.pdf");
 
     await waitFor(() =>
@@ -121,18 +170,27 @@ describe("PdfImportDialog (async)", () => {
     );
   });
 
-  it("rejects non-PDF files locally without calling fetch", async () => {
+  it("rejects non-PDF files locally without calling upload endpoint", async () => {
+    installFetch([makeProfile()], jsonResponse(makeJob()));
+
     renderDialog();
+    await screen.findByTestId("pdf-import-profile-select");
+
     const input = screen.getByTestId("pdf-import-input") as HTMLInputElement;
     const file = new File(["junk"], "spec.txt", { type: "text/plain" });
     fireEvent.change(input, { target: { files: [file] } });
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(
+      fetchSpy.mock.calls.some(([u]) =>
+        String(u).includes("import/pdf"),
+      ),
+    ).toBe(false);
     expect(toastMock.toast.error).toHaveBeenCalledWith("Нужен файл .pdf");
   });
 
   it("shows error toast on backend failure and stays open", async () => {
-    fetchSpy.mockResolvedValueOnce(
+    installFetch(
+      [makeProfile()],
       new Response(JSON.stringify({ detail: "PDF слишком большой" }), {
         status: 413,
         headers: { "Content-Type": "application/json" },
@@ -140,6 +198,7 @@ describe("PdfImportDialog (async)", () => {
     );
 
     const { onOpenChange } = renderDialog();
+    await screen.findByTestId("pdf-import-profile-select");
     selectFile();
 
     await waitFor(() => expect(toastMock.toast.error).toHaveBeenCalled());

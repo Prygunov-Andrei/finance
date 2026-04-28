@@ -9,6 +9,9 @@ import type {
   EstimateListItem,
   EstimateSection,
   ExcelImportResult,
+  LLMProfile,
+  LLMProfileCreate,
+  LLMProfileTestResult,
   MaterialApplyResponse,
   MaterialMatchResult,
   MaterialMatchSession,
@@ -320,9 +323,15 @@ export const importApi = {
     );
   },
 
-  uploadPdf: (estimateId: UUID, file: File, workspaceId: string) => {
+  uploadPdf: (
+    estimateId: UUID,
+    file: File,
+    workspaceId: string,
+    profileId?: number | null,
+  ) => {
     const form = new FormData();
     form.append("file", file);
+    if (profileId != null) form.append("llm_profile_id", String(profileId));
     return apiFetch<PdfImportResult>(
       `/estimates/${estimateId}/import/pdf/`,
       {
@@ -335,9 +344,15 @@ export const importApi = {
 
   // E19: запускает background-распознавание. Возвращает 202 + RecognitionJob
   // в статусе "queued" сразу. Прогресс — через recognitionJobsApi.list polling.
-  uploadPdfAsync: (estimateId: UUID, file: File, workspaceId: string) => {
+  uploadPdfAsync: (
+    estimateId: UUID,
+    file: File,
+    workspaceId: string,
+    profileId?: number | null,
+  ) => {
     const form = new FormData();
     form.append("file", file);
+    if (profileId != null) form.append("llm_profile_id", String(profileId));
     return apiFetch<RecognitionJob>(
       `/estimates/${estimateId}/import/pdf/?async=true`,
       {
@@ -424,4 +439,63 @@ export const recognitionJobsApi = {
       `/recognition-jobs/${id}/cancel/`,
       { method: "POST", workspaceId },
     ),
+};
+
+// =============================================================================
+// E18: LLM-профили (глобальные, без workspace-scope в MVP)
+// =============================================================================
+//
+// Backend (E18-2) ещё не на main — методы работают против контракта из
+// ismeta/specs/16-llm-profiles.md. До мержа E18-2 запросы будут падать с 404,
+// тесты используют mock через vi.mock("@/lib/api/client").
+
+export const llmProfileApi = {
+  list: (workspaceId: string) =>
+    apiFetch<LLMProfile[]>(`/llm-profiles/`, { workspaceId }),
+
+  retrieve: (id: number, workspaceId: string) =>
+    apiFetch<LLMProfile>(`/llm-profiles/${id}/`, { workspaceId }),
+
+  create: (data: LLMProfileCreate, workspaceId: string) =>
+    apiFetch<LLMProfile>(`/llm-profiles/`, {
+      method: "POST",
+      body: data as unknown as Record<string, unknown>,
+      workspaceId,
+    }),
+
+  update: (
+    id: number,
+    data: Partial<LLMProfileCreate>,
+    workspaceId: string,
+  ) =>
+    apiFetch<LLMProfile>(`/llm-profiles/${id}/`, {
+      method: "PATCH",
+      body: data as unknown as Record<string, unknown>,
+      workspaceId,
+    }),
+
+  remove: (id: number, workspaceId: string) =>
+    apiFetch<void>(`/llm-profiles/${id}/`, {
+      method: "DELETE",
+      workspaceId,
+      expect: "none",
+    }),
+
+  setDefault: (id: number, workspaceId: string) =>
+    apiFetch<{ id: number; is_default: boolean }>(
+      `/llm-profiles/${id}/set-default/`,
+      { method: "POST", workspaceId },
+    ),
+
+  // Тест соединения. Делается до сохранения профиля — backend проксирует на
+  // recognition `GET /v1/models` через переданные base_url+api_key.
+  testConnection: (
+    data: { base_url: string; api_key: string },
+    workspaceId: string,
+  ) =>
+    apiFetch<LLMProfileTestResult>(`/llm-profiles/test-connection/`, {
+      method: "POST",
+      body: data as unknown as Record<string, unknown>,
+      workspaceId,
+    }),
 };

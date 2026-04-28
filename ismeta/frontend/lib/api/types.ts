@@ -281,6 +281,9 @@ export interface PdfImportResult {
   // pages_summary — покадровый отчёт с флагом suspicious=true когда vision-
   // counter видит позиций больше чем парсер. Optional: legacy backend без поля.
   pages_summary?: PageSummary[];
+  // E18: LLM-стоимость распознавания. Отсутствует если backend не прокидывает
+  // (старая версия без E18-1) — UI покажет «—».
+  llm_costs?: LLMCosts;
 }
 
 export interface PdfItem {
@@ -420,8 +423,32 @@ export interface RecognitionJobPageSummary {
   suspicious?: boolean;
 }
 
+// E18-1: per-call cost breakdown. Recognition отдаёт это поле в response
+// каждого parse-эндпоинта; backend проксирует в RecognitionJob.llm_costs и
+// в PdfImportResult.llm_costs.
+export interface LLMCallCost {
+  model: string;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cached_tokens: number;
+  cost_usd: number | null;
+}
+
+export interface LLMCosts {
+  extract: LLMCallCost | null;
+  multimodal: LLMCallCost | null;
+  classify: LLMCallCost | null;
+  total_usd: number;
+}
+
+// Backward compatibility: до полного раскатывания E18-1 backend может слать
+// усечённый payload. Поэтому в RecognitionJob ослабляем форму: либо новая
+// LLMCosts, либо старый легаси-снимок (только model + total_tokens).
 export interface RecognitionJobLlmCosts {
-  extract?: { model?: string; total_tokens?: number };
+  extract?: LLMCallCost | { model?: string; total_tokens?: number } | null;
+  multimodal?: LLMCallCost | null;
+  classify?: LLMCallCost | null;
   total_usd?: number;
 }
 
@@ -463,3 +490,41 @@ export const RECOGNITION_JOB_STATUS_LABELS: Record<RecognitionJobStatus, string>
   failed: "Ошибка",
   cancelled: "Отменено",
 };
+
+// =============================================================================
+// E18: LLM-профили
+// =============================================================================
+
+export interface LLMProfile {
+  id: number;
+  name: string;
+  base_url: string;
+  api_key_preview: string; // "***abcd"
+  extract_model: string;
+  multimodal_model: string;
+  classify_model: string;
+  vision_supported: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// При create/update отправляется plain api_key. Если пустой при update —
+// бэкенд не меняет существующий ключ.
+export interface LLMProfileCreate {
+  name: string;
+  base_url: string;
+  api_key: string;
+  extract_model: string;
+  multimodal_model?: string;
+  classify_model?: string;
+  vision_supported: boolean;
+  is_default?: boolean;
+}
+
+export interface LLMProfileTestResult {
+  ok: boolean;
+  status_code?: number;
+  models?: string[];
+  error?: string;
+}
