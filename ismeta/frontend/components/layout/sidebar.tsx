@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, Settings } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/estimates", label: "Сметы", icon: FileSpreadsheet },
+  { href: "/settings/llm", label: "Настройки", icon: Settings },
 ] as const;
 
 export function Sidebar() {
