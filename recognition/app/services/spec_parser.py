@@ -45,6 +45,7 @@ from .spec_postprocess import (
     _strip_duplicate_pos_prefix,
     _unbreak_dash_word,
     apply_no_qty_merge,
+    apply_p2_cosmetics,
     backfill_source_row_index,
     cap_sticky_name,
     cover_bbox_rows,
@@ -943,6 +944,9 @@ class SpecParser:
         # Spec-3 Class G/H: series suffix items («n=4сек.», «Ду15», «ф100»)
         # наследуют parent name от соседнего выше с тем же model_name.
         norm.items = inherit_series_parent(norm.items, rows)
+        # TD-04 P2 cosmetics — Class J/G/I/N/O. Финальный полировочный layer
+        # на готовых items (см. apply_p2_cosmetics docstring).
+        norm.items = apply_p2_cosmetics(norm.items)
         after = len(norm.items)
         if before != after:
             norm.warnings.append(

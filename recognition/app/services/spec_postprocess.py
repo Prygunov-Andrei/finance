@@ -59,6 +59,96 @@ def _unbreak_dash_word(text: str) -> str:
     return _WORD_BREAK_DASH_RE.sub(r"\1\2", text)
 
 
+# ---------------------------------------------------------------------------
+# TD-04 — P2 cosmetics (Class J/G/I/N/O из AUDIT-TRACKER)
+# ---------------------------------------------------------------------------
+
+# Class J — PUNCTUATION_DRIFT в КЛОП-моделях.
+# «КЛОП-2(90)-НО-700х500, МВ/S(220)-К» → «КЛОП-2(90)-НО-700х500-МВ/S(220)-К».
+# Запятая-пробел между размером и «МВ/S» / «MB/K» / etc — должна быть `-`
+# (фрагмент кода серии, не отдельный qualifier).
+_KLOP_DRIFT_RE = re.compile(
+    r"(КЛОП-\d+\([^)]+\)-(?:НО|НЗ)-[^\s,]+),\s*(М[ВB]/[SК])",
+    re.IGNORECASE,
+)
+
+
+def _fix_klop_punctuation_drift(model: str) -> str:
+    """Class J: КЛОП-...-700х500, МВ/S → КЛОП-...-700х500-МВ/S."""
+    if not model or "КЛОП" not in model.upper():
+        return model
+    return _KLOP_DRIFT_RE.sub(r"\1-\2", model)
+
+
+# Class G — TRAILING_HYPHEN: word-break без продолжения.
+# «...плёнкой каширо-» в финальном name — обрыв слова без следующей строки.
+# Удаляем висячий дефис (но НЕ дефис в середине: «КЛОП-2-90» сохраняется).
+_TRAILING_HYPHEN_RE = re.compile(r"(\S)-\s*$")
+
+
+def _trim_trailing_hyphen(name: str) -> str:
+    """Class G: «слово-» в конце → «слово» (обрыв без продолжения)."""
+    if not name:
+        return name
+    return _TRAILING_HYPHEN_RE.sub(r"\1", name)
+
+
+# Class I — MODEL_INJECTED_INTO_NAME: LLM дописывает «(модель: …)» в name,
+# дублируя model_name. Strip-аем в конце name'а если совпадает с model_name.
+def _strip_injected_model_suffix(name: str, model_name: str) -> str:
+    """Class I: «...установка ... (модель: RL/...)» → «...установка ...»."""
+    if not name or not model_name:
+        return name
+    cleaned = model_name.strip()
+    if not cleaned:
+        return name
+    pattern = re.compile(
+        rf"\s*\(модель:\s*{re.escape(cleaned)}\)\s*$",
+        re.IGNORECASE,
+    )
+    return pattern.sub("", name).rstrip()
+
+
+# Class N — DIGIT_DUPLICATION: «6400/6400» → LLM выдала «6400/64000» (последняя
+# цифра дублируется). Pattern: одинаковое число до и после `/`, но второе
+# число имеет ровно одну лишнюю цифру в хвосте, дублирующую последнюю.
+_DIGIT_DUP_RE = re.compile(r"(?<!\d)(\d{3,})/(\d{4,})(?!\d)")
+
+
+def _fix_digit_duplication(name: str) -> str:
+    """Class N: «6400/64000» → «6400/6400» если 1-е == 2-е без последней цифры
+    AND последняя цифра 2-го == последняя 1-го (явный дубль)."""
+    if not name or "/" not in name:
+        return name
+
+    def _repl(m: re.Match[str]) -> str:
+        first, second = m.group(1), m.group(2)
+        if len(second) != len(first) + 1:
+            return m.group(0)
+        if second[:-1] != first:
+            return m.group(0)
+        if second[-1] != first[-1]:
+            return m.group(0)
+        return f"{first}/{first}"
+
+    return _DIGIT_DUP_RE.sub(_repl, name)
+
+
+# Class O — MODEL_TRAILING_DASH_NO_DIGITS: «КЛОП-2(90)-НО-1700х» (нет числа
+# после `х`/`x`/`Ø`). Маркируем флагом model_truncated; UI показывает иконку.
+_MODEL_TRUNCATED_RE = re.compile(r"(?:[-]|^)(?:Ø|[xх])\s*$|(?<=\d)[xх]\s*$")
+
+
+def _is_model_truncated_no_digits(model: str) -> bool:
+    """Class O: model заканчивается на размер-разделитель без числа."""
+    if not model:
+        return False
+    s = model.strip()
+    if not s:
+        return False
+    return bool(_MODEL_TRUNCATED_RE.search(s))
+
+
 # Spec-3 заход 3/10 повтор (#5): дублированный pos-prefix «А1-А1-Шкаф...».
 # Phase 2c pre-inject кладёт «pos-» в name, но LLM иногда ПРИ ВОЗВРАТЕ тоже
 # добавляет свой «pos-» — получается «А1-А1-name». Убираем дубль после LLM.
@@ -496,6 +586,31 @@ def restore_from_bbox_rows(
         # Восстанавливаем cells.name полностью. model/brand/qty остаются от item.
         item.name = cells_name[:500]
 
+    return items
+
+
+def apply_p2_cosmetics(items: list[NormalizedItem]) -> list[NormalizedItem]:
+    """TD-04: P2 cosmetics — Class J/G/I/N/O.
+
+    Применяется в `_apply_postprocess` ПОСЛЕ всех merge-операций — на финальных
+    item.name / item.model_name. Каждый класс — независимый regex-fix; никакой
+    inter-class зависимости нет.
+
+    - J: punctuation drift в КЛОП model_name.
+    - G: trailing hyphen в name (обрыв слова без продолжения).
+    - I: «(модель: …)» suffix в name дублирующий model_name.
+    - N: digit duplication «6400/64000» → «6400/6400».
+    - O: model trailing-dash-no-digits → флаг `model_truncated`.
+    """
+    for it in items:
+        if it.model_name:
+            it.model_name = _fix_klop_punctuation_drift(it.model_name)
+        if it.name:
+            it.name = _strip_injected_model_suffix(it.name, it.model_name)
+            it.name = _fix_digit_duplication(it.name)
+            it.name = _trim_trailing_hyphen(it.name)
+        if it.model_name and _is_model_truncated_no_digits(it.model_name):
+            it.model_truncated = True
     return items
 
 

@@ -52,6 +52,11 @@ class NormalizedItem:
     # и cover_bbox_rows (coverage-check потерянных continuation-rows).
     # None если item пришёл не из bbox-rows (vision-fallback / legacy path).
     source_row_index: int | None = None
+    # TD-04 (Class O): model_name заканчивается на разделитель размера без
+    # числа (например «КЛОП-2(90)-НО-1700х»). Не удалось найти продолжение
+    # на следующей строке — оставлено как есть, флаг для PO внимания.
+    # UI ismeta-frontend может показать иконку «модель неполная».
+    model_truncated: bool = False
 
 
 @dataclass
