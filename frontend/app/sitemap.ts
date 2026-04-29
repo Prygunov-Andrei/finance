@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { getRatingMethodology, getRatingModels } from '@/lib/api/services/rating';
-import { getAllNews, getManufacturers } from '@/lib/hvac-api';
+import { getAllNews } from '@/lib/hvac-api';
 
 const SITE_URL = 'https://hvac-info.com';
 
@@ -41,7 +41,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let presetPages: MetadataRoute.Sitemap = [];
   let modelPages: MetadataRoute.Sitemap = [];
   let newsPages: MetadataRoute.Sitemap = [];
-  let manufacturerPages: MetadataRoute.Sitemap = [];
 
   try {
     const methodology = await getRatingMethodology();
@@ -49,7 +48,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .filter((p) => !p.is_all_selected)
       .map((p) => ({
         url: `${SITE_URL}/rating-split-system/preset/${p.slug}`,
-        lastModified: now,
+        lastModified: p.updated_at ? new Date(p.updated_at) : now,
         changeFrequency: 'weekly',
         priority: 0.7,
       }));
@@ -61,12 +60,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const models = await getRatingModels();
     modelPages = models
       .filter((m) => m.publish_status === 'published')
-      .map((m) => ({
-        url: `${SITE_URL}/rating-split-system/${m.slug}`,
-        lastModified: now,
-        changeFrequency: 'monthly',
-        priority: 0.6,
-      }));
+      .map((m) => {
+        const entry: MetadataRoute.Sitemap[number] = {
+          url: `${SITE_URL}/rating-split-system/${m.slug}`,
+          lastModified: m.updated_at ? new Date(m.updated_at) : now,
+          changeFrequency: 'monthly',
+          priority: 0.6,
+        };
+        if (m.main_photo_url) {
+          entry.images = [m.main_photo_url];
+        }
+        return entry;
+      });
   } catch (err) {
     console.error('sitemap: models fetch failed', err);
   }
@@ -83,24 +88,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error('sitemap: news fetch failed', err);
   }
 
-  try {
-    const manufacturers = await getManufacturers();
-    manufacturerPages = manufacturers.map((m) => ({
-      url: `${SITE_URL}/manufacturers#${m.id}`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    }));
-  } catch (err) {
-    console.error('sitemap: manufacturers fetch failed', err);
-  }
-
   return [
     ...staticPages,
     ...pricePages,
     ...presetPages,
     ...modelPages,
     ...newsPages,
-    ...manufacturerPages,
   ];
 }

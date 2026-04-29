@@ -46,4 +46,12 @@ describe('app/robots.ts', () => {
       expect(disallow).toEqual(expect.arrayContaining(['/api/', '/admin/', '/erp/']));
     }
   });
+
+  it('не блокирует /_next/ — нужно для рендеринга в Яндекс/Google', () => {
+    const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
+    for (const rule of rules) {
+      const disallow = rule.disallow as string[];
+      expect(disallow).not.toContain('/_next/');
+    }
+  });
 });

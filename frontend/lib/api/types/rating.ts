@@ -101,6 +101,10 @@ export interface RatingModelListItem {
   is_ad: boolean;
   ad_position: number | null;
   rank: number | null;
+  /** Wave 10.1 SEO P0 — для <lastmod> в sitemap.xml. Опционально до мержа AC-Петя backend. */
+  updated_at?: string;
+  /** Wave 10.1 SEO P0 — для <image:image> в sitemap. Опционально до мержа AC-Петя backend. */
+  main_photo_url?: string | null;
 }
 
 export interface RatingModelDetail {
@@ -199,6 +203,8 @@ export interface RatingMethodologyPreset {
   description: string;
   is_all_selected: boolean;
   criteria_codes: string[];
+  /** Wave 10.1 SEO P0 — для <lastmod> в sitemap.xml. Опционально до мержа backend. */
+  updated_at?: string;
 }
 
 export interface RatingMethodology {
