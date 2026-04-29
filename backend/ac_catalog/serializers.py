@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from django.db.models import Q
 from rest_framework import serializers
 
 from ac_brands.models import Brand
@@ -71,12 +72,16 @@ class ParameterScoreSerializer(serializers.ModelSerializer):
     criterion_code = serializers.CharField(source="criterion.code", read_only=True)
     criterion_name = serializers.CharField(source="criterion.name_ru", read_only=True)
     unit = serializers.CharField(source="criterion.unit", read_only=True)
+    is_key_measurement = serializers.BooleanField(
+        source="criterion.is_key_measurement", read_only=True,
+    )
 
     class Meta:
         model = CalculationResult
         fields = [
             "criterion_code", "criterion_name", "unit",
             "raw_value", "normalized_score", "weighted_score", "above_reference",
+            "is_key_measurement",
         ]
         read_only_fields = fields
 
@@ -395,6 +400,7 @@ class ACModelDetailSerializer(serializers.ModelSerializer):
                 "weighted_score": r["weighted_score"],
                 "above_reference": r["above_reference"],
                 "is_active": r["is_active"],
+                "is_key_measurement": bool(r["criterion"].criterion.is_key_measurement),
             }
             for r in rows
         ]
@@ -489,13 +495,14 @@ class MethodologySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_criteria(self, obj: MethodologyVersion) -> list:
-        # Отдаём только активные параметры — неактивные (включая снятый noise)
-        # не должны участвовать в «Пользовательском рейтинге» и на публичной
-        # странице методики. Таб «Самые тихие» использует отдельный noise_mc
-        # из context ACModelListView — не зависит от этого endpoint'а.
+        # Wave 11: пропускаем активные критерии + неактивные с
+        # is_key_measurement=True. Это нужно, чтобы единственный «ключевой
+        # замер» (noise) попадал в API публичной методики даже когда у него
+        # is_active=False, weight=0 (engine исключает его из total_index, но
+        # на детальной странице модели и в hero-блоке его нужно показать).
         qs = (
             obj.methodology_criteria
-            .filter(is_active=True)
+            .filter(Q(is_active=True) | Q(criterion__is_key_measurement=True))
             .select_related("criterion")
             .order_by("display_order", "criterion__code")
         )
