@@ -44,18 +44,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  // Wave 10.4 P3.2: пагинация /manufacturers по 50 (515 → 11 страниц).
-  // Page 1 — /manufacturers (уже в staticPages), pages 2..11 — /manufacturers/page/N.
-  // TODO: увеличить когда manufacturers > 550.
-  const manufacturersPaginationPages: MetadataRoute.Sitemap = Array.from(
-    { length: 10 },
-    (_, i) => ({
-      url: `${SITE_URL}/manufacturers/page/${i + 2}`,
-      lastModified: now,
-      changeFrequency: 'weekly',
-      priority: 0.5,
-    }),
-  );
+  // Wave 11: пагинация /manufacturers — динамически по реальному count.
+  // Page 1 = /manufacturers (в staticPages), 2..N — /manufacturers/page/N.
+  let manufacturersPaginationPages: MetadataRoute.Sitemap = [];
+  try {
+    const { getManufacturers } = await import('@/lib/hvac-api');
+    const all = await getManufacturers();
+    const totalPages = Math.ceil(all.length / 50);
+    manufacturersPaginationPages = Array.from(
+      { length: Math.max(0, totalPages - 1) },
+      (_, i) => ({
+        url: `${SITE_URL}/manufacturers/page/${i + 2}`,
+        lastModified: now,
+        changeFrequency: 'weekly',
+        priority: 0.5,
+      }),
+    );
+  } catch (err) {
+    console.error('sitemap: manufacturers fetch failed', err);
+  }
 
   let presetPages: MetadataRoute.Sitemap = [];
   let modelPages: MetadataRoute.Sitemap = [];
@@ -81,7 +88,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .filter((m) => m.publish_status === 'published')
       .map((m) => {
         const entry: MetadataRoute.Sitemap[number] = {
-          url: `${SITE_URL}/rating-split-system/${m.slug}`,
+          url: `${SITE_URL}/konditsioner/${m.slug}`,
           lastModified: m.updated_at ? new Date(m.updated_at) : now,
           changeFrequency: 'monthly',
           priority: 0.6,

@@ -11,7 +11,7 @@ type JsonLdValue =
   | { [key: string]: JsonLdValue | undefined };
 
 function buildJsonLd(detail: RatingModelDetail): Record<string, JsonLdValue> {
-  const url = `${BASE}/rating-split-system/${detail.slug}/`;
+  const url = `${BASE}/konditsioner/${detail.slug}/`;
   const description =
     detail.editorial_lede?.trim() ||
     `Кондиционер ${detail.brand.name} ${detail.inner_unit} — независимая оценка по методике «Август-климат».`;

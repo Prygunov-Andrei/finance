@@ -132,7 +132,8 @@ describe('NewsFeedList — grid card image aspect-ratio', () => {
     expect(img!.style.aspectRatio).toBe('16 / 9');
     expect(img!.style.height).toBe('');
     expect(img!.style.background).toContain('http://example.com/photo.jpg');
-    expect(img!.style.background).toMatch(/cover/);
+    // Wave 11: object-fit: contain + alt-подложка во всех превью.
+    expect(img!.style.background).toMatch(/contain/);
   });
 });
 

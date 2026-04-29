@@ -37,9 +37,9 @@ describe('RatingItemListJsonLd', () => {
     expect(data['@type']).toBe('ItemList');
     expect(data.numberOfItems).toBe(3);
     expect(data.itemListElement[0].position).toBe(1);
-    expect(data.itemListElement[0].url).toBe('https://hvac-info.com/rating-split-system/mdv-a');
+    expect(data.itemListElement[0].url).toBe('https://hvac-info.com/konditsioner/mdv-a');
     expect(data.itemListElement[2].position).toBe(3);
-    expect(data.itemListElement[2].url).toBe('https://hvac-info.com/rating-split-system/mdv-c');
+    expect(data.itemListElement[2].url).toBe('https://hvac-info.com/konditsioner/mdv-c');
   });
 
   it('возвращает null если список пустой', () => {

@@ -38,8 +38,21 @@ describe('HvacInfoHeader active-state', () => {
     );
   });
 
-  it('/rating-split-system/abc: «Рейтинг» active', () => {
-    pathnameMock.mockReturnValue('/rating-split-system/abc');
+  it('/rating-split-system: «Рейтинг» active', () => {
+    pathnameMock.mockReturnValue('/rating-split-system');
+    render(<HvacInfoHeader />);
+    expect(screen.getByRole('link', { hidden: true, name: 'Рейтинг' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { hidden: true, name: 'Новости' })).not.toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('/konditsioner/abc: «Рейтинг» active (Wave 11 URL-редизайн)', () => {
+    pathnameMock.mockReturnValue('/konditsioner/abc');
     render(<HvacInfoHeader />);
     expect(screen.getByRole('link', { hidden: true, name: 'Рейтинг' })).toHaveAttribute(
       'aria-current',

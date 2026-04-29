@@ -32,12 +32,26 @@ export default function NewsFeedHero({ items }: { items: NewsItem[] }) {
       className="rt-feed-hero"
     >
       <div style={{ marginBottom: 18 }}>
-        <Eyebrow>Новости отрасли</Eyebrow>
+        {/* Wave 11: SEO-h1 в семантическом потоке (subtitle-style),
+            визуальный hero — h2 «Сегодня, …». */}
+        <h1
+          style={{
+            margin: 0,
+            fontFamily: 'var(--rt-font-sans)',
+            fontSize: 13,
+            fontWeight: 500,
+            letterSpacing: 0.2,
+            color: 'hsl(var(--rt-ink-60))',
+            textTransform: 'uppercase',
+          }}
+        >
+          HVAC Info — независимый рейтинг и обзоры кондиционеров
+        </h1>
         <H
           size={30}
           serif
-          as="h1"
-          style={{ marginTop: 4, letterSpacing: -0.5 }}
+          as="h2"
+          style={{ marginTop: 8, letterSpacing: -0.5 }}
         >
           Сегодня, {formatNewsDate(new Date().toISOString())}
         </H>
@@ -82,7 +96,7 @@ export default function NewsFeedHero({ items }: { items: NewsItem[] }) {
                 priority
                 sizes="(max-width: 1023px) 100vw, 60vw"
                 unoptimized={isExternalUrl(heroImage)}
-                style={{ objectFit: 'cover' }}
+                style={{ objectFit: 'contain' }}
               />
             </div>
           )}

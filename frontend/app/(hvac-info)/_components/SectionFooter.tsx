@@ -284,21 +284,9 @@ export default function SectionFooter() {
           .rt-section-footer-links > span + span {
             border-top: 1px solid hsl(var(--rt-border-subtle));
           }
-          .rt-section-footer-login-row {
-            justify-content: stretch;
-            flex-direction: column;
-            align-items: stretch;
-            gap: 18px;
-          }
-          .rt-section-footer-seo-links {
-            justify-content: center;
-            gap: 12px 18px;
-          }
-          .rt-section-footer-login {
-            align-self: stretch;
-            justify-content: center;
-            flex: 1;
-          }
+          /* Wave 11: на мобиле скрываем весь блок robots/sitemap/llms + кнопку
+             «Вход» — Максим зачеркнул его на скрине визуального обзора. */
+          .rt-section-footer-login-row { display: none !important; }
         }
       `}</style>
     </footer>

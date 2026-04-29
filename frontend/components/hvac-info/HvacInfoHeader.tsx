@@ -19,7 +19,10 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Рейтинг',
     href: '/rating-split-system',
-    match: (p) => p.startsWith('/rating-split-system'),
+    // Wave 11: карточки моделей переехали на /konditsioner/{slug} —
+    // header должен подсвечивать «Рейтинг» и для них.
+    match: (p) =>
+      p.startsWith('/rating-split-system') || p.startsWith('/konditsioner'),
   },
   { label: 'ISmeta', muted: true },
   { label: 'Мешок Монтажников', muted: true },

@@ -24,7 +24,7 @@ function buildItemListJsonLd(models: RatingModelListItem[]): ItemListJsonLd {
     itemListElement: models.map((m, i) => ({
       '@type': 'ListItem',
       position: i + 1,
-      url: `${BASE}/rating-split-system/${m.slug}`,
+      url: `${BASE}/konditsioner/${m.slug}`,
       name: `${m.brand} ${m.inner_unit}`.trim(),
     })),
   };

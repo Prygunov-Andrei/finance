@@ -11,6 +11,10 @@ const nextConfig = {
     return [
       { source: '/ratings', destination: '/rating-split-system', permanent: true },
       { source: '/ratings/:path*', destination: '/rating-split-system/:path*', permanent: true },
+      // Wave 11: URL-редизайн карточек моделей. Slug всегда начинается с
+      // заглавной буквы (MDV-..., CASARTE-...), поэтому regex [A-Z] исключает
+      // подпути methodology/archive/submit/preset/quiet/price (они lowercase).
+      { source: '/rating-split-system/:slug([A-Z][^/]+)', destination: '/konditsioner/:slug', permanent: true },
     ];
   },
 
@@ -68,6 +72,11 @@ const nextConfig = {
       { pathname: '/favicon*/**', search: '' },
       { pathname: '/help/**', search: '' },
     ],
+    // Wave 11 P2.1: явно объявляем форматы AVIF/WebP для оптимизатора
+    // и whitelist quality-значений (Next.js 16 — массив `qualities`, не одно
+    // число). Используемые в коде: 50 (lazy thumbnails), 75 (default), 90 (hero).
+    formats: ['image/avif', 'image/webp'],
+    qualities: [50, 75, 90],
   },
 };
 
