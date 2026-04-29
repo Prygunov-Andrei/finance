@@ -148,6 +148,7 @@ class ACModelListSerializer(serializers.ModelSerializer):
     has_noise_measurement = serializers.SerializerMethodField()
     scores = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
+    main_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ACModel
@@ -158,6 +159,9 @@ class ACModelListSerializer(serializers.ModelSerializer):
             "publish_status", "region_availability",
             "price", "noise_score", "has_noise_measurement", "scores",
             "is_ad", "ad_position", "rank",
+            # Wave 10.1 — SEO P0 (sitemap)
+            "updated_at",
+            "main_photo_url",
         ]
         read_only_fields = fields
 
@@ -172,6 +176,14 @@ class ACModelListSerializer(serializers.ModelSerializer):
 
     def get_brand_logo_dark(self, obj: ACModel) -> str:
         return _url_with_mtime(obj.brand.logo_dark)
+
+    def get_main_photo_url(self, obj: ACModel) -> str | None:
+        """Главное фото модели для image sitemap. ACModelPhoto.Meta.ordering =
+        ['order', 'id'], так что .first() даёт фото с минимальным order."""
+        photo = obj.photos.first()
+        if photo and photo.image:
+            return _url_with_mtime(photo.image)
+        return None
 
     def get_index_max(self, _obj: ACModel) -> float:
         return float(self.context.get("index_max", 100.0))
@@ -437,6 +449,8 @@ class RatingPresetSerializer(serializers.ModelSerializer):
         fields = [
             "id", "slug", "label", "order", "description",
             "is_all_selected", "criteria_codes",
+            # Wave 10.1 — SEO P0 (sitemap)
+            "updated_at",
         ]
         read_only_fields = fields
 
