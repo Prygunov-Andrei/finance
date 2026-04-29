@@ -20,6 +20,7 @@ import DetailBuy from '../_components/DetailBuy';
 import DetailReviews from '../_components/DetailReviews';
 import ModelJsonLd from '../_components/ModelJsonLd';
 import BreadcrumbJsonLd from '../_components/BreadcrumbJsonLd';
+import DetailBreadcrumb from '../_components/DetailBreadcrumb';
 import SectionFooter from '../../_components/SectionFooter';
 import { fallbackLede } from '../_components/detailHelpers';
 
@@ -131,6 +132,7 @@ export default async function RatingDetailPage({ params }: Props) {
           Кондиционер {detail.brand.name} {detail.inner_unit}
           {detail.outer_unit ? ` / ${detail.outer_unit}` : ''}
         </h1>
+        <DetailBreadcrumb detail={detail} />
       </main>
       <StickyCollapseHero
         full={

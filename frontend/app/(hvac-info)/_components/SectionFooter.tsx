@@ -8,6 +8,31 @@ const RATING_LINKS: Array<[string, string]> = [
   ['Добавить модель', '/rating-split-system/submit/'],
 ];
 
+/** Wave 10.4 P3.4: внутренняя перелинковка с подвала на популярные landing'и
+ *  (price, preset, каталоги). У главной не было прямых ссылок на эти разделы —
+ *  Максим в SEO-аудите 28.04.2026 пометил это как причину низкого CTR. */
+const BUDGET_LINKS: Array<[string, string]> = [
+  ['До 20 000 ₽', '/price/do-20000-rub'],
+  ['До 30 000 ₽', '/price/do-30000-rub'],
+  ['До 40 000 ₽', '/price/do-40000-rub'],
+  ['До 50 000 ₽', '/price/do-50000-rub'],
+  ['До 60 000 ₽', '/price/do-60000-rub'],
+];
+
+const REQUIREMENT_LINKS: Array<[string, string]> = [
+  ['Тихие', '/quiet'],
+  ['Для холодного климата', '/rating-split-system/preset/cold'],
+  ['Бюджетные', '/rating-split-system/preset/budget'],
+  ['Для частного дома', '/rating-split-system/preset/house'],
+  ['Для аллергиков', '/rating-split-system/preset/allergy'],
+];
+
+const CATALOG_LINKS: Array<[string, string]> = [
+  ['Бренды', '/brands'],
+  ['Производители', '/manufacturers'],
+  ['Ресурсы', '/resources'],
+];
+
 const NEWS_STUBS = ['Прислать новость'];
 const MISC_STUBS = ['Контакты', 'Нашли ошибку?'];
 
@@ -123,6 +148,44 @@ export default function SectionFooter() {
           <FooterColumn>
             {MISC_STUBS.map((label) => (
               <FooterStub key={label} label={label} />
+            ))}
+          </FooterColumn>
+        </div>
+
+        <div
+          className="rt-section-footer-grid rt-section-footer-grid-secondary"
+          style={{ marginTop: 28 }}
+        >
+          <FooterColumn heading="Подобрать по бюджету">
+            {BUDGET_LINKS.map(([label, href]) => (
+              <Link key={href} href={href} style={linkStyle}>
+                <T size={13}>{label}</T>
+                <span style={{ color: 'hsl(var(--rt-ink-40))', fontSize: 12 }}>
+                  →
+                </span>
+              </Link>
+            ))}
+          </FooterColumn>
+
+          <FooterColumn heading="Подобрать по требованиям">
+            {REQUIREMENT_LINKS.map(([label, href]) => (
+              <Link key={href} href={href} style={linkStyle}>
+                <T size={13}>{label}</T>
+                <span style={{ color: 'hsl(var(--rt-ink-40))', fontSize: 12 }}>
+                  →
+                </span>
+              </Link>
+            ))}
+          </FooterColumn>
+
+          <FooterColumn heading="Каталоги">
+            {CATALOG_LINKS.map(([label, href]) => (
+              <Link key={href} href={href} style={linkStyle}>
+                <T size={13}>{label}</T>
+                <span style={{ color: 'hsl(var(--rt-ink-40))', fontSize: 12 }}>
+                  →
+                </span>
+              </Link>
             ))}
           </FooterColumn>
         </div>

@@ -44,6 +44,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
+  // Wave 10.4 P3.2: пагинация /manufacturers по 50 (515 → 11 страниц).
+  // Page 1 — /manufacturers (уже в staticPages), pages 2..11 — /manufacturers/page/N.
+  // TODO: увеличить когда manufacturers > 550.
+  const manufacturersPaginationPages: MetadataRoute.Sitemap = Array.from(
+    { length: 10 },
+    (_, i) => ({
+      url: `${SITE_URL}/manufacturers/page/${i + 2}`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.5,
+    }),
+  );
+
   let presetPages: MetadataRoute.Sitemap = [];
   let modelPages: MetadataRoute.Sitemap = [];
   let newsPages: MetadataRoute.Sitemap = [];
@@ -97,6 +110,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     ...staticPages,
     ...pricePages,
+    ...manufacturersPaginationPages,
     ...presetPages,
     ...modelPages,
     ...newsPages,
