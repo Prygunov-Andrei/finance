@@ -45,6 +45,9 @@ class ACModelListView(LangMixin, generics.ListAPIView):
         qs = ACModel.objects.select_related("brand", "brand__origin_class").prefetch_related(
             "regions",
             "raw_values__criterion",
+            # Wave 10.1: main_photo_url в ACModelListSerializer → photos.first()
+            # без prefetch_related даёт N+1 (по запросу на каждую модель).
+            "photos",
         ).filter(
             publish_status=ACModel.PublishStatus.PUBLISHED,
         ).annotate(
@@ -133,6 +136,7 @@ class ACModelArchiveListView(ACModelListView):
         qs = ACModel.objects.select_related("brand", "brand__origin_class").prefetch_related(
             "regions",
             "raw_values__criterion",
+            "photos",
         ).filter(
             publish_status=ACModel.PublishStatus.ARCHIVED,
         ).order_by("-total_index")
