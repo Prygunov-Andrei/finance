@@ -671,6 +671,7 @@ function DesktopCustomRow({
     <Link
       ref={(el) => register(model.id, el as HTMLElement | null)}
       href={`/konditsioner/${model.slug}/`}
+      prefetch={false}
       data-ad={isAd ? 'true' : undefined}
       className={isAd ? AD_ROW_CLASS : undefined}
       style={{
@@ -857,6 +858,7 @@ function MobileCustomList({
             >
               <Link
                 href={`/konditsioner/${r.model.slug}/`}
+                prefetch={false}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '34px 1fr auto',

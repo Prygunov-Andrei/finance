@@ -151,6 +151,7 @@ function ModelRow({
   return (
     <Link
       href={href}
+      prefetch={false}
       data-ad={isAd ? 'true' : undefined}
       style={{
         display: 'grid',

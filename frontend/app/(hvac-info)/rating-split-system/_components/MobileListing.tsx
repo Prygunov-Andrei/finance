@@ -402,6 +402,7 @@ function MobileRows({
                   </T>
                   <Link
                     href={`/konditsioner/${m.slug}/`}
+                    prefetch={false}
                     style={{
                       display: 'inline-flex',
                       alignSelf: 'flex-start',
