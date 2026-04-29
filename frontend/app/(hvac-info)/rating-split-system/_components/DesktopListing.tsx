@@ -208,9 +208,9 @@ function ModelRow({
           justifyContent: 'flex-start',
         }}
       >
-        {/* Polish 2.0 A5: Ранее здесь был дубль <AdBadge /> для рекламных строк.
-            Бейдж «Реклама» уже отрисован в колонке ранга — второй копии не нужно. */}
-        {!isAd && (
+        {isAd ? (
+          <AdBadge />
+        ) : (
           <>
             <Meter value={clamp01(displayValue, model.index_max)} />
             <span
