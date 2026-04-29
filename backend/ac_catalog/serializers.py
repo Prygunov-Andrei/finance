@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from rest_framework import serializers
 
 from ac_brands.models import Brand
@@ -17,13 +19,22 @@ from .models import ACModel, ACModelPhoto, ACModelSupplier, ModelRawValue, Model
 
 
 def _url_with_mtime(file_field) -> str:
-    """Relative URL файла + query `?v=<mtime>` для cache-bust (Cloudflare/CDN).
-    Когда файл перезаписывается (normalize), mtime меняется → URL уникален → edge
-    cache считает ресурс новым и идёт на origin.
+    """Absolute URL файла + query `?v=<mtime>` для cache-bust (Cloudflare/CDN).
+
+    Префикс берётся из env var ``PUBLIC_MEDIA_HOST`` (например
+    ``https://hvac-info.com``) — нужен для image:loc в sitemap.xml и og:image,
+    которые требуют absolute URL. Если переменная пуста (локальная разработка),
+    возвращается relative URL — frontend rewrites (next.config.js) подхватят.
+
+    `?v=<mtime>` остаётся после префикса: при перезаписи файла mtime меняется,
+    edge cache идёт на origin за новым ресурсом.
     """
     if not file_field:
         return ""
     url = file_field.url
+    host = os.environ.get("PUBLIC_MEDIA_HOST", "").rstrip("/")
+    if host and url.startswith("/"):
+        url = f"{host}{url}"
     try:
         mtime = file_field.storage.get_modified_time(file_field.name)
         return f"{url}?v={int(mtime.timestamp())}"

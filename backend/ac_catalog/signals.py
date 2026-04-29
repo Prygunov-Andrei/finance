@@ -1,13 +1,21 @@
-"""Сигналы каталога рейтинга: пересчёт индекса при изменении бренда."""
+"""Сигналы каталога рейтинга: пересчёт индекса при изменении бренда +
+транслит имён загружаемых файлов (Wave 10.3, SEO P2)."""
 from __future__ import annotations
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from ac_brands.models import Brand
+from ac_catalog.models import ACModelPhoto
+from core.file_utils import register_filename_slugify
 
 # Поля бренда, влияющие на расчёт индекса моделей
 _BRAND_FIELDS_RECALC = frozenset({"sales_start_year_ru", "origin_class_id"})
+
+# Транслит кириллических имён файлов при upload — для красивых URL в sitemap
+# image:loc и og:image. Старые файлы на проде не переименовываются.
+register_filename_slugify(ACModelPhoto, ["image"])
+register_filename_slugify(Brand, ["logo", "logo_dark"])
 
 
 @receiver(post_save, sender=Brand, dispatch_uid="ac_catalog.brand_post_save_sync")
