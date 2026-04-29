@@ -145,6 +145,11 @@ export interface RatingModelDetail {
 
   // M5 — до 5 упоминаний модели в новостях. Могут отсутствовать до мержа M5.
   news_mentions?: RatingNewsMention[];
+
+  /** Wave 12: true если запрос пришёл по legacy_slug (старому URL до lowercase
+   *  миграции). Фронт делает 301 redirect на канонический /konditsioner/{slug}.
+   *  Опционально до мержа backend Wave 12 — может приходить как undefined. */
+  is_legacy_match?: boolean;
 }
 
 export interface RatingNewsMention {

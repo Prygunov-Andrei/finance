@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import {
   getRatingMethodology,
   getRatingModelBySlug,
@@ -83,6 +83,12 @@ export default async function RatingDetailPage({ params }: Props) {
   const { slug } = await params;
   const detail = await loadDetail(slug);
   if (!detail) notFound();
+
+  // Wave 12: backend by-slug ищет по slug ИЛИ legacy_slug. Если нашли по
+  // legacy_slug — is_legacy_match=true, делаем 301 на канонический lowercase URL.
+  if (detail.is_legacy_match && detail.slug !== slug) {
+    permanentRedirect(`/konditsioner/${detail.slug}`);
+  }
 
   let list: Awaited<ReturnType<typeof getRatingModels>> = [];
   let methodology: Awaited<ReturnType<typeof getRatingMethodology>> | null = null;
