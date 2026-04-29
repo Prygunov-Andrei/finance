@@ -6,7 +6,11 @@ import {
 import RatingPageContent from '../rating-split-system/_components/RatingPageContent';
 import { filterQuietModels } from './quietHelpers';
 
-export const revalidate = 3600;
+// Wave 10.2 hotfix: force-dynamic чтобы Suspense внутри RatingPageContent
+// (DesktopListing/MobileListing с HeroBlock h1) полностью попадал в SSR HTML.
+// Без этого initial HTML отдаёт fallback={null}, h1 приходит только через
+// streaming RSC payload — SEO-боты на initial-HTML видят 0 H1.
+export const dynamic = 'force-dynamic';
 
 const PAGE_TITLE = 'Самые тихие кондиционеры — рейтинг по уровню шума';
 const PAGE_INTRO =

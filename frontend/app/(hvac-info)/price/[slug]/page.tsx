@@ -7,7 +7,9 @@ import {
 import RatingPageContent from '../../rating-split-system/_components/RatingPageContent';
 import { PRICE_SLUGS, filterByBudget, findPriceSlug } from './priceHelpers';
 
-export const revalidate = 3600;
+// Wave 10.2 hotfix: force-dynamic чтобы Suspense внутри RatingPageContent
+// (HeroBlock с h1) попадал в initial SSR HTML, а не приходил через streaming.
+export const dynamic = 'force-dynamic';
 
 type Props = { params: Promise<{ slug: string }> };
 
