@@ -54,12 +54,19 @@ const nextConfig = {
       { protocol: 'http', hostname: 'localhost' },
       { protocol: 'http', hostname: 'backend' },
     ],
-    // Wave 10.3 hotfix: Next.js 16 требует localPatterns для local images
-    // с query string. backend `_url_with_mtime` добавляет ?v=<mtime> для
-    // cache-bust → без этого <Image src="/media/...?v=..."> рендерит 500.
+    // Next.js 16 требует localPatterns для всех local images через <Image>.
+    // /media/** — пользовательские медиа (с ?v=<mtime> cache-bust из backend).
+    // /rating-* — статика из /public/ (hero-illustration, авторы, логотипы).
+    // /favicon* — иконки сайта. Wildcard pathname /** не используем чтобы
+    // не открывать оптимизатор для произвольных путей.
     localPatterns: [
       { pathname: '/media/**', search: '' },
       { pathname: '/media/**', search: '**' },
+      { pathname: '/rating-hero/**', search: '' },
+      { pathname: '/rating-authors/**', search: '' },
+      { pathname: '/rating-logo/**', search: '' },
+      { pathname: '/favicon*/**', search: '' },
+      { pathname: '/help/**', search: '' },
     ],
   },
 };
