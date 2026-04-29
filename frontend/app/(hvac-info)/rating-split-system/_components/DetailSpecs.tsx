@@ -122,6 +122,7 @@ export default function DetailSpecs({ detail, methodology }: Props) {
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
+          alignItems: 'start',
           gap: 28,
         }}
       >

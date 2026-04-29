@@ -1,14 +1,74 @@
 import type { CSSProperties } from 'react';
+import Link from 'next/link';
 import type {
   RatingMethodologyStats,
   RatingModelDetail,
 } from '@/lib/api/types/rating';
-import { BrandLogo, Eyebrow, T, formatPrice } from './primitives';
+import { BrandLogo, Eyebrow, H, T, formatPrice } from './primitives';
 import {
   fallbackLede,
   formatNominalCapacity,
   minSupplierPrice,
 } from './detailHelpers';
+
+function modelTitle(detail: RatingModelDetail): string {
+  const inner = detail.inner_unit?.trim() || '';
+  const outer = detail.outer_unit?.trim() || '';
+  const code = outer ? `${inner} / ${outer}` : inner;
+  return `Кондиционер ${detail.brand.name} ${code}`.trim();
+}
+
+function HeroHeader({ detail }: { detail: RatingModelDetail }) {
+  const modelLabel = `${detail.brand.name} ${detail.inner_unit}`.trim();
+  const title = modelTitle(detail);
+  return (
+    <div
+      className="rt-detail-hero-header"
+      style={{
+        marginBottom: 28,
+        paddingBottom: 22,
+        borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+      }}
+    >
+      <nav
+        aria-label="Хлебные крошки"
+        style={{
+          fontFamily: 'var(--rt-font-mono)',
+          fontSize: 11,
+          color: 'hsl(var(--rt-ink-60))',
+          letterSpacing: 1.2,
+          textTransform: 'uppercase',
+          marginBottom: 12,
+        }}
+      >
+        <Link
+          href="/"
+          style={{ color: 'hsl(var(--rt-ink-60))', textDecoration: 'none' }}
+        >
+          Главная
+        </Link>
+        <span style={{ color: 'hsl(var(--rt-ink-40))', margin: '0 8px' }}>/</span>
+        <Link
+          href="/rating-split-system"
+          style={{ color: 'hsl(var(--rt-ink-60))', textDecoration: 'none' }}
+        >
+          Рейтинг кондиционеров
+        </Link>
+        <span style={{ color: 'hsl(var(--rt-ink-40))', margin: '0 8px' }}>/</span>
+        <span style={{ color: 'hsl(var(--rt-ink))' }}>{modelLabel}</span>
+      </nav>
+      <H
+        as="h1"
+        size={34}
+        serif
+        className="rt-detail-hero-h1"
+        style={{ letterSpacing: -0.5, lineHeight: 1.15 }}
+      >
+        {title}
+      </H>
+    </div>
+  );
+}
 
 type Props = {
   detail: RatingModelDetail;
@@ -35,9 +95,10 @@ export default function DetailHero({ detail, stats, median }: Props) {
         style={{
           maxWidth: 1280,
           margin: '0 auto',
-          padding: '44px 40px 40px',
+          padding: '32px 40px 40px',
         }}
       >
+        <HeroHeader detail={detail} />
         {/* Desktop 2-col */}
         <div
           className="rt-hero-desktop"
@@ -77,7 +138,9 @@ export default function DetailHero({ detail, stats, median }: Props) {
           .rt-hero-mobile { display: none !important; }
         }
         @media (max-width: 899px) {
-          .rt-detail-hero-inner { padding: 20px 18px 22px !important; }
+          .rt-detail-hero-inner { padding: 18px 18px 22px !important; }
+          .rt-detail-hero-header { margin-bottom: 18px !important; padding-bottom: 14px !important; }
+          .rt-detail-hero-h1 { font-size: 22px !important; letter-spacing: -0.3px !important; line-height: 1.2 !important; }
         }
       `}</style>
     </section>

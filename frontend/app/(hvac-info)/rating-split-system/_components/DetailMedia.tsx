@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import Image from 'next/image';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import { T } from './primitives';
 import {
@@ -173,15 +172,21 @@ function PhotoBlock({
                     height: '100%',
                   }}
                 >
-                  <Image
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
                     src={p.image_url}
                     alt={
                       p.alt ||
                       `Кондиционер ${brandName} ${modelName} — фото ${i + 1}`
                     }
-                    fill
-                    sizes="(max-width: 899px) 16vw, 80px"
-                    style={{ objectFit: 'cover', display: 'block' }}
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block',
+                    }}
                   />
                 </span>
               </button>
@@ -241,13 +246,21 @@ function PhotoZoom({
 
   return (
     <>
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={src}
         alt={alt}
-        fill
-        sizes="(max-width: 899px) 100vw, 50vw"
-        priority={priority}
-        style={{ objectFit: 'cover', display: 'block' }}
+        loading={priority ? 'eager' : 'lazy'}
+        decoding="async"
+        fetchPriority={priority ? 'high' : 'auto'}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        }}
       />
       {hover ? (
         <div

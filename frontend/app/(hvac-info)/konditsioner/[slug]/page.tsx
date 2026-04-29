@@ -20,7 +20,6 @@ import DetailBuy from '../../rating-split-system/_components/DetailBuy';
 import DetailReviews from '../../rating-split-system/_components/DetailReviews';
 import ModelJsonLd from '../../rating-split-system/_components/ModelJsonLd';
 import BreadcrumbJsonLd from '../../rating-split-system/_components/BreadcrumbJsonLd';
-import DetailBreadcrumb from '../../rating-split-system/_components/DetailBreadcrumb';
 import SectionFooter from '../../_components/SectionFooter';
 import { fallbackLede } from '../../rating-split-system/_components/detailHelpers';
 
@@ -122,20 +121,6 @@ export default async function RatingDetailPage({ params }: Props) {
       <HvacInfoHeader />
       <main className="hvac-content">
         <BackToRating />
-        <h1
-          style={{
-            fontFamily: 'var(--rt-font-serif)',
-            fontSize: 14,
-            fontWeight: 500,
-            letterSpacing: -0.1,
-            color: 'hsl(var(--rt-ink-60))',
-            margin: '0 0 8px 0',
-          }}
-        >
-          Кондиционер {detail.brand.name} {detail.inner_unit}
-          {detail.outer_unit ? ` / ${detail.outer_unit}` : ''}
-        </h1>
-        <DetailBreadcrumb detail={detail} />
       </main>
       <StickyCollapseHero
         full={
