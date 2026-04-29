@@ -19,7 +19,9 @@ describe('NewsArticleBody', () => {
     );
     const blockquote = container.querySelector('blockquote');
     expect(blockquote).not.toBeNull();
-    expect(blockquote?.textContent).toBe('Цитата спикера');
+    // react-markdown оборачивает строку в <p> внутри <blockquote>, поэтому
+    // textContent содержит whitespace-обвязку — сравниваем по trim().
+    expect(blockquote?.textContent?.trim()).toBe('Цитата спикера');
   });
 
   it('HTML-body: проходит как-есть через dangerouslySetInnerHTML', () => {

@@ -62,6 +62,25 @@ export function getNewsHeroImage(news: NewsItem): string | null {
 }
 
 /**
+ * Soft-эвристика «это превью — логотип бренда, не сюжет».
+ * В типе HvacNewsMedia нет явного флага is_logo, поэтому судим по:
+ *   1) категория «brands» / Бренды — карточки в этой категории обычно с лого;
+ *   2) caption содержит «logo»/«лого»;
+ *   3) filename содержит «logo».
+ * При false-positive UI всё равно остаётся читаемым (просто фон вместо crop).
+ */
+export function isNewsImageLikelyLogo(news: NewsItem, src: string): boolean {
+  const cat = (news.category || '').toString().toLowerCase();
+  if (cat === 'brands') return true;
+  const display = (news.category_display || '').toString().toLowerCase();
+  if (display.includes('бренд')) return true;
+  const caption = news.media?.find((m) => m.file === src)?.caption?.toLowerCase() || '';
+  if (caption.includes('logo') || caption.includes('лого')) return true;
+  if (/\blogo\b|[-_]logo|logo[-_]/i.test(src)) return true;
+  return false;
+}
+
+/**
  * Лид — предпочтительно поле lede (M5), иначе первые 200 символов body без HTML.
  */
 export function getNewsLede(news: NewsItem, maxChars = 200): string {

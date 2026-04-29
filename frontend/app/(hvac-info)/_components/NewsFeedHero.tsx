@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { HvacNews as NewsItem } from '@/lib/api/types/hvac';
 import { Eyebrow, H, Pill, T } from '../rating-split-system/_components/primitives';
@@ -8,6 +9,12 @@ import {
   getNewsHeroImage,
   getNewsLede,
 } from './newsHelpers';
+
+// Внешние URL (из body) могут быть с не-настроенных доменов — используем
+// unoptimized, чтобы не падать в next/image. priority всё равно даёт preload.
+function isExternalUrl(src: string): boolean {
+  return /^https?:\/\//i.test(src);
+}
 
 export default function NewsFeedHero({ items }: { items: NewsItem[] }) {
   if (items.length === 0) return null;
@@ -54,18 +61,30 @@ export default function NewsFeedHero({ items }: { items: NewsItem[] }) {
             color: 'inherit',
           }}
         >
-          {hasImage && (
+          {hasImage && heroImage && (
             <div
-              aria-hidden
               className="rt-feed-hero-img"
               style={{
+                position: 'relative',
                 width: '100%',
                 aspectRatio: '16 / 9',
-                background: `center / cover no-repeat url(${heroImage})`,
                 borderRadius: 4,
                 marginBottom: 14,
+                overflow: 'hidden',
+                background: 'hsl(var(--rt-alt))',
               }}
-            />
+            >
+              <Image
+                src={heroImage}
+                alt=""
+                aria-hidden
+                fill
+                priority
+                sizes="(max-width: 1023px) 100vw, 60vw"
+                unoptimized={isExternalUrl(heroImage)}
+                style={{ objectFit: 'cover' }}
+              />
+            </div>
           )}
           <div style={{ marginBottom: 10 }}>
             <Pill style={{ background: 'hsl(var(--rt-accent-bg))', color: 'hsl(var(--rt-accent))', borderColor: 'hsl(var(--rt-accent))' }}>

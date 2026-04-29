@@ -32,6 +32,23 @@ const NAV_ITEMS: NavItem[] = [
 export default function HvacInfoHeader() {
   const pathname = usePathname() ?? '/';
   const [searchOpen, setSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Закрытие drawer'а при смене маршрута (клик по пункту меню).
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // Закрытие по Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   return (
     <header
       style={{
@@ -171,22 +188,168 @@ export default function HvacInfoHeader() {
         >
           <SearchButton onClick={() => setSearchOpen(true)} />
           <ThemeToggle />
+          <BurgerButton open={menuOpen} onClick={() => setMenuOpen((v) => !v)} />
         </div>
       </div>
       <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {menuOpen && (
+        <MobileMenu
+          pathname={pathname}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
 
       <style>{`
         .rt-header-bar { padding: 0 16px; }
+        .rt-nav-burger { display: inline-flex; }
         @media (min-width: 1024px) {
           .rt-header-bar { padding: 0 40px; }
           .rt-nav-desktop { display: flex !important; }
           .rt-actions-desktop { display: flex !important; }
           .rt-actions-mobile { display: none !important; }
+          .rt-nav-burger { display: none !important; }
         }
         .dark .rt-logo-light { display: none !important; }
         .dark .rt-logo-dark { display: block !important; }
       `}</style>
     </header>
+  );
+}
+
+function BurgerButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={open ? 'Закрыть меню' : 'Открыть меню'}
+      aria-expanded={open}
+      aria-controls="rt-mobile-menu"
+      data-testid="mobile-nav-toggle"
+      className="rt-nav-burger"
+      style={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 32,
+        height: 32,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        color: 'hsl(var(--rt-ink-60))',
+      }}
+    >
+      {open ? (
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M6 6l12 12M6 18L18 6" />
+        </svg>
+      ) : (
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function MobileMenu({
+  pathname,
+  onClose,
+}: {
+  pathname: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      id="rt-mobile-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Главное меню"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.45)',
+        zIndex: 60,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'hsl(var(--rt-paper))',
+          borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+          padding: '12px 16px 18px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
+      >
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {NAV_ITEMS.map((item) => {
+            if ('muted' in item) {
+              return (
+                <li key={item.label}>
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '14px 4px',
+                      fontSize: 15,
+                      fontWeight: 500,
+                      color: 'hsl(var(--rt-ink-25))',
+                      borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+                    }}
+                  >
+                    {item.label}
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontFamily: 'var(--rt-font-mono)',
+                        textTransform: 'uppercase',
+                        letterSpacing: 1,
+                        color: 'hsl(var(--rt-ink-40))',
+                      }}
+                    >
+                      скоро
+                    </span>
+                  </span>
+                </li>
+              );
+            }
+            const isActive = item.match(pathname);
+            return (
+              <li key={item.label}>
+                <Link
+                  href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  onClick={onClose}
+                  style={{
+                    display: 'block',
+                    padding: '14px 4px',
+                    fontSize: 15,
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? 'hsl(var(--rt-accent))' : 'hsl(var(--rt-ink))',
+                    textDecoration: 'none',
+                    borderBottom: '1px solid hsl(var(--rt-border-subtle))',
+                  }}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }
 

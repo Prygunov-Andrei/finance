@@ -205,12 +205,12 @@ function ModelRow({
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          justifyContent: isAd ? 'flex-end' : 'flex-start',
+          justifyContent: 'flex-start',
         }}
       >
-        {isAd ? (
-          <AdBadge />
-        ) : (
+        {/* Polish 2.0 A5: Ранее здесь был дубль <AdBadge /> для рекламных строк.
+            Бейдж «Реклама» уже отрисован в колонке ранга — второй копии не нужно. */}
+        {!isAd && (
           <>
             <Meter value={clamp01(displayValue, model.index_max)} />
             <span

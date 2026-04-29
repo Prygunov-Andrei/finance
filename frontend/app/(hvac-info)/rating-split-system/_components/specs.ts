@@ -9,20 +9,28 @@ import type {
 
 export type SpecTicker = 'above' | 'below' | null;
 
+/** Расширяем RatingCriterionGroup синтетической группой `key_measurements`,
+ *  которую DetailSpecs показывает первым блоком (Polish 2.0 п. A4). */
+export type SpecGroupCode = RatingCriterionGroup | 'key_measurements';
+
 export interface SpecRow {
   key: string;
   name: string;
   value: string;
   ticker: SpecTicker;
+  /** true для критериев с criterion.is_key_measurement — DetailSpecs может
+   *  визуально подсветить такие строки (badge / accent border). */
+  is_key?: boolean;
 }
 
 export interface SpecGroup {
-  group: RatingCriterionGroup;
+  group: SpecGroupCode;
   group_display: string;
   rows: SpecRow[];
 }
 
-const GROUP_ORDER: RatingCriterionGroup[] = [
+const GROUP_ORDER: SpecGroupCode[] = [
+  'key_measurements',
   'climate',
   'compressor',
   'acoustics',
@@ -31,7 +39,8 @@ const GROUP_ORDER: RatingCriterionGroup[] = [
   'other',
 ];
 
-const GROUP_DISPLAY_FALLBACK: Record<RatingCriterionGroup, string> = {
+const GROUP_DISPLAY_FALLBACK: Record<SpecGroupCode, string> = {
+  key_measurements: 'Ключевые замеры',
   climate: 'Климат',
   compressor: 'Компрессор и контур',
   acoustics: 'Акустика',
@@ -77,8 +86,8 @@ export function buildSpecGroups(
     scoresByCode.set(s.criterion_code, s);
   }
 
-  const groups = new Map<RatingCriterionGroup, SpecGroup>();
-  const ensure = (g: RatingCriterionGroup, display: string): SpecGroup => {
+  const groups = new Map<SpecGroupCode, SpecGroup>();
+  const ensure = (g: SpecGroupCode, display: string): SpecGroup => {
     let cur = groups.get(g);
     if (!cur) {
       cur = {
@@ -95,8 +104,14 @@ export function buildSpecGroups(
     const code = rv.criterion_code;
     if (!code) continue;
     const crit = criteriaByCode.get(code);
-    const group: RatingCriterionGroup = crit?.group ?? 'other';
-    const display = crit?.group_display ?? GROUP_DISPLAY_FALLBACK[group];
+    const isKey = Boolean(crit?.is_key_measurement);
+    // Polish 2.0 A4: ключевые замеры — отдельный синтетический блок наверху.
+    const group: SpecGroupCode = isKey
+      ? 'key_measurements'
+      : crit?.group ?? 'other';
+    const display = isKey
+      ? GROUP_DISPLAY_FALLBACK.key_measurements
+      : crit?.group_display ?? GROUP_DISPLAY_FALLBACK[group];
     const value = formatValue(rv.raw_value ?? '', crit?.unit ?? '');
     if (!value) continue;
     const bucket = ensure(group, display);
@@ -105,6 +120,7 @@ export function buildSpecGroups(
       name: crit?.name_ru || rv.criterion_name || code,
       value,
       ticker: tickerFor(scoresByCode.get(code)),
+      is_key: isKey || undefined,
     });
   }
 
