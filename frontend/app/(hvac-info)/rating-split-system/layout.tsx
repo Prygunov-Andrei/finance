@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: {
     default: 'Рейтинг кондиционеров — hvac-info.com',
-    template: '%s | Рейтинг кондиционеров',
+    template: '%s | HVAC Info',
   },
   description:
     'Независимый рейтинг бытовых кондиционеров: методика, параметры, отзывы, сравнение моделей.',

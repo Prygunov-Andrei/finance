@@ -21,7 +21,8 @@ const AUTHORS: Array<{ name: string; role: string; photo: string }> = [
   },
 ];
 
-const DEFAULT_HERO_TITLE =
+const DEFAULT_HERO_TITLE = 'Рейтинг кондиционеров — индекс «Август-климат»';
+const DEFAULT_HERO_SUBTITLE =
   'Интегральный индекс «Август-климат» качества бытовых кондиционеров до 4,5 кВт на основе наших измерений и анализа параметров';
 const DEFAULT_HERO_EYEBROW = 'Независимый рейтинг · обновление 04.2026';
 
@@ -30,17 +31,24 @@ export default function HeroBlock({
   title = DEFAULT_HERO_TITLE,
   eyebrow = DEFAULT_HERO_EYEBROW,
   intro,
+  subtitle,
 }: {
   stats: RatingMethodologyStats;
   title?: string;
   eyebrow?: string;
   intro?: string;
+  subtitle?: string;
 }) {
   const numbers: Array<[number | string, string]> = [
     [stats.total_models, 'моделей'],
     [stats.active_criteria_count, 'критериев'],
     [4, 'года замеров'],
   ];
+  // Длинный «Интегральный индекс…» рендерим как H2 под H1, только когда
+  // используется дефолтный H1 (на /rating-split-system). Кастомные страницы
+  // (/quiet, /price/[slug], /preset/[slug]) передают свой title и не нуждаются.
+  const resolvedSubtitle =
+    subtitle ?? (title === DEFAULT_HERO_TITLE ? DEFAULT_HERO_SUBTITLE : null);
   return (
     <section
       style={{
@@ -92,6 +100,22 @@ export default function HeroBlock({
           <H size={34} serif as="h1" style={{ letterSpacing: -0.5, lineHeight: 1.2 }}>
             {title}
           </H>
+          {resolvedSubtitle && (
+            <H
+              size={18}
+              serif
+              as="h2"
+              style={{
+                letterSpacing: -0.2,
+                lineHeight: 1.35,
+                marginTop: 12,
+                color: 'hsl(var(--rt-ink-60))',
+                fontWeight: 500,
+              }}
+            >
+              {resolvedSubtitle}
+            </H>
+          )}
           {intro && (
             <T
               size={14}

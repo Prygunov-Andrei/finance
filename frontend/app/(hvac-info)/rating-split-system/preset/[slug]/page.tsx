@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     ? findPublishablePreset(methodology.presets, slug)
     : undefined;
   if (!preset) return { title: 'Пресет не найден' };
-  const title = `Рейтинг ${preset.label} — Август-климат | HVAC Info`;
+  const title = `Рейтинг ${preset.label} — Август-климат`;
   const description =
     preset.description?.trim() ||
     `Рейтинг кондиционеров под приоритет «${preset.label}» — собран по выборке критериев методики «Август-климат».`;

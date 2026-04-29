@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const def = findPriceSlug(slug);
   if (!def) return { title: 'Страница не найдена' };
-  const title = `Кондиционеры ${def.label} — рейтинг | HVAC Info`;
+  const title = `Кондиционеры ${def.label} — рейтинг`;
   const description = `Лучшие кондиционеры стоимостью ${def.label} — рейтинг по интегральному индексу «Август-климат». Сравнение по характеристикам, шуму, энергоэффективности.`;
   return {
     title,
