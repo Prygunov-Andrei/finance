@@ -11,10 +11,10 @@ const nextConfig = {
     return [
       { source: '/ratings', destination: '/rating-split-system', permanent: true },
       { source: '/ratings/:path*', destination: '/rating-split-system/:path*', permanent: true },
-      // Wave 11: URL-редизайн карточек моделей. Slug всегда начинается с
-      // заглавной буквы (MDV-..., CASARTE-...), поэтому regex [A-Z] исключает
-      // подпути methodology/archive/submit/preset/quiet/price (они lowercase).
-      { source: '/rating-split-system/:slug([A-Z][^/]+)', destination: '/konditsioner/:slug', permanent: true },
+      // Wave 11: URL-редизайн карточек моделей делается через
+      // [slug]/page.tsx с permanentRedirect (см. ниже), а не здесь —
+      // path-to-regexp в next.config.js не дал чисто исключить подпути
+      // /methodology, /archive, /submit (они тоже ловились в :slug regex).
     ];
   },
 
