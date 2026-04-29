@@ -670,7 +670,7 @@ function DesktopCustomRow({
   return (
     <Link
       ref={(el) => register(model.id, el as HTMLElement | null)}
-      href={`/rating-split-system/${model.slug}/`}
+      href={`/konditsioner/${model.slug}/`}
       data-ad={isAd ? 'true' : undefined}
       className={isAd ? AD_ROW_CLASS : undefined}
       style={{
@@ -856,7 +856,7 @@ function MobileCustomList({
               }}
             >
               <Link
-                href={`/rating-split-system/${r.model.slug}/`}
+                href={`/konditsioner/${r.model.slug}/`}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '34px 1fr auto',

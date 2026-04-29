@@ -147,7 +147,7 @@ function ModelRow({
 }) {
   const isAd = model._displayRank === null;
   const displayValue = mode === 'silence' ? model.noise_score ?? 0 : model.total_index;
-  const href = `/rating-split-system/${model.slug}/`;
+  const href = `/konditsioner/${model.slug}/`;
   return (
     <Link
       href={href}

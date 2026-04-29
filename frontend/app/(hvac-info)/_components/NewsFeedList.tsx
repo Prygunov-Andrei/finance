@@ -9,7 +9,6 @@ import {
   getNewsCategoryLabel,
   getNewsHeroImage,
   getNewsLede,
-  isNewsImageLikelyLogo,
 } from './newsHelpers';
 
 interface Props {
@@ -81,7 +80,6 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
           {visible.map((item) => {
             const img = getNewsHeroImage(item);
             const hasImage = Boolean(img);
-            const isLogo = hasImage && img ? isNewsImageLikelyLogo(item, img) : false;
             return (
               <Link
                 key={item.id}
@@ -109,9 +107,9 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
                       aspectRatio: '16 / 9',
                       marginBottom: 12,
                       borderRadius: 2,
-                      background: isLogo
-                        ? `center / contain no-repeat hsl(var(--rt-alt)) url(${img})`
-                        : `center / cover no-repeat url(${img})`,
+                      // Wave 11: contain везде + alt-подложка, чтобы превью с
+                      // логотипом / нестандартным aspect-ratio не обрезались.
+                      background: `center / contain no-repeat hsl(var(--rt-alt)) url(${img})`,
                       flexShrink: 0,
                     }}
                   />
@@ -193,7 +191,6 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
           {visible.map((item) => {
             const img = getNewsHeroImage(item);
             const hasImage = Boolean(img);
-            const isLogo = hasImage && img ? isNewsImageLikelyLogo(item, img) : false;
             return (
               <Link
                 key={item.id}
@@ -221,9 +218,7 @@ export default function NewsFeedList({ items, hasMore, totalCount, skipFirst = 0
                       height: 120,
                       flexShrink: 0,
                       borderRadius: 4,
-                      background: isLogo
-                        ? `center / contain no-repeat hsl(var(--rt-alt)) url(${img})`
-                        : `center / cover no-repeat url(${img})`,
+                      background: `center / contain no-repeat hsl(var(--rt-alt)) url(${img})`,
                     }}
                   />
                 )}

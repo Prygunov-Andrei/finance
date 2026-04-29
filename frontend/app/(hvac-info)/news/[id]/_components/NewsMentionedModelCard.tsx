@@ -77,7 +77,7 @@ function SingleCard({ model }: { model: HvacNewsMentionedAcModel }) {
         </div>
       </div>
       <Link
-        href={`/rating-split-system/${model.slug}/`}
+        href={`/konditsioner/${model.slug}/`}
         style={{
           padding: '8px 14px',
           borderRadius: 4,
@@ -106,7 +106,7 @@ function SingleCard({ model }: { model: HvacNewsMentionedAcModel }) {
 function CompactCard({ model }: { model: HvacNewsMentionedAcModel }) {
   return (
     <Link
-      href={`/rating-split-system/${model.slug}/`}
+      href={`/konditsioner/${model.slug}/`}
       style={{
         display: 'block',
         padding: 14,

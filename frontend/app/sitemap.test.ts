@@ -7,27 +7,31 @@ vi.mock('@/lib/api/services/rating', () => ({
 
 vi.mock('@/lib/hvac-api', () => ({
   getAllNews: vi.fn(),
+  getManufacturers: vi.fn(),
 }));
 
 import sitemap from './sitemap';
 import { getRatingMethodology, getRatingModels } from '@/lib/api/services/rating';
-import { getAllNews } from '@/lib/hvac-api';
+import { getAllNews, getManufacturers } from '@/lib/hvac-api';
 
 const mockedMethodology = vi.mocked(getRatingMethodology);
 const mockedModels = vi.mocked(getRatingModels);
 const mockedNews = vi.mocked(getAllNews);
+const mockedManufacturers = vi.mocked(getManufacturers);
 
 describe('app/sitemap.ts', () => {
   beforeEach(() => {
     mockedMethodology.mockReset();
     mockedModels.mockReset();
     mockedNews.mockReset();
+    mockedManufacturers.mockReset();
   });
 
   it('содержит главную, rating, methodology, archive, submit, quiet и 7 ценовых страниц при пустых API', async () => {
     mockedMethodology.mockRejectedValue(new Error('no api'));
     mockedModels.mockRejectedValue(new Error('no api'));
     mockedNews.mockRejectedValue(new Error('no api'));
+    mockedManufacturers.mockRejectedValue(new Error('no api'));
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const entries = await sitemap();
@@ -74,14 +78,17 @@ describe('app/sitemap.ts', () => {
       // @ts-expect-error — частичный fixture
       { id: 42, pub_date: '2026-04-01T00:00:00Z' },
     ]);
+    mockedManufacturers.mockRejectedValue(new Error('no api'));
 
     const entries = await sitemap();
     const urls = entries.map((e) => e.url);
 
     expect(urls).toContain('https://hvac-info.com/rating-split-system/preset/quiet-preset');
     expect(urls).not.toContain('https://hvac-info.com/rating-split-system/preset/all');
-    expect(urls).toContain('https://hvac-info.com/rating-split-system/mdv-aurora');
-    expect(urls).not.toContain('https://hvac-info.com/rating-split-system/draft');
+    // Wave 11: карточки моделей переехали на /konditsioner/{slug}.
+    expect(urls).toContain('https://hvac-info.com/konditsioner/mdv-aurora');
+    expect(urls).not.toContain('https://hvac-info.com/konditsioner/draft');
+    expect(urls).not.toContain('https://hvac-info.com/rating-split-system/mdv-aurora');
     expect(urls).toContain('https://hvac-info.com/news/42');
     expect(urls.filter((u) => u.includes('#'))).toHaveLength(0);
   });
@@ -104,6 +111,7 @@ describe('app/sitemap.ts', () => {
       },
     ]);
     mockedNews.mockRejectedValue(new Error('no api'));
+    mockedManufacturers.mockRejectedValue(new Error('no api'));
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const entries = await sitemap();
@@ -130,6 +138,7 @@ describe('app/sitemap.ts', () => {
       { slug: 'no-photo', publish_status: 'published' },
     ]);
     mockedNews.mockRejectedValue(new Error('no api'));
+    mockedManufacturers.mockRejectedValue(new Error('no api'));
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const entries = await sitemap();
@@ -156,6 +165,7 @@ describe('app/sitemap.ts', () => {
     });
     mockedModels.mockRejectedValue(new Error('no api'));
     mockedNews.mockRejectedValue(new Error('no api'));
+    mockedManufacturers.mockRejectedValue(new Error('no api'));
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const entries = await sitemap();

@@ -7,22 +7,22 @@ import {
 } from '@/lib/api/services/rating';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
-import BackToRating from '../_components/BackToRating';
-import DetailHero, { DetailHeroCollapsed } from '../_components/DetailHero';
-import DetailMedia from '../_components/DetailMedia';
-import DetailAnchorNav from '../_components/DetailAnchorNav';
-import StickyCollapseHero from '../_components/StickyCollapseHero';
-import DetailOverview from '../_components/DetailOverview';
-import DetailCriteria from '../_components/DetailCriteria';
-import DetailIndexViz from '../_components/DetailIndexViz';
-import DetailSpecs from '../_components/DetailSpecs';
-import DetailBuy from '../_components/DetailBuy';
-import DetailReviews from '../_components/DetailReviews';
-import ModelJsonLd from '../_components/ModelJsonLd';
-import BreadcrumbJsonLd from '../_components/BreadcrumbJsonLd';
-import DetailBreadcrumb from '../_components/DetailBreadcrumb';
+import BackToRating from '../../rating-split-system/_components/BackToRating';
+import DetailHero, { DetailHeroCollapsed } from '../../rating-split-system/_components/DetailHero';
+import DetailMedia from '../../rating-split-system/_components/DetailMedia';
+import DetailAnchorNav from '../../rating-split-system/_components/DetailAnchorNav';
+import StickyCollapseHero from '../../rating-split-system/_components/StickyCollapseHero';
+import DetailOverview from '../../rating-split-system/_components/DetailOverview';
+import DetailCriteria from '../../rating-split-system/_components/DetailCriteria';
+import DetailIndexViz from '../../rating-split-system/_components/DetailIndexViz';
+import DetailSpecs from '../../rating-split-system/_components/DetailSpecs';
+import DetailBuy from '../../rating-split-system/_components/DetailBuy';
+import DetailReviews from '../../rating-split-system/_components/DetailReviews';
+import ModelJsonLd from '../../rating-split-system/_components/ModelJsonLd';
+import BreadcrumbJsonLd from '../../rating-split-system/_components/BreadcrumbJsonLd';
+import DetailBreadcrumb from '../../rating-split-system/_components/DetailBreadcrumb';
 import SectionFooter from '../../_components/SectionFooter';
-import { fallbackLede } from '../_components/detailHelpers';
+import { fallbackLede } from '../../rating-split-system/_components/detailHelpers';
 
 export const revalidate = 3600;
 
@@ -60,9 +60,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const seriesPart = detail.series?.trim() ? ` серии ${detail.series.trim()}` : '';
   const title = `Кондиционер ${detail.brand.name} ${detail.inner_unit}${seriesPart} — независимый рейтинг, обзор и отзывы`;
   const firstPhoto = detail.photos?.[0]?.image_url;
-  // Wave 10.3: OG image обязан быть absolute. Backend AC-Петя параллельно
-  // меняет _url_with_mtime на absolute; до его merge guard вручную, после —
-  // startsWith('http') graceful обрабатывает оба варианта.
   const ogImage = firstPhoto
     ? firstPhoto.startsWith('http')
       ? firstPhoto
@@ -72,7 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `/rating-split-system/${slug}` },
+    alternates: { canonical: `/konditsioner/${slug}` },
     openGraph: {
       title,
       description,

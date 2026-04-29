@@ -1,14 +1,24 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { getManufacturers } from '@/lib/hvac-api';
 import ManufacturersListPage from '../../_components/ManufacturersListPage';
-import { loadManufacturersPage } from '../../_helpers';
+import { loadManufacturersPage, PAGE_SIZE } from '../../_helpers';
 
 export const dynamic = 'force-dynamic';
 
-// 515 manufacturers / 50 per page = 11 pages. Page 1 — это /manufacturers.
-// TODO: увеличить когда manufacturers > 550.
+// Wave 11: динамическое число страниц по реальному count.
+// Page 1 = /manufacturers (без префикса), генерируем 2..N.
 export async function generateStaticParams() {
-  return Array.from({ length: 10 }, (_, i) => ({ n: String(i + 2) }));
+  try {
+    const all = await getManufacturers();
+    const totalPages = Math.ceil(all.length / PAGE_SIZE);
+    return Array.from(
+      { length: Math.max(0, totalPages - 1) },
+      (_, i) => ({ n: String(i + 2) }),
+    );
+  } catch {
+    return [];
+  }
 }
 
 type Props = { params: Promise<{ n: string }> };

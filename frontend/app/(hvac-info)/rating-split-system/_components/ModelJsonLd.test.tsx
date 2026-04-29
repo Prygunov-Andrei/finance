@@ -49,7 +49,7 @@ describe('ModelJsonLd', () => {
     expect(data['@type']).toBe('Product');
     expect(data.name).toBe('MDV AURORA-09H');
     expect(data.sku).toBe('mdv-aurora-09');
-    expect(data.url).toBe('https://hvac-info.com/rating-split-system/mdv-aurora-09/');
+    expect(data.url).toBe('https://hvac-info.com/konditsioner/mdv-aurora-09/');
     expect(data.image).toBe('https://hvac-info.com/media/x.jpg');
     expect(data.description).toContain('Лучший в среднем сегменте');
 

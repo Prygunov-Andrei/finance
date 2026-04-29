@@ -134,7 +134,7 @@ export default function ArchiveTable({ models }: Props) {
       {sorted.map((m, i) => (
         <Link
           key={m.id}
-          href={`/rating-split-system/${m.slug}/`}
+          href={`/konditsioner/${m.slug}/`}
           className="rt-archive-row"
           data-testid="archive-row"
           style={{
