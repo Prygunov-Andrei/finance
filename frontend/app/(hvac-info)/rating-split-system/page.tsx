@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   getRatingMethodology,
   getRatingModels,
@@ -7,6 +8,11 @@ import RatingPageContent from './_components/RatingPageContent';
 // SSR каждый запрос — ISR snapshot при первом deploy ловит пустой backend
 // (Docker build context не видит compose-сервисы). Для 27 моделей overhead ~50ms.
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  description:
+    'Рейтинг кондиционеров по интегральному индексу «Август-климат»: оценка бытовых сплит-систем по 30+ параметрам на основе реальных измерений. Обновлено 04.2026.',
+};
 
 export default async function RatingHomePage() {
   let models: Awaited<ReturnType<typeof getRatingModels>> = [];

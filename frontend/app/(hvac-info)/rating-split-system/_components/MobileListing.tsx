@@ -141,7 +141,7 @@ export function MobileHero({
           ))}
         </div>
       </div>
-      <H size={18} serif as="h1" style={{ letterSpacing: -0.3, lineHeight: 1.25 }}>
+      <H size={18} serif as="h2" style={{ letterSpacing: -0.3, lineHeight: 1.25 }}>
         {title}
       </H>
     </section>

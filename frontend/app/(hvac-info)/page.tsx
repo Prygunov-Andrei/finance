@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import type { Metadata } from 'next';
 import { unstable_noStore as noStore } from 'next/cache';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
 import { getFeaturedNews, getNews, type FeaturedNewsResponse } from '@/lib/hvac-api';
@@ -11,6 +12,14 @@ import { loadFirstPage } from './loadFirstPage';
 import { buildFeaturedFeed } from './buildFeaturedFeed';
 
 export const revalidate = 300;
+
+export const metadata: Metadata = {
+  // absolute, чтобы template `%s | HVAC Info` из (hvac-info)/layout.tsx
+  // не дублировал суффикс на главной.
+  title: { absolute: 'HVAC Info — независимый портал о кондиционерах' },
+  description:
+    'Независимый портал о кондиционерах: рейтинг бытовых сплит-систем по индексу «Август-климат», обзоры моделей и новости HVAC-отрасли.',
+};
 
 export default async function NewsFeedPage() {
   const [{ page: firstPage, empty }, featured] = await Promise.all([

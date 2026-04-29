@@ -55,7 +55,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
   const descSource = (detail.editorial_lede || fallbackLede(detail)).trim();
   const description = descSource.slice(0, 160);
-  const title = `${detail.brand.name} ${detail.inner_unit} — рейтинг и обзор`;
+  const seriesPart = detail.series?.trim() ? ` серии ${detail.series.trim()}` : '';
+  const title = `Кондиционер ${detail.brand.name} ${detail.inner_unit}${seriesPart} — независимый рейтинг, обзор и отзывы`;
   const firstPhoto = detail.photos?.[0]?.image_url;
 
   return {
@@ -100,6 +101,19 @@ export default async function RatingDetailPage({ params }: Props) {
       <HvacInfoHeader />
       <main className="hvac-content">
         <BackToRating />
+        <h1
+          style={{
+            fontFamily: 'var(--rt-font-serif)',
+            fontSize: 14,
+            fontWeight: 500,
+            letterSpacing: -0.1,
+            color: 'hsl(var(--rt-ink-60))',
+            margin: '0 0 8px 0',
+          }}
+        >
+          Кондиционер {detail.brand.name} {detail.inner_unit}
+          {detail.outer_unit ? ` / ${detail.outer_unit}` : ''}
+        </h1>
       </main>
       <StickyCollapseHero
         full={
