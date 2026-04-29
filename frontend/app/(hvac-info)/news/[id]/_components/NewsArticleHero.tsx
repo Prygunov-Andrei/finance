@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { HvacNews as NewsItem } from '@/lib/api/types/hvac';
 import { Eyebrow, H, T } from '../../../rating-split-system/_components/primitives';
 import {
@@ -6,6 +7,12 @@ import {
   getNewsHeroImage,
   getNewsLede,
 } from '../../../_components/newsHelpers';
+
+// Внешние URL (из body) могут быть с не-настроенных доменов — используем
+// unoptimized, чтобы не падать в next/image. priority всё равно даёт preload.
+function isExternalUrl(src: string): boolean {
+  return /^https?:\/\//i.test(src);
+}
 
 export default function NewsArticleHero({ news }: { news: NewsItem }) {
   const image = getNewsHeroImage(news);
@@ -91,19 +98,27 @@ export default function NewsArticleHero({ news }: { news: NewsItem }) {
 
       {image && (
         <figure style={{ margin: '24px 0 0' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image}
-            alt={news.title}
+          <div
             style={{
+              position: 'relative',
               width: '100%',
               aspectRatio: '16 / 9',
               maxHeight: 420,
-              objectFit: 'cover',
               borderRadius: 4,
-              display: 'block',
+              overflow: 'hidden',
+              background: 'hsl(var(--rt-alt))',
             }}
-          />
+          >
+            <Image
+              src={image}
+              alt={news.title}
+              fill
+              priority
+              sizes="(max-width: 1023px) 100vw, 760px"
+              unoptimized={isExternalUrl(image)}
+              style={{ objectFit: 'cover', display: 'block' }}
+            />
+          </div>
           {sourceHost && (
             <figcaption
               style={{
@@ -127,12 +142,12 @@ function AuthorAvatar({ author }: { author: NonNullable<NewsItem['editorial_auth
   const size = 28;
   if (author.avatar_url) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={author.avatar_url}
         alt={author.name}
         width={size}
         height={size}
+        unoptimized={isExternalUrl(author.avatar_url)}
         style={{
           width: size,
           height: size,

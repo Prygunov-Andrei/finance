@@ -19,6 +19,15 @@ export const metadata: Metadata = {
   title: { absolute: 'HVAC Info — независимый портал о кондиционерах' },
   description:
     'Независимый портал о кондиционерах: рейтинг бытовых сплит-систем по индексу «Август-климат», обзоры моделей и новости HVAC-отрасли.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: 'HVAC Info — независимый портал о кондиционерах',
+    description:
+      'Независимый портал о кондиционерах: рейтинг бытовых сплит-систем по индексу «Август-климат», обзоры моделей и новости HVAC-отрасли.',
+    type: 'website',
+    url: 'https://hvac-info.com/',
+    images: [{ url: 'https://hvac-info.com/rating-hero/ac-unit-illustration.webp' }],
+  },
 };
 
 export default async function NewsFeedPage() {

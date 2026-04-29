@@ -81,6 +81,24 @@ describe('ModelJsonLd', () => {
     expect(data.description).toContain('Кондиционер MDV AURORA-09H');
   });
 
+  it('префиксует image на BASE если backend отдал relative URL', () => {
+    const data = buildJsonLd(
+      makeDetail({
+        photos: [{ id: 1, image_url: '/media/photos/foo.jpg', alt: '' }],
+      }),
+    );
+    expect(data.image).toBe('https://hvac-info.com/media/photos/foo.jpg');
+  });
+
+  it('оставляет image как есть если backend уже отдал absolute URL', () => {
+    const data = buildJsonLd(
+      makeDetail({
+        photos: [{ id: 1, image_url: 'https://hvac-info.com/media/photos/bar.jpg', alt: '' }],
+      }),
+    );
+    expect(data.image).toBe('https://hvac-info.com/media/photos/bar.jpg');
+  });
+
   it('рендерит <script type="application/ld+json"> с валидным JSON', () => {
     const html = renderToStaticMarkup(<ModelJsonLd detail={makeDetail()} />);
     expect(html).toContain('<script type="application/ld+json">');

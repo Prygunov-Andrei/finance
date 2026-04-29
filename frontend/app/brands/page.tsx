@@ -6,6 +6,7 @@ import { getBrands } from '@/lib/hvac-api';
 export const metadata: Metadata = {
   title: 'Бренды HVAC-оборудования',
   description: 'Каталог брендов оборудования для отопления, вентиляции и кондиционирования',
+  alternates: { canonical: '/brands' },
 };
 
 export default async function BrandsPage() {

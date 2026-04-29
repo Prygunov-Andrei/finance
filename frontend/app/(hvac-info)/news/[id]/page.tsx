@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import HvacInfoHeader from '@/components/hvac-info/HvacInfoHeader';
+import BreadcrumbJsonLd from '../../rating-split-system/_components/BreadcrumbJsonLd';
 import { getAllNews, getNewsById } from '@/lib/hvac-api';
 import { getNewsPrimaryImageUrl, stripHtml, truncate } from '@/lib/utils';
 import NewsBreadcrumb from './_components/NewsBreadcrumb';
@@ -41,17 +42,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       160,
     );
     const imageUrl = getNewsPrimaryImageUrl(news);
+    // Wave 10.3: OG image absolute. До мержа backend-абсолютизации префиксуем
+    // вручную; после — startsWith('http') graceful обрабатывает оба варианта.
+    const absoluteImage = imageUrl
+      ? imageUrl.startsWith('http')
+        ? imageUrl
+        : `https://hvac-info.com${imageUrl}`
+      : null;
 
     return {
       title: news.title,
       description,
+      alternates: { canonical: `/news/${id}` },
       openGraph: {
         title: news.title,
         description,
         type: 'article',
         publishedTime: news.pub_date,
         modifiedTime: news.updated_at,
-        images: imageUrl ? [{ url: imageUrl }] : [],
+        images: absoluteImage ? [{ url: absoluteImage }] : [],
       },
     };
   } catch {
@@ -80,6 +89,13 @@ export default async function NewsDetailPage({ params }: Props) {
   return (
     <>
       <HvacInfoHeader />
+      <BreadcrumbJsonLd
+        crumbs={[
+          { name: 'Главная', url: 'https://hvac-info.com/' },
+          { name: 'Новости', url: 'https://hvac-info.com/' },
+          { name: news.title },
+        ]}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

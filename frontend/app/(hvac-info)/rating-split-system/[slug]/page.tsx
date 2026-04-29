@@ -19,6 +19,7 @@ import DetailSpecs from '../_components/DetailSpecs';
 import DetailBuy from '../_components/DetailBuy';
 import DetailReviews from '../_components/DetailReviews';
 import ModelJsonLd from '../_components/ModelJsonLd';
+import BreadcrumbJsonLd from '../_components/BreadcrumbJsonLd';
 import SectionFooter from '../../_components/SectionFooter';
 import { fallbackLede } from '../_components/detailHelpers';
 
@@ -58,15 +59,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const seriesPart = detail.series?.trim() ? ` серии ${detail.series.trim()}` : '';
   const title = `Кондиционер ${detail.brand.name} ${detail.inner_unit}${seriesPart} — независимый рейтинг, обзор и отзывы`;
   const firstPhoto = detail.photos?.[0]?.image_url;
+  // Wave 10.3: OG image обязан быть absolute. Backend AC-Петя параллельно
+  // меняет _url_with_mtime на absolute; до его merge guard вручную, после —
+  // startsWith('http') graceful обрабатывает оба варианта.
+  const ogImage = firstPhoto
+    ? firstPhoto.startsWith('http')
+      ? firstPhoto
+      : `https://hvac-info.com${firstPhoto}`
+    : null;
 
   return {
     title,
     description,
+    alternates: { canonical: `/rating-split-system/${slug}` },
     openGraph: {
       title,
       description,
       type: 'article',
-      ...(firstPhoto ? { images: [{ url: firstPhoto }] } : {}),
+      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
     },
   };
 }
@@ -98,6 +108,13 @@ export default async function RatingDetailPage({ params }: Props) {
   return (
     <>
       <ModelJsonLd detail={detail} />
+      <BreadcrumbJsonLd
+        crumbs={[
+          { name: 'Главная', url: 'https://hvac-info.com/' },
+          { name: 'Рейтинг кондиционеров', url: 'https://hvac-info.com/rating-split-system' },
+          { name: `${detail.brand.name} ${detail.inner_unit}`.trim() },
+        ]}
+      />
       <HvacInfoHeader />
       <main className="hvac-content">
         <BackToRating />

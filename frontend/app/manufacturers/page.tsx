@@ -7,6 +7,7 @@ import { getManufacturers } from '@/lib/hvac-api';
 export const metadata: Metadata = {
   title: 'Производители HVAC-оборудования',
   description: 'Каталог производителей оборудования для отопления, вентиляции и кондиционирования',
+  alternates: { canonical: '/manufacturers' },
 };
 
 export default async function ManufacturersPage() {

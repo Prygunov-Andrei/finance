@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import { Eyebrow, T } from './primitives';
 import { parsePoints, type ProsConsPoint } from './detailHelpers';
@@ -122,11 +123,12 @@ function EditorsRow() {
     >
       <div style={{ display: 'flex' }}>
         {EDITORS.map((e, i) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             key={e.name}
             src={e.avatar}
             alt={e.name}
+            width={32}
+            height={32}
             style={{
               width: 32,
               height: 32,

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import type { RatingMethodologyStats } from '@/lib/api/types/rating';
 import { Eyebrow, H, T } from './primitives';
 
@@ -199,10 +200,13 @@ function HeroIllustration() {
       role="img"
       aria-label="Иллюстрация наружного блока сплит-системы"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src="/rating-hero/ac-unit-illustration.webp"
         alt=""
+        width={520}
+        height={390}
+        priority
+        sizes="(max-width: 1279px) 0px, 220px"
         style={{
           width: '100%',
           height: 'auto',
@@ -239,8 +243,7 @@ function AuthorsBlock() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {AUTHORS.map(({ name, role, photo }) => (
           <div key={name} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={photo}
               alt={name}
               width={44}
@@ -339,8 +342,7 @@ export function HeroBlockCollapsed({ stats }: { stats: RatingMethodologyStats })
         >
           {AUTHORS.map(({ name, photo }) => (
             <div key={name} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={photo}
                 alt={name}
                 width={24}

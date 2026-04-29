@@ -4,6 +4,7 @@ import {
   getRatingModels,
 } from '@/lib/api/services/rating';
 import RatingPageContent from './_components/RatingPageContent';
+import RatingItemListJsonLd from './_components/RatingItemListJsonLd';
 
 // SSR каждый запрос — ISR snapshot при первом deploy ловит пустой backend
 // (Docker build context не видит compose-сервисы). Для 27 моделей overhead ~50ms.
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   description:
     'Рейтинг кондиционеров по интегральному индексу «Август-климат»: оценка бытовых сплит-систем по 30+ параметрам на основе реальных измерений. Обновлено 04.2026.',
+  alternates: { canonical: '/rating-split-system' },
 };
 
 export default async function RatingHomePage() {
@@ -33,5 +35,10 @@ export default async function RatingHomePage() {
   }
   const publishedModels = models.filter((m) => m.publish_status === 'published');
 
-  return <RatingPageContent models={publishedModels} methodology={methodology} />;
+  return (
+    <>
+      <RatingItemListJsonLd models={publishedModels} />
+      <RatingPageContent models={publishedModels} methodology={methodology} />
+    </>
+  );
 }

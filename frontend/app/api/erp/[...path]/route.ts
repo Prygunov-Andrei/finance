@@ -47,9 +47,9 @@ const buildUpstreamUrl = (request: NextRequest, path: string[]): string => {
 
 const proxyRequest = async (
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) => {
-  const resolvedParams = await Promise.resolve(context.params);
+  const resolvedParams = await context.params;
   const upstreamUrl = buildUpstreamUrl(request, resolvedParams.path);
 
   let body: BodyInit | undefined;
@@ -81,42 +81,42 @@ const proxyRequest = async (
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   return proxyRequest(request, context);
 }
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   return proxyRequest(request, context);
 }
 
 export async function PUT(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   return proxyRequest(request, context);
 }
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   return proxyRequest(request, context);
 }
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   return proxyRequest(request, context);
 }
 
 export async function HEAD(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   return proxyRequest(request, context);
 }

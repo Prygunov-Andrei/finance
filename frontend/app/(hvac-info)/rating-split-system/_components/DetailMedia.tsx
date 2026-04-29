@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import Image from 'next/image';
 import type { RatingModelDetail } from '@/lib/api/types/rating';
 import { T } from './primitives';
 import {
@@ -41,7 +42,11 @@ export default function DetailMedia({ detail }: Props) {
           gap: 24,
         }}
       >
-        <PhotoBlock photos={photos} modelName={detail.inner_unit} />
+        <PhotoBlock
+          photos={photos}
+          modelName={detail.inner_unit}
+          brandName={detail.brand.name}
+        />
         <VideoBlock videos={videos} />
       </div>
 
@@ -68,9 +73,11 @@ export default function DetailMedia({ detail }: Props) {
 function PhotoBlock({
   photos,
   modelName,
+  brandName,
 }: {
   photos: RatingModelDetail['photos'];
   modelName: string;
+  brandName: string;
 }) {
   const [idx, setIdx] = useState(0);
   if (photos.length === 0) {
@@ -98,7 +105,8 @@ function PhotoBlock({
       >
         <PhotoZoom
           src={current.image_url}
-          alt={current.alt || modelName}
+          alt={current.alt || `Кондиционер ${brandName} ${modelName} — фото ${idx + 1}`}
+          priority={idx === 0}
           // key — чтобы при переключении фото state hover/modal сбрасывался
           key={current.id}
         />
@@ -157,17 +165,25 @@ function PhotoBlock({
                   background: 'hsl(var(--rt-chip))',
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.image_url}
-                  alt={p.alt || `Фото ${i + 1}`}
+                <span
                   style={{
+                    position: 'relative',
+                    display: 'block',
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',
-                    display: 'block',
                   }}
-                />
+                >
+                  <Image
+                    src={p.image_url}
+                    alt={
+                      p.alt ||
+                      `Кондиционер ${brandName} ${modelName} — фото ${i + 1}`
+                    }
+                    fill
+                    sizes="(max-width: 899px) 16vw, 80px"
+                    style={{ objectFit: 'cover', display: 'block' }}
+                  />
+                </span>
               </button>
             );
           })}
@@ -192,9 +208,11 @@ function PhotoBlock({
 function PhotoZoom({
   src,
   alt,
+  priority = false,
 }: {
   src: string;
   alt: string;
+  priority?: boolean;
 }) {
   const [hover, setHover] = useState(false);
   const [pos, setPos] = useState({ x: 50, y: 50 });
@@ -223,16 +241,13 @@ function PhotoZoom({
 
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={src}
         alt={alt}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          display: 'block',
-        }}
+        fill
+        sizes="(max-width: 899px) 100vw, 50vw"
+        priority={priority}
+        style={{ objectFit: 'cover', display: 'block' }}
       />
       {hover ? (
         <div

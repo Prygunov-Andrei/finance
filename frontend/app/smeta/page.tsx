@@ -6,6 +6,7 @@ import { CabinetLoginForm } from './CabinetLoginForm';
 export const metadata: Metadata = {
   title: 'Сметчик — Рассчитайте смету онлайн',
   description: 'Загрузите смету для автоматической оценки стоимости работ и материалов или работайте в интерактивном редакторе',
+  robots: { index: false, follow: true },
 };
 
 export default function SmetaPage() {

@@ -6,6 +6,7 @@ import { getResources } from '@/lib/hvac-api';
 export const metadata: Metadata = {
   title: 'Ресурсы и источники',
   description: 'Полезные ресурсы и источники новостей HVAC-индустрии',
+  alternates: { canonical: '/resources' },
 };
 
 export default async function ResourcesPage() {

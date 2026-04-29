@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: 'Добавить модель в рейтинг',
   description:
     'Форма заявки на добавление кондиционера в рейтинг Август-климат: замеры, фото, контакты.',
+  robots: { index: false, follow: true },
 };
 
 export const dynamic = 'force-dynamic';

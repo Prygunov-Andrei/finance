@@ -28,9 +28,9 @@ const buildUpstreamUrl = (request: NextRequest, path: string[]): string => {
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
-  const resolvedParams = await Promise.resolve(context.params);
+  const resolvedParams = await context.params;
   const upstreamUrl = buildUpstreamUrl(request, resolvedParams.path);
   const upstreamResponse = await fetch(upstreamUrl, {
     method: 'GET',
@@ -54,9 +54,9 @@ export async function GET(
 
 export async function HEAD(
   request: NextRequest,
-  context: { params: Promise<{ path: string[] }> | { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
-  const resolvedParams = await Promise.resolve(context.params);
+  const resolvedParams = await context.params;
   const upstreamUrl = buildUpstreamUrl(request, resolvedParams.path);
   const upstreamResponse = await fetch(upstreamUrl, {
     method: 'HEAD',

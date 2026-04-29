@@ -33,9 +33,12 @@ function buildJsonLd(detail: RatingModelDetail): Record<string, JsonLdValue> {
     },
   };
 
+  // Wave 10.3: Schema.org Product требует absolute image URL. Backend AC-Петя
+  // параллельно меняет _url_with_mtime на absolute; до его merge guard вручную,
+  // после — startsWith('http') graceful обрабатывает оба варианта.
   const firstPhoto = detail.photos?.[0]?.image_url;
   if (firstPhoto) {
-    data.image = firstPhoto;
+    data.image = firstPhoto.startsWith('http') ? firstPhoto : `${BASE}${firstPhoto}`;
   }
 
   if (detail.price) {
