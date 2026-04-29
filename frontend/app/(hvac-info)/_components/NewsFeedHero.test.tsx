@@ -19,7 +19,7 @@ describe('NewsFeedHero', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('hero с image: рендерит .rt-feed-hero-img c aspect-ratio 16/9', () => {
+  it('hero с image: рендерит .rt-feed-hero-img c aspect-ratio 16/9 + next/image priority', () => {
     const heroItem = mkItem(1, {
       media: [{ id: 1, file: 'http://example.com/hero.jpg', media_type: 'image' }],
     } as Partial<HvacNews>);
@@ -28,7 +28,12 @@ describe('NewsFeedHero', () => {
     expect(img).toBeInTheDocument();
     expect(img!.style.aspectRatio).toBe('16 / 9');
     expect(img!.style.height).toBe('');
-    expect(img!.style.background).toContain('http://example.com/hero.jpg');
+    // Polish 2.0 A1: было background-url, стало next/image fill priority.
+    // URL передаётся в src дочернего <img>; next/image для абсолютных URL
+    // рендерит как unoptimized (тот же src без /_next/image оптимизации).
+    const innerImg = img!.querySelector('img') as HTMLImageElement | null;
+    expect(innerImg).not.toBeNull();
+    expect(innerImg!.getAttribute('src')).toContain('http://example.com/hero.jpg');
   });
 
   it('hero без image: image-блок не рендерится, ссылка имеет data-no-image="true"', () => {

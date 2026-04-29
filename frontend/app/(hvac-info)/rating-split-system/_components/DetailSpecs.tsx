@@ -186,11 +186,15 @@ function groupsPlural(n: number): string {
 }
 
 function SpecCard({ group }: { group: SpecGroup }) {
+  const isKeyGroup = group.group === 'key_measurements';
   return (
     <div
+      data-group={group.group}
       style={{
         breakInside: 'avoid',
-        border: '1px solid hsl(var(--rt-border-subtle))',
+        border: isKeyGroup
+          ? '1px solid hsl(var(--rt-accent))'
+          : '1px solid hsl(var(--rt-border-subtle))',
         borderRadius: 6,
         overflow: 'hidden',
         background: 'hsl(var(--rt-paper))',
@@ -199,7 +203,9 @@ function SpecCard({ group }: { group: SpecGroup }) {
       <div
         style={{
           padding: '12px 16px',
-          background: 'hsl(var(--rt-alt))',
+          background: isKeyGroup
+            ? 'hsl(var(--rt-accent-bg))'
+            : 'hsl(var(--rt-alt))',
           borderBottom: '1px solid hsl(var(--rt-border-subtle))',
           display: 'flex',
           justifyContent: 'space-between',
@@ -208,9 +214,13 @@ function SpecCard({ group }: { group: SpecGroup }) {
       >
         <T
           size={12}
-          weight={600}
+          weight={isKeyGroup ? 700 : 600}
           mono
-          style={{ textTransform: 'uppercase', letterSpacing: 1.2 }}
+          style={{
+            textTransform: 'uppercase',
+            letterSpacing: 1.2,
+            color: isKeyGroup ? 'hsl(var(--rt-accent))' : undefined,
+          }}
         >
           {group.group_display}
         </T>

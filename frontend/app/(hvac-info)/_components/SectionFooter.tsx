@@ -213,6 +213,10 @@ export default function SectionFooter() {
             grid-template-columns: 1fr;
             gap: 24px;
           }
+          /* Polish 2.2 B5: на мобиле колонка «прочее» без заголовка не нуждается
+             в spacer'е высотой 12px, который на десктопе нужен только для
+             выравнивания grid-колонок по нижнему краю heading'ов. */
+          .rt-section-footer-col-spacer { display: none !important; }
           .rt-section-footer-links > a + a,
           .rt-section-footer-links > span + span {
             border-top: 1px solid hsl(var(--rt-border-subtle));

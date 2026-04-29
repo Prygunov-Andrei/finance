@@ -147,15 +147,21 @@ describe('getNewsBodyWithoutHero', () => {
     expect(getNewsBodyWithoutHero(news)).toContain('<img');
   });
 
-  it('отрезает первый <p> если lede пустое', () => {
+  it('отрезает первый <img> и пустые <p></p> в начале, но сохраняет первый текстовый <p>', () => {
+    // Дизайн (см. комментарий в getNewsBodyWithoutHero): когда lede взят из
+    // первого параграфа, body всё равно показывает его полностью — это
+    // newspaper-pattern, дубль ожидаемый.
     const news = mk({
       media: [],
       lede: '',
       body: '<img src="/x.jpg"><p></p><p>Первый абзац (lede).</p><p>Второй абзац.</p>',
     });
     const result = getNewsBodyWithoutHero(news);
-    expect(result).not.toContain('Первый абзац');
+    expect(result).not.toContain('<img');
+    expect(result).toContain('Первый абзац');
     expect(result).toContain('Второй абзац');
+    // Пустой <p></p> в начале вычищен.
+    expect(result.startsWith('<p>Первый абзац')).toBe(true);
   });
 
   it('не трогает body если lede заполнен и hero из media', () => {

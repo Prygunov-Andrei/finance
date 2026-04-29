@@ -91,20 +91,34 @@ export default function MobileListing({
   );
 }
 
+// Polish 2.0 B2: тексты H1/H2/eyebrow на мобиле должны совпадать с десктопным
+// HeroBlock (DEFAULT_HERO_TITLE / DEFAULT_HERO_SUBTITLE / DEFAULT_HERO_EYEBROW).
+const MOBILE_DEFAULT_TITLE = 'Рейтинг кондиционеров — индекс «Август-климат»';
+const MOBILE_DEFAULT_SUBTITLE =
+  'Интегральный индекс «Август-климат» качества бытовых кондиционеров до 4,5 кВт на основе наших измерений и анализа параметров';
+const MOBILE_DEFAULT_EYEBROW = 'Независимый рейтинг · обновление 04.2026';
+
 export function MobileHero({
   stats,
-  title = 'Интегральный индекс «Август-климат» качества кондиционеров до 4,0 кВт.',
-  eyebrow = 'Рейтинг · 04.2026',
+  title = MOBILE_DEFAULT_TITLE,
+  eyebrow = MOBILE_DEFAULT_EYEBROW,
+  subtitle,
 }: {
   stats: RatingMethodology['stats'];
   title?: string;
   eyebrow?: string;
+  subtitle?: string;
 }) {
   const numbers: Array<[number | string, string]> = [
     [stats.total_models, 'мод.'],
     [stats.active_criteria_count, 'крит.'],
     [4, 'года'],
   ];
+  // Длинный subtitle (H2) показываем только когда используется дефолтный title
+  // — иначе кастомные страницы (/quiet, /price/*, /preset/*) сами задают H1
+  // под свой контент. Поведение зеркально HeroBlock.tsx.
+  const resolvedSubtitle =
+    subtitle ?? (title === MOBILE_DEFAULT_TITLE ? MOBILE_DEFAULT_SUBTITLE : null);
   return (
     <section
       style={{
@@ -119,6 +133,8 @@ export function MobileHero({
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: 10,
+          gap: 8,
+          flexWrap: 'wrap',
         }}
       >
         <Eyebrow>{eyebrow}</Eyebrow>
@@ -141,9 +157,25 @@ export function MobileHero({
           ))}
         </div>
       </div>
-      <H size={18} serif as="h2" style={{ letterSpacing: -0.3, lineHeight: 1.25 }}>
+      <H size={22} serif as="h1" style={{ letterSpacing: -0.4, lineHeight: 1.2 }}>
         {title}
       </H>
+      {resolvedSubtitle && (
+        <H
+          size={16}
+          serif
+          as="h2"
+          style={{
+            marginTop: 8,
+            letterSpacing: -0.1,
+            lineHeight: 1.4,
+            color: 'hsl(var(--rt-ink-60))',
+            fontWeight: 500,
+          }}
+        >
+          {resolvedSubtitle}
+        </H>
+      )}
     </section>
   );
 }
@@ -314,9 +346,9 @@ function MobileRows({
                   </span>
                 </span>
                 <span style={{ textAlign: 'right' }}>
-                  {isAd ? (
-                    <AdBadge />
-                  ) : (
+                  {/* Polish 2.2 B4: дубль <AdBadge /> убран — бейдж «Реклама»
+                      уже отображается слева в колонке ранга. */}
+                  {!isAd && (
                     <>
                       <span
                         title={
@@ -372,17 +404,21 @@ function MobileRows({
                     href={`/rating-split-system/${m.slug}/`}
                     style={{
                       display: 'inline-flex',
-                      justifyContent: 'center',
-                      padding: '10px 14px',
-                      background: 'hsl(var(--rt-ink))',
-                      color: 'hsl(var(--rt-paper))',
-                      borderRadius: 4,
-                      fontSize: 12,
+                      alignSelf: 'flex-start',
+                      gap: 4,
+                      alignItems: 'center',
+                      padding: '4px 0',
+                      background: 'transparent',
+                      color: 'hsl(var(--rt-accent))',
+                      fontSize: 13,
                       fontWeight: 600,
-                      textDecoration: 'none',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 3,
+                      textDecorationColor: 'hsl(var(--rt-accent))',
                     }}
                   >
-                    Открыть модель →
+                    Открыть модель
+                    <span aria-hidden style={{ fontSize: 12 }}>→</span>
                   </Link>
                 </div>
               )}
